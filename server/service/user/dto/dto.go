@@ -81,6 +81,7 @@ type UserQueryDTO struct {
 
 type UserStatsDTO struct {
 	VisibleUsers     int `json:"visibleUsers"`
+	AccountCount     int `json:"accountCount"`
 	PrivilegedUsers  int `json:"privilegedUsers"`
 	RecentLoginUsers int `json:"recentLoginUsers"`
 	ActiveUsers      int `json:"activeUsers"`

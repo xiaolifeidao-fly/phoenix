@@ -1,13 +1,14 @@
 "use client";
 
 import {
+  ApartmentOutlined,
   BellOutlined,
+  DashboardOutlined,
   LogoutOutlined,
-  SearchOutlined,
   ShoppingOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
-import { Avatar, Badge, Button, Input, Layout, Menu, Space, Typography } from "antd";
+import { Avatar, Badge, Button, Layout, Menu, Space, Typography } from "antd";
 import type { MenuProps } from "antd";
 import { usePathname, useRouter } from "next/navigation";
 import { PropsWithChildren, useMemo } from "react";
@@ -24,6 +25,9 @@ function getOpenKeys(pathname: string) {
   if (pathname.startsWith("/product")) {
     return ["product"];
   }
+  if (pathname.startsWith("/tenant")) {
+    return ["tenant"];
+  }
 
   return [];
 }
@@ -31,8 +35,33 @@ function getOpenKeys(pathname: string) {
 export function ManagerShell({ children }: ManagerShellProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const quickActions = useMemo(
+    () => [
+      {
+        key: "/manager-dashboard",
+        label: "工作台",
+        icon: <DashboardOutlined />,
+      },
+      {
+        key: "/product/overview",
+        label: "商品类别",
+        icon: <ShoppingOutlined />,
+      },
+      {
+        key: "/user",
+        label: "用户",
+        icon: <TeamOutlined />,
+      },
+    ],
+    [],
+  );
   const items = useMemo<MenuItem[]>(
     () => [
+      {
+        key: "/manager-dashboard",
+        icon: <DashboardOutlined />,
+        label: "管理工作台",
+      },
       {
         key: "product",
         icon: <ShoppingOutlined />,
@@ -49,6 +78,17 @@ export function ManagerShell({ children }: ManagerShellProps) {
         ],
       },
       {
+        key: "tenant",
+        icon: <ApartmentOutlined />,
+        label: "租户管理",
+        children: [
+          {
+            key: "/tenant/list",
+            label: "租户管理",
+          },
+        ],
+      },
+      {
         key: "/user",
         icon: <TeamOutlined />,
         label: "用户管理",
@@ -56,7 +96,7 @@ export function ManagerShell({ children }: ManagerShellProps) {
     ],
     [],
   );
-  const activePath = pathname ?? "/product/list";
+  const activePath = pathname ?? "/manager-dashboard";
 
   const handleLogout = () => {
     clearAuthToken();
@@ -143,17 +183,43 @@ export function ManagerShell({ children }: ManagerShellProps) {
                   alignItems: "center",
                 }}
               >
-                <Space size={14} wrap style={{ width: "100%" }}>
-                  <Input
-                    className="manager-toolbar-search"
-                    prefix={<SearchOutlined style={{ color: "var(--manager-text-faint)" }} />}
-                    placeholder="搜索页面或功能"
-                    style={{ width: "min(100%, 420px)" }}
-                  />
-                  <Button type="primary" className="manager-soft-button">
-                    数据备份
-                  </Button>
-                </Space>
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      letterSpacing: "0.08em",
+                      color: "var(--manager-text-soft)",
+                      textTransform: "uppercase",
+                      marginBottom: 10,
+                    }}
+                  >
+                    快捷入口
+                  </div>
+                  <Space size={12} wrap style={{ width: "100%" }}>
+                    {quickActions.map((action) => {
+                      const isActive = activePath === action.key;
+
+                      return (
+                        <Button
+                          key={action.key}
+                          type={isActive ? "primary" : "default"}
+                          icon={action.icon}
+                          className={isActive ? "manager-soft-button" : undefined}
+                          onClick={() => router.push(action.key)}
+                          style={{
+                            height: 44,
+                            paddingInline: 18,
+                            borderRadius: 16,
+                            fontWeight: 700,
+                          }}
+                        >
+                          {action.label}
+                        </Button>
+                      );
+                    })}
+                  </Space>
+                </div>
 
                 <Space size={12} wrap>
                   <Badge dot offset={[-2, 2]}>

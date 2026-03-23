@@ -29,8 +29,10 @@ func NewTenantHandler() *TenantHandler {
 func (h *TenantHandler) RegisterHandler(engine *gin.RouterGroup) {
 	engine.GET("/tenants", h.listTenants)
 	engine.GET("/tenants/:id", h.getTenantByID)
+	engine.GET("/tenants/:id/shop-categories", h.listTenantCategoryBindings)
 	engine.POST("/tenants", h.createTenant)
 	engine.PUT("/tenants/:id", h.updateTenant)
+	engine.PUT("/tenants/:id/shop-categories", h.saveTenantCategoryBindings)
 	engine.DELETE("/tenants/:id", h.deleteTenant)
 }
 
@@ -67,6 +69,19 @@ func (h *TenantHandler) createTenant(context *gin.Context) {
 	commonRouter.ToJson(context, result, err)
 }
 
+func (h *TenantHandler) listTenantCategoryBindings(context *gin.Context) {
+	id, ok := parseTenantID(context)
+	if !ok {
+		return
+	}
+	result, err := h.tenantService.ListTenantCategoryBindings(id)
+	if err == gorm.ErrRecordNotFound {
+		commonRouter.ToError(context, "tenant not found")
+		return
+	}
+	commonRouter.ToJson(context, result, err)
+}
+
 func (h *TenantHandler) updateTenant(context *gin.Context) {
 	id, ok := parseTenantID(context)
 	if !ok {
@@ -78,6 +93,24 @@ func (h *TenantHandler) updateTenant(context *gin.Context) {
 		return
 	}
 	result, err := h.tenantService.UpdateTenant(id, &req)
+	if err == gorm.ErrRecordNotFound {
+		commonRouter.ToError(context, "tenant not found")
+		return
+	}
+	commonRouter.ToJson(context, result, err)
+}
+
+func (h *TenantHandler) saveTenantCategoryBindings(context *gin.Context) {
+	id, ok := parseTenantID(context)
+	if !ok {
+		return
+	}
+	var req tenantDTO.SaveTenantCategoryBindingsDTO
+	if err := context.ShouldBindJSON(&req); err != nil {
+		commonRouter.ToError(context, "参数错误")
+		return
+	}
+	result, err := h.tenantService.SaveTenantCategoryBindings(id, &req)
 	if err == gorm.ErrRecordNotFound {
 		commonRouter.ToError(context, "tenant not found")
 		return

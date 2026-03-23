@@ -32,7 +32,7 @@ export function LoginFormCard() {
 
   useEffect(() => {
     if (isAuthenticated()) {
-      router.replace("/product/list");
+      router.replace("/manager-dashboard");
     }
   }, [router]);
 
@@ -45,7 +45,7 @@ export function LoginFormCard() {
       });
       setAuthToken(response.token, values.remember);
       messageApi.success("登录成功，正在进入后台");
-      router.replace(values.workspace === "user" ? "/user" : "/product/list");
+      router.replace(values.workspace === "user" ? "/user" : "/manager-dashboard");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "请输入登录密码";
       messageApi.error(errorMessage);

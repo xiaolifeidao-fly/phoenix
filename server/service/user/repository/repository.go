@@ -55,6 +55,19 @@ func (r *UserRepository) CountRecentLoginUsers() (int64, error) {
 	return count, nil
 }
 
+func (r *UserRepository) CountActiveAccounts() (int64, error) {
+	if r.Db == nil {
+		return 0, fmt.Errorf("database is not initialized")
+	}
+	var count int64
+	if err := r.Db.Table("account").
+		Where("active = ?", 1).
+		Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 func (r *UserRepository) CountUsersByQuery(query userDTO.UserQueryDTO) (int64, error) {
 	if r.Db == nil {
 		return 0, fmt.Errorf("database is not initialized")

@@ -553,6 +553,131 @@ select {
   box-shadow: 0 16px 28px rgba(93, 125, 246, 0.22);
 }
 
+.manager-dashboard-card {
+  position: relative;
+  min-height: 136px;
+  padding: 18px 20px;
+  border-radius: 26px;
+  cursor: pointer;
+  overflow: hidden;
+  border: 1px solid rgba(145, 171, 212, 0.22);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 248, 253, 0.96));
+  box-shadow:
+    0 20px 50px rgba(103, 133, 182, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+
+.manager-dashboard-card--featured {
+  min-height: 124px;
+  padding: 18px 20px;
+}
+
+.manager-dashboard-card--compact {
+  min-height: 112px;
+}
+
+.manager-dashboard-card--static {
+  cursor: default;
+}
+
+.manager-dashboard-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(118, 148, 198, 0.38);
+  box-shadow:
+    0 26px 56px rgba(103, 133, 182, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+.manager-dashboard-card--static:hover {
+  transform: none;
+}
+
+.manager-dashboard-card__backdrop {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.manager-dashboard-card__content {
+  position: relative;
+  z-index: 1;
+}
+
+.manager-dashboard-card__scope {
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.manager-dashboard-card__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
+}
+
+.manager-dashboard-card__metrics {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.manager-dashboard-card__metric {
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(145, 171, 212, 0.18);
+  background: rgba(247, 250, 255, 0.76);
+}
+
+.manager-dashboard-card__metric-label {
+  color: var(--manager-text-soft);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.manager-dashboard-card__metric-value {
+  margin-top: 4px;
+  color: var(--manager-text);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.manager-dashboard-card__metric-description {
+  margin-top: 4px;
+  color: var(--manager-text-soft);
+  font-size: 12px;
+}
+
+.manager-dashboard-tag.ant-tag {
+  margin-inline-end: 0;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(145, 171, 212, 0.2);
+  background: rgba(247, 250, 255, 0.98);
+  color: var(--manager-text-soft);
+}
+
+.manager-dashboard-drawer .ant-drawer-content {
+  background: linear-gradient(180deg, rgba(252, 253, 255, 0.98), rgba(241, 246, 253, 0.98));
+}
+
+.manager-dashboard-drawer .ant-drawer-header {
+  background: transparent;
+  border-bottom: 1px solid rgba(145, 171, 212, 0.18);
+}
+
+.manager-dashboard-drawer .ant-drawer-title {
+  color: var(--manager-text);
+}
+
 .manager-stagger-1,
 .manager-stagger-2,
 .manager-stagger-3,

@@ -61,6 +61,8 @@ export class UserRecord {
 export class UserStats {
   visibleUsers = 0;
 
+  accountCount = 0;
+
   privilegedUsers = 0;
 
   recentLoginUsers = 0;

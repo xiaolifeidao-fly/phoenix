@@ -15,6 +15,8 @@ import {
   type ShopCategoryRecord,
 } from "../api/product.api";
 
+const PRODUCT_CATEGORY_MANAGEMENT_CACHE_KEY = "phoenix_manager_product_category_management_cache_v1";
+
 const defaultQuery: Required<ShopCategoryListQuery> = {
   pageIndex: 1,
   pageSize: 10,
@@ -22,6 +24,12 @@ const defaultQuery: Required<ShopCategoryListQuery> = {
   name: "",
   status: "",
 };
+
+interface ProductCategoryManagementCache {
+  categories: ShopCategoryRecord[];
+  total: number;
+  query: Required<ShopCategoryListQuery>;
+}
 
 export function useProductCategoryManagement() {
   const [categories, setCategories] = useState<ShopCategoryRecord[]>([]);
@@ -40,6 +48,14 @@ export function useProductCategoryManagement() {
       setCategories(result.data);
       setTotal(result.total);
       setQuery(mergedQuery);
+      if (typeof window !== "undefined") {
+        const payload: ProductCategoryManagementCache = {
+          categories: result.data,
+          total: result.total,
+          query: mergedQuery,
+        };
+        window.sessionStorage.setItem(PRODUCT_CATEGORY_MANAGEMENT_CACHE_KEY, JSON.stringify(payload));
+      }
     } finally {
       setLoading(false);
     }
@@ -96,6 +112,24 @@ export function useProductCategoryManagement() {
   };
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      void refresh();
+      return;
+    }
+
+    try {
+      const rawValue = window.sessionStorage.getItem(PRODUCT_CATEGORY_MANAGEMENT_CACHE_KEY);
+      if (rawValue) {
+        const parsed = JSON.parse(rawValue) as ProductCategoryManagementCache;
+        setCategories(parsed.categories ?? []);
+        setTotal(parsed.total ?? 0);
+        setQuery(parsed.query ?? defaultQuery);
+        return;
+      }
+    } catch {
+      window.sessionStorage.removeItem(PRODUCT_CATEGORY_MANAGEMENT_CACHE_KEY);
+    }
+
     void refresh();
   }, []);
 

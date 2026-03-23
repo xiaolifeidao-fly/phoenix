@@ -132,8 +132,13 @@ func (s *UserService) GetUserStats() (*userDTO.UserStatsDTO, error) {
 	if err != nil {
 		return nil, err
 	}
+	accountCount, err := s.userRepository.CountActiveAccounts()
+	if err != nil {
+		return nil, err
+	}
 	return &userDTO.UserStatsDTO{
 		VisibleUsers:     int(visibleUsers),
+		AccountCount:     int(accountCount),
 		PrivilegedUsers:  int(privilegedUsers),
 		RecentLoginUsers: int(recentLoginUsers),
 		ActiveUsers:      int(activeUsers),

@@ -14,6 +14,8 @@ import {
   updateUser,
 } from "../api/user.api";
 
+const USER_MANAGEMENT_CACHE_KEY = "phoenix_manager_user_management_cache_v1";
+
 const defaultStats: UserStats = {
   visibleUsers: 0,
   privilegedUsers: 0,
@@ -28,6 +30,13 @@ const defaultQuery: Required<UserListQuery> = {
   role: "",
   status: "",
 };
+
+interface UserManagementCache {
+  users: UserRecord[];
+  stats: UserStats;
+  total: number;
+  query: Required<UserListQuery>;
+}
 
 export function useUserManagement() {
   const [users, setUsers] = useState<UserRecord[]>([]);
@@ -46,6 +55,17 @@ export function useUserManagement() {
       setUsers(result.data);
       setTotal(result.total);
       setQuery(mergedQuery);
+      if (typeof window !== "undefined") {
+        const rawValue = window.sessionStorage.getItem(USER_MANAGEMENT_CACHE_KEY);
+        const parsed = rawValue ? (JSON.parse(rawValue) as UserManagementCache) : null;
+        const payload: UserManagementCache = {
+          users: result.data,
+          stats: parsed?.stats ?? defaultStats,
+          total: result.total,
+          query: mergedQuery,
+        };
+        window.sessionStorage.setItem(USER_MANAGEMENT_CACHE_KEY, JSON.stringify(payload));
+      }
     } finally {
       setLoading(false);
     }
@@ -56,6 +76,17 @@ export function useUserManagement() {
     try {
       const result = await fetchUserStats();
       setStats(result);
+      if (typeof window !== "undefined") {
+        const rawValue = window.sessionStorage.getItem(USER_MANAGEMENT_CACHE_KEY);
+        const parsed = rawValue ? (JSON.parse(rawValue) as UserManagementCache) : null;
+        const payload: UserManagementCache = {
+          users: parsed?.users ?? [],
+          stats: result,
+          total: parsed?.total ?? 0,
+          query: parsed?.query ?? defaultQuery,
+        };
+        window.sessionStorage.setItem(USER_MANAGEMENT_CACHE_KEY, JSON.stringify(payload));
+      }
     } finally {
       setStatsLoading(false);
     }
@@ -106,6 +137,25 @@ export function useUserManagement() {
   };
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      void refresh();
+      return;
+    }
+
+    try {
+      const rawValue = window.sessionStorage.getItem(USER_MANAGEMENT_CACHE_KEY);
+      if (rawValue) {
+        const parsed = JSON.parse(rawValue) as UserManagementCache;
+        setUsers(parsed.users ?? []);
+        setStats(parsed.stats ?? defaultStats);
+        setTotal(parsed.total ?? 0);
+        setQuery(parsed.query ?? defaultQuery);
+        return;
+      }
+    } catch {
+      window.sessionStorage.removeItem(USER_MANAGEMENT_CACHE_KEY);
+    }
+
     void refresh();
   }, []);
 

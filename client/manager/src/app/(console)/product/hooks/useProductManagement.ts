@@ -11,12 +11,20 @@ import {
   type ShopRecord,
 } from "../api/product.api";
 
+const PRODUCT_MANAGEMENT_CACHE_KEY = "phoenix_manager_product_management_cache_v1";
+
 const defaultQuery: Required<ShopListQuery> = {
   pageIndex: 1,
   pageSize: 10,
   code: "",
   name: "",
 };
+
+interface ProductManagementCache {
+  products: ShopRecord[];
+  total: number;
+  query: Required<ShopListQuery>;
+}
 
 export function useProductManagement() {
   const [products, setProducts] = useState<ShopRecord[]>([]);
@@ -33,6 +41,14 @@ export function useProductManagement() {
       setProducts(result.data);
       setTotal(result.total);
       setQuery(mergedQuery);
+      if (typeof window !== "undefined") {
+        const payload: ProductManagementCache = {
+          products: result.data,
+          total: result.total,
+          query: mergedQuery,
+        };
+        window.sessionStorage.setItem(PRODUCT_MANAGEMENT_CACHE_KEY, JSON.stringify(payload));
+      }
     } finally {
       setLoading(false);
     }
@@ -65,6 +81,24 @@ export function useProductManagement() {
   };
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      void refresh();
+      return;
+    }
+
+    try {
+      const rawValue = window.sessionStorage.getItem(PRODUCT_MANAGEMENT_CACHE_KEY);
+      if (rawValue) {
+        const parsed = JSON.parse(rawValue) as ProductManagementCache;
+        setProducts(parsed.products ?? []);
+        setTotal(parsed.total ?? 0);
+        setQuery(parsed.query ?? defaultQuery);
+        return;
+      }
+    } catch {
+      window.sessionStorage.removeItem(PRODUCT_MANAGEMENT_CACHE_KEY);
+    }
+
     void refresh();
   }, []);
 

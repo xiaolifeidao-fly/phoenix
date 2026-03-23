@@ -2,8 +2,6 @@ package dto
 
 import (
 	"encoding/json"
-
-	baseDTO "common/base/dto"
 )
 
 type RequestDTO struct {
@@ -38,9 +36,171 @@ type ActionResponseDTO struct {
 	Data    json.RawMessage `json:"data,omitempty"`
 }
 
+type barryListData[T any] struct {
+	List  []*T `json:"list,omitempty"`
+	Data  []*T `json:"data,omitempty"`
+	Rows  []*T `json:"rows,omitempty"`
+	Total int  `json:"total,omitempty"`
+}
+
+func normalizeBarrySuccess(success bool, code string) bool {
+	return success || code == "0"
+}
+
+func decodeBarryListResponse[T any](payload []byte) (success bool, code, message string, total int, data []*T, err error) {
+	var wrapped struct {
+		Success bool   `json:"success"`
+		Code    string `json:"code,omitempty"`
+		Message string `json:"message,omitempty"`
+		Data    []*T   `json:"data,omitempty"`
+		Total   int    `json:"total,omitempty"`
+	}
+	if err = json.Unmarshal(payload, &wrapped); err == nil && wrapped.Data != nil {
+		return normalizeBarrySuccess(wrapped.Success, wrapped.Code), wrapped.Code, wrapped.Message, wrapped.Total, wrapped.Data, nil
+	}
+
+	var list []*T
+	if err = json.Unmarshal(payload, &list); err == nil {
+		return true, "", "", len(list), list, nil
+	}
+
+	var wrappedPage struct {
+		Success bool             `json:"success"`
+		Code    string           `json:"code,omitempty"`
+		Message string           `json:"message,omitempty"`
+		Data    barryListData[T] `json:"data"`
+		Total   int              `json:"total,omitempty"`
+	}
+	if err = json.Unmarshal(payload, &wrappedPage); err == nil {
+		switch {
+		case wrappedPage.Data.List != nil:
+			return normalizeBarrySuccess(wrappedPage.Success, wrappedPage.Code), wrappedPage.Code, wrappedPage.Message, wrappedPage.Data.Total, wrappedPage.Data.List, nil
+		case wrappedPage.Data.Data != nil:
+			return normalizeBarrySuccess(wrappedPage.Success, wrappedPage.Code), wrappedPage.Code, wrappedPage.Message, wrappedPage.Data.Total, wrappedPage.Data.Data, nil
+		case wrappedPage.Data.Rows != nil:
+			return normalizeBarrySuccess(wrappedPage.Success, wrappedPage.Code), wrappedPage.Code, wrappedPage.Message, wrappedPage.Data.Total, wrappedPage.Data.Rows, nil
+		}
+		if wrappedPage.Total > 0 {
+			total = wrappedPage.Total
+		}
+	}
+
+	var wrappedWithoutData struct {
+		Success bool   `json:"success"`
+		Code    string `json:"code,omitempty"`
+		Message string `json:"message,omitempty"`
+	}
+	if err = json.Unmarshal(payload, &wrappedWithoutData); err != nil {
+		return false, "", "", 0, nil, err
+	}
+	return normalizeBarrySuccess(wrappedWithoutData.Success, wrappedWithoutData.Code), wrappedWithoutData.Code, wrappedWithoutData.Message, 0, nil, nil
+}
+
+func decodeBarryDetailResponse[T any](payload []byte) (success bool, code, message string, data *T, err error) {
+	var wrapped struct {
+		Success bool   `json:"success"`
+		Code    string `json:"code,omitempty"`
+		Message string `json:"message,omitempty"`
+		Data    *T     `json:"data,omitempty"`
+	}
+	if err = json.Unmarshal(payload, &wrapped); err == nil && (wrapped.Data != nil || wrapped.Success || wrapped.Code != "" || wrapped.Message != "") {
+		return normalizeBarrySuccess(wrapped.Success, wrapped.Code), wrapped.Code, wrapped.Message, wrapped.Data, nil
+	}
+
+	var detail T
+	if err = json.Unmarshal(payload, &detail); err == nil {
+		return true, "", "", &detail, nil
+	}
+
+	var successOnly bool
+	if err = json.Unmarshal(payload, &successOnly); err == nil {
+		return successOnly, "", "", nil, nil
+	}
+
+	var wrappedWithoutData struct {
+		Success bool   `json:"success"`
+		Code    string `json:"code,omitempty"`
+		Message string `json:"message,omitempty"`
+	}
+	if err = json.Unmarshal(payload, &wrappedWithoutData); err != nil {
+		return false, "", "", nil, err
+	}
+	return normalizeBarrySuccess(wrappedWithoutData.Success, wrappedWithoutData.Code), wrappedWithoutData.Code, wrappedWithoutData.Message, nil, nil
+}
+
+func decodeBarryActionResponse(payload []byte) (success bool, code, message string, raw json.RawMessage, err error) {
+	var wrapped struct {
+		Success bool            `json:"success"`
+		Code    string          `json:"code,omitempty"`
+		Message string          `json:"message,omitempty"`
+		Data    json.RawMessage `json:"data,omitempty"`
+	}
+	if err = json.Unmarshal(payload, &wrapped); err == nil && (wrapped.Success || wrapped.Code != "" || wrapped.Message != "" || wrapped.Data != nil) {
+		return normalizeBarrySuccess(wrapped.Success, wrapped.Code), wrapped.Code, wrapped.Message, wrapped.Data, nil
+	}
+
+	var successOnly bool
+	if err = json.Unmarshal(payload, &successOnly); err == nil {
+		return successOnly, "", "", nil, nil
+	}
+	return false, "", "", nil, err
+}
+
+func (dto *ListResponseDTO[T]) UnmarshalJSON(data []byte) error {
+	success, code, message, total, list, err := decodeBarryListResponse[T](data)
+	if err != nil {
+		return err
+	}
+	dto.Success = success
+	dto.Code = code
+	dto.Message = message
+	dto.Total = total
+	dto.Data = list
+	return nil
+}
+
+func (dto *DetailResponseDTO[T]) UnmarshalJSON(data []byte) error {
+	success, code, message, detail, err := decodeBarryDetailResponse[T](data)
+	if err != nil {
+		return err
+	}
+	dto.Success = success
+	dto.Code = code
+	dto.Message = message
+	dto.Data = detail
+	return nil
+}
+
+func (dto *ActionResponseDTO) UnmarshalJSON(data []byte) error {
+	success, code, message, raw, err := decodeBarryActionResponse(data)
+	if err != nil {
+		return err
+	}
+	dto.Success = success
+	dto.Code = code
+	dto.Message = message
+	dto.Data = raw
+	return nil
+}
+
+type BarryBaseDTO struct {
+	ID          int     `json:"id"`
+	CreatedTime string  `json:"createdTime,omitempty"`
+	UpdatedTime string  `json:"updatedTime,omitempty"`
+	CreatedBy   *string `json:"createdBy,omitempty"`
+	UpdatedBy   *string `json:"updatedBy,omitempty"`
+	Active      bool    `json:"active"`
+}
+
 type ProductTypeDTO struct {
-	Code string `json:"code"`
-	Name string `json:"name"`
+	BarryBaseDTO
+	Name         string `json:"name"`
+	Code         string `json:"code"`
+	Priority     int    `json:"priority,omitempty"`
+	AllowGetData bool   `json:"allowGetData,omitempty"`
+	Params       any    `json:"params,omitempty"`
+	Status       string `json:"status,omitempty"`
+	ShopGroupID  int64  `json:"shopGroupId,omitempty"`
 }
 
 type ProductTypeQueryDTO struct {
@@ -58,39 +218,19 @@ type ProductTypeListResponseDTO struct {
 }
 
 func (dto *ProductTypeListResponseDTO) UnmarshalJSON(data []byte) error {
-	type alias ProductTypeListResponseDTO
-	var wrapped alias
-	if err := json.Unmarshal(data, &wrapped); err == nil && wrapped.Data != nil {
-		*dto = ProductTypeListResponseDTO(wrapped)
-		if !dto.Success {
-			dto.Success = true
-		}
-		return nil
-	}
-
-	var list []*ProductTypeDTO
-	if err := json.Unmarshal(data, &list); err == nil {
-		dto.Success = true
-		dto.Data = list
-		return nil
-	}
-
-	var wrappedWithoutData struct {
-		Success bool   `json:"success"`
-		Code    string `json:"code,omitempty"`
-		Message string `json:"message,omitempty"`
-	}
-	if err := json.Unmarshal(data, &wrappedWithoutData); err != nil {
+	success, code, message, _, list, err := decodeBarryListResponse[ProductTypeDTO](data)
+	if err != nil {
 		return err
 	}
-	dto.Success = wrappedWithoutData.Success
-	dto.Code = wrappedWithoutData.Code
-	dto.Message = wrappedWithoutData.Message
+	dto.Success = success
+	dto.Code = code
+	dto.Message = message
+	dto.Data = list
 	return nil
 }
 
 type ProductCategoryDTO struct {
-	baseDTO.BaseDTO
+	BarryBaseDTO
 	ShopGroupID       int64             `json:"shopGroupId"`
 	Name              string            `json:"name"`
 	Code              string            `json:"code"`
@@ -117,39 +257,18 @@ type ProductCategoryListResponseDTO struct {
 }
 
 func (dto *ProductCategoryListResponseDTO) UnmarshalJSON(data []byte) error {
-	type alias ProductCategoryListResponseDTO
-	var wrapped alias
-	if err := json.Unmarshal(data, &wrapped); err == nil && wrapped.Data != nil {
-		*dto = ProductCategoryListResponseDTO(wrapped)
-		if !dto.Success {
-			dto.Success = true
-		}
-		return nil
-	}
-
-	var list []*ProductCategoryDTO
-	if err := json.Unmarshal(data, &list); err == nil {
-		dto.Success = true
-		dto.Data = list
-		return nil
-	}
-
-	var wrappedWithoutData struct {
-		Success bool   `json:"success"`
-		Code    string `json:"code,omitempty"`
-		Message string `json:"message,omitempty"`
-	}
-	if err := json.Unmarshal(data, &wrappedWithoutData); err != nil {
+	success, code, message, _, list, err := decodeBarryListResponse[ProductCategoryDTO](data)
+	if err != nil {
 		return err
 	}
-	dto.Success = wrappedWithoutData.Success
-	dto.Code = wrappedWithoutData.Code
-	dto.Message = wrappedWithoutData.Message
+	dto.Success = success
+	dto.Code = code
+	dto.Message = message
+	dto.Data = list
 	return nil
 }
 
 type SaveProductCategoryDTO struct {
-	baseDTO.BaseDTO
 	ShopGroupID      int64    `json:"shopGroupId"`
 	Name             string   `json:"name"`
 	Code             string   `json:"code"`
@@ -170,27 +289,15 @@ type ProductCategoryActionResultDTO struct {
 }
 
 func (dto *ProductCategoryActionResultDTO) UnmarshalJSON(data []byte) error {
-	type alias ProductCategoryActionResultDTO
-	var wrapped alias
-	if err := json.Unmarshal(data, &wrapped); err == nil && (wrapped.Data != nil || wrapped.Success || wrapped.Code != "" || wrapped.Message != "") {
-		*dto = ProductCategoryActionResultDTO(wrapped)
-		return nil
+	success, code, message, detail, err := decodeBarryDetailResponse[ProductCategoryDTO](data)
+	if err != nil {
+		return err
 	}
-
-	var detail ProductCategoryDTO
-	if err := json.Unmarshal(data, &detail); err == nil && (detail.Code != "" || detail.Name != "" || detail.Id > 0) {
-		dto.Success = true
-		dto.Data = &detail
-		return nil
-	}
-
-	var success bool
-	if err := json.Unmarshal(data, &success); err == nil {
-		dto.Success = success
-		return nil
-	}
-
-	return json.Unmarshal(data, (*alias)(dto))
+	dto.Success = success
+	dto.Code = code
+	dto.Message = message
+	dto.Data = detail
+	return nil
 }
 
 type ChannelDTO struct {
