@@ -1,11 +1,16 @@
 "use client";
 
 import {
+  AuditOutlined,
   ApartmentOutlined,
+  BarChartOutlined,
   BellOutlined,
+  ControlOutlined,
   DashboardOutlined,
   LogoutOutlined,
+  ShopOutlined,
   ShoppingOutlined,
+  SolutionOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
 import { Avatar, Badge, Button, Layout, Menu, Space, Typography } from "antd";
@@ -27,6 +32,9 @@ function getOpenKeys(pathname: string) {
   }
   if (pathname.startsWith("/tenant")) {
     return ["tenant"];
+  }
+  if (pathname.startsWith("/manual")) {
+    return ["manual"];
   }
 
   return [];
@@ -92,6 +100,38 @@ export function ManagerShell({ children }: ManagerShellProps) {
         key: "/user",
         icon: <TeamOutlined />,
         label: "用户管理",
+      },
+      {
+        key: "manual",
+        icon: <ControlOutlined />,
+        label: "人工",
+        children: [
+          {
+            key: "/manual/user-management",
+            icon: <SolutionOutlined />,
+            label: "用户管理",
+          },
+          {
+            key: "/manual/product-management",
+            icon: <ShopOutlined />,
+            label: "人工商品管理",
+          },
+          {
+            key: "/manual/channel-management",
+            icon: <ApartmentOutlined />,
+            label: "渠道管理",
+          },
+          {
+            key: "/manual/task-statistics",
+            icon: <BarChartOutlined />,
+            label: "任务统计",
+          },
+          {
+            key: "/manual/withdraw-approval",
+            icon: <AuditOutlined />,
+            label: "提现审批",
+          },
+        ],
       },
     ],
     [],

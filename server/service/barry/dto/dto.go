@@ -1,8 +1,6 @@
 package dto
 
-import (
-	"encoding/json"
-)
+import "encoding/json"
 
 type RequestDTO struct {
 	RequestID string `json:"requestId,omitempty"`
@@ -306,12 +304,48 @@ type ChannelDTO struct {
 	Type string `json:"type"`
 }
 
+type ChannelDetailDTO struct {
+	BarryBaseDTO
+	Code                    string   `json:"code"`
+	Name                    string   `json:"name"`
+	Type                    string   `json:"type"`
+	TypeDesc                string   `json:"typeDesc,omitempty"`
+	RetailerCommissionScale *float64 `json:"retailerCommissionScale,omitempty"`
+	MerchantCommissionScale *float64 `json:"merchantCommissionScale,omitempty"`
+	AllowAssign             *bool    `json:"allowAssign,omitempty"`
+	AssignLimit             *int     `json:"assignLimit,omitempty"`
+	Remark                  string   `json:"remark,omitempty"`
+}
+
 type ChannelQueryDTO struct {
 	PageQueryDTO
 	RequestDTO
 	Code string `json:"code,omitempty" form:"code"`
 	Name string `json:"name,omitempty" form:"name"`
 	Type string `json:"type,omitempty" form:"type"`
+}
+
+type SaveChannelDetailDTO struct {
+	Code                    string   `json:"code" binding:"required"`
+	Name                    string   `json:"name" binding:"required"`
+	Type                    string   `json:"type" binding:"required"`
+	RetailerCommissionScale *float64 `json:"retailerCommissionScale,omitempty"`
+	MerchantCommissionScale *float64 `json:"merchantCommissionScale,omitempty"`
+	AllowAssign             *bool    `json:"allowAssign,omitempty"`
+	AssignLimit             *int     `json:"assignLimit,omitempty"`
+	Remark                  string   `json:"remark,omitempty"`
+}
+
+type UpdateChannelDetailDTO struct {
+	ID                      int      `json:"id" binding:"required"`
+	Code                    string   `json:"code" binding:"required"`
+	Name                    string   `json:"name" binding:"required"`
+	Type                    string   `json:"type" binding:"required"`
+	RetailerCommissionScale *float64 `json:"retailerCommissionScale,omitempty"`
+	MerchantCommissionScale *float64 `json:"merchantCommissionScale,omitempty"`
+	AllowAssign             *bool    `json:"allowAssign,omitempty"`
+	AssignLimit             *int     `json:"assignLimit,omitempty"`
+	Remark                  string   `json:"remark,omitempty"`
 }
 
 type UserPointDTO struct {

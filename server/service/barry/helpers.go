@@ -8,13 +8,16 @@ import (
 )
 
 const (
-	barryInnerPrefixPath             = "barry.url.inner.prefix"
-	barryInnerShopSuffixPath         = "barry.url.inner.shop.suffix"
-	barryInnerManualListSuffixPath   = "barry.url.inner.manual.list.suffix"
-	barryInnerManualSaveSuffixPath   = "barry.url.inner.manual.save.suffix"
-	barryInnerManualDeleteSuffixPath = "barry.url.inner.manual.delete.suffix"
-	barryInnerManualExpireSuffixPath = "barry.url.inner.manual.expire.suffix"
-	barryInnerManualActiveSuffixPath = "barry.url.inner.manual.active.suffix"
+	barryInnerPrefixPath              = "barry.url.inner.prefix"
+	barryInnerShopSuffixPath          = "barry.url.inner.shop.suffix"
+	barryInnerManualListSuffixPath    = "barry.url.inner.manual.list.suffix"
+	barryInnerManualSaveSuffixPath    = "barry.url.inner.manual.save.suffix"
+	barryInnerManualDeleteSuffixPath  = "barry.url.inner.manual.delete.suffix"
+	barryInnerManualExpireSuffixPath  = "barry.url.inner.manual.expire.suffix"
+	barryInnerManualActiveSuffixPath  = "barry.url.inner.manual.active.suffix"
+	barryInnerChannelDetailListPath   = "barry.url.inner.channel.detail.list.suffix"
+	barryInnerChannelDetailSavePath   = "barry.url.inner.channel.detail.save.list.suffix"
+	barryInnerChannelDetailUpdatePath = "barry.url.inner.channel.detail.update.list.suffix"
 )
 
 func servicePath(configKey string) string {
