@@ -28,7 +28,9 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
+  fetchBarryProductCategories,
   fetchProducts,
+  type BarryProductCategoryRecord,
   type ShopCategoryChangeRecord,
   type ShopCategoryPayload,
   type ShopCategoryRecord,
@@ -71,6 +73,7 @@ export function ProductCategoryManagementPanel() {
     setChanges,
   } = useProductCategoryManagement();
   const [products, setProducts] = useState<ShopRecord[]>([]);
+  const [manualProducts, setManualProducts] = useState<BarryProductCategoryRecord[]>([]);
   const [filters, setFilters] = useState({ shopId: 0, name: "", status: "" });
   const [modalOpen, setModalOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -89,9 +92,32 @@ export function ProductCategoryManagementPanel() {
     void loadProducts();
   }, []);
 
+  useEffect(() => {
+    const loadManualProducts = async () => {
+      try {
+        const result = await fetchBarryProductCategories();
+        setManualProducts(result);
+      } catch {
+        setManualProducts([]);
+      }
+    };
+    void loadManualProducts();
+  }, []);
+
   const productNameMap = useMemo(
     () => new Map(products.map((item) => [item.id, item.name || item.code || `商品#${item.id}`])),
     [products],
+  );
+
+  const manualProductOptions = useMemo(
+    () =>
+      manualProducts
+        .filter((item) => item.code?.trim())
+        .map((item) => ({
+          label: item.name?.trim() ? `${item.name.trim()} (${item.code.trim()})` : item.code.trim(),
+          value: item.code.trim(),
+        })),
+    [manualProducts],
   );
 
   const stats = useMemo(
@@ -119,10 +145,11 @@ export function ProductCategoryManagementPanel() {
 
   const openEditModal = (record: ShopCategoryRecord) => {
     setEditingCategory(record);
+    const matchedManualProduct = manualProducts.find((item) => item.code === record.barryShopCategoryCode);
     form.setFieldsValue({
       shopId: record.shopId,
       name: record.name,
-      categoryCode: record.barryShopCategoryCode,
+      categoryCode: matchedManualProduct?.code || record.barryShopCategoryCode,
       secretKey: record.secretKey,
       lowerLimit: record.lowerLimit,
       upperLimit: record.upperLimit,
@@ -180,7 +207,7 @@ export function ProductCategoryManagementPanel() {
       render: (value: string) => <Text style={{ color: "var(--manager-text)", fontWeight: 600 }}>{value || "-"}</Text>,
     },
     {
-      title: "类目编码",
+      title: "人工商品编码",
       dataIndex: "barryShopCategoryCode",
       width: 180,
       render: (value: string) => value || "-",
@@ -288,9 +315,9 @@ export function ProductCategoryManagementPanel() {
   const historyColumns: ColumnsType<ShopCategoryChangeRecord> = [
     {
       title: "时间",
-      key: "changeTime",
+      dataIndex: "createdTime",
       width: 180,
-      render: (_, record) => formatDateTime(record.updatedTime || record.createdTime),
+      render: (value?: string) => formatDateTime(value),
     },
     { title: "旧价格", dataIndex: "oldPrice", width: 120 },
     { title: "新价格", dataIndex: "newPrice", width: 120 },
@@ -419,8 +446,15 @@ export function ProductCategoryManagementPanel() {
           <Form.Item name="name" label="类目名称" rules={[{ required: true, message: "请输入类目名称" }]}>
             <Input placeholder="例如：快速点赞" />
           </Form.Item>
-          <Form.Item name="categoryCode" label="类目编码">
-            <Input placeholder="例如：MI_FAST_LOVE" />
+          <Form.Item name="categoryCode" label="人工商品列表">
+            <Select
+              allowClear
+              showSearch
+              placeholder="请选择人工商品"
+              optionFilterProp="label"
+              options={manualProductOptions}
+              notFoundContent="接口暂无人工商品数据"
+            />
           </Form.Item>
           <Form.Item name="secretKey" label="密钥">
             <Input placeholder="请输入密钥" />

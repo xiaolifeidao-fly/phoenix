@@ -46,6 +46,16 @@ export class ShopCategoryRecord {
   updatedTime?: string;
 }
 
+export class BarryProductCategoryRecord {
+  id = 0;
+
+  name = "";
+
+  code = "";
+
+  status = "";
+}
+
 export class ShopCategoryChangeRecord {
   id!: number;
 
@@ -163,4 +173,14 @@ export async function fetchProductCategoryChanges(shopCategoryId: number) {
     pageSize: 100,
     shopCategoryId,
   });
+}
+
+export async function fetchBarryProductCategories() {
+  const response = await instance.get<ApiResponse<BarryProductCategoryRecord[]>>("/barry/product-categories", {
+    params: {
+      pageIndex: 1,
+      pageSize: 200,
+    },
+  });
+  return unwrapApiResponse(response.data);
 }

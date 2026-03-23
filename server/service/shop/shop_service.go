@@ -98,6 +98,40 @@ func buildShopCategoryChangeEntity(entity *shopRepository.ShopCategory, newPrice
 	}
 }
 
+func toShopCategoryChangeDTO(entity *shopRepository.ShopCategoryChange) *shopDTO.ShopCategoryChangeDTO {
+	if entity == nil {
+		return nil
+	}
+	return &shopDTO.ShopCategoryChangeDTO{
+		BaseDTO: baseDTO.BaseDTO{
+			Id:          entity.Id,
+			Active:      entity.Active,
+			CreatedTime: entity.CreatedTime,
+			CreatedBy:   entity.CreatedBy,
+			UpdatedTime: entity.UpdatedTime,
+			UpdatedBy:   entity.UpdatedBy,
+		},
+		UserID:           entity.UserID,
+		ShopID:           entity.ShopID,
+		ShopCategoryID:   entity.ShopCategoryID,
+		ShopCategoryName: entity.ShopCategoryName,
+		OldPrice:         entity.OldPrice,
+		NewPrice:         entity.NewPrice,
+		OldLowerLimit:    entity.OldLowerLimit,
+		NewLowerLimit:    entity.NewLowerLimit,
+		OldUpperLimit:    entity.OldUpperLimit,
+		NewUpperLimit:    entity.NewUpperLimit,
+	}
+}
+
+func toShopCategoryChangeDTOs(entities []*shopRepository.ShopCategoryChange) []*shopDTO.ShopCategoryChangeDTO {
+	var dtos []*shopDTO.ShopCategoryChangeDTO
+	for _, entity := range entities {
+		dtos = append(dtos, toShopCategoryChangeDTO(entity))
+	}
+	return dtos
+}
+
 func (s *ShopService) ListShops(query shopDTO.ShopQueryDTO) (*baseDTO.PageDTO[shopDTO.ShopDTO], error) {
 	if s.shopRepository.Db == nil {
 		return nil, fmt.Errorf("database is not initialized")
@@ -381,10 +415,10 @@ func (s *ShopService) ListShopCategoryChanges(query shopDTO.ShopCategoryChangeQu
 		return nil, err
 	}
 	var entities []*shopRepository.ShopCategoryChange
-	if err := dbQuery.Order("id DESC").Offset((pageIndex - 1) * pageSize).Limit(pageSize).Find(&entities).Error; err != nil {
+	if err := dbQuery.Order("created_time DESC, id DESC").Offset((pageIndex - 1) * pageSize).Limit(pageSize).Find(&entities).Error; err != nil {
 		return nil, err
 	}
-	return baseDTO.BuildPage(int(total), db.ToDTOs[shopDTO.ShopCategoryChangeDTO](entities)), nil
+	return baseDTO.BuildPage(int(total), toShopCategoryChangeDTOs(entities)), nil
 }
 
 func (s *ShopService) ListShopCategoryChangesByShopCategoryID(id uint, page, pageIndex, pageSize int) (*baseDTO.PageDTO[shopDTO.ShopCategoryChangeDTO], error) {
@@ -404,7 +438,7 @@ func (s *ShopService) GetShopCategoryChangeByID(id uint) (*shopDTO.ShopCategoryC
 	if entity.Active == 0 {
 		return nil, gorm.ErrRecordNotFound
 	}
-	return db.ToDTO[shopDTO.ShopCategoryChangeDTO](entity), nil
+	return toShopCategoryChangeDTO(entity), nil
 }
 func (s *ShopService) CreateShopCategoryChange(req *shopDTO.CreateShopCategoryChangeDTO) (*shopDTO.ShopCategoryChangeDTO, error) {
 	if s.shopCategoryChangeRepository.Db == nil {
@@ -421,7 +455,7 @@ func (s *ShopService) CreateShopCategoryChange(req *shopDTO.CreateShopCategoryCh
 	if err != nil {
 		return nil, err
 	}
-	return db.ToDTO[shopDTO.ShopCategoryChangeDTO](created), nil
+	return toShopCategoryChangeDTO(created), nil
 }
 func (s *ShopService) UpdateShopCategoryChange(id uint, req *shopDTO.UpdateShopCategoryChangeDTO) (*shopDTO.ShopCategoryChangeDTO, error) {
 	if req == nil {
@@ -468,7 +502,7 @@ func (s *ShopService) UpdateShopCategoryChange(id uint, req *shopDTO.UpdateShopC
 	if err != nil {
 		return nil, err
 	}
-	return db.ToDTO[shopDTO.ShopCategoryChangeDTO](saved), nil
+	return toShopCategoryChangeDTO(saved), nil
 }
 func (s *ShopService) DeleteShopCategoryChange(id uint) error {
 	entity, err := s.shopCategoryChangeRepository.FindById(id)
