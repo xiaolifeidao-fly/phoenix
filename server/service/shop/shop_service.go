@@ -386,6 +386,16 @@ func (s *ShopService) ListShopCategoryChanges(query shopDTO.ShopCategoryChangeQu
 	}
 	return baseDTO.BuildPage(int(total), db.ToDTOs[shopDTO.ShopCategoryChangeDTO](entities)), nil
 }
+
+func (s *ShopService) ListShopCategoryChangesByShopCategoryID(id uint, page, pageIndex, pageSize int) (*baseDTO.PageDTO[shopDTO.ShopCategoryChangeDTO], error) {
+	return s.ListShopCategoryChanges(shopDTO.ShopCategoryChangeQueryDTO{
+		Page:           page,
+		PageIndex:      pageIndex,
+		PageSize:       pageSize,
+		ShopCategoryID: uint64(id),
+	})
+}
+
 func (s *ShopService) GetShopCategoryChangeByID(id uint) (*shopDTO.ShopCategoryChangeDTO, error) {
 	entity, err := s.shopCategoryChangeRepository.FindById(id)
 	if err != nil {

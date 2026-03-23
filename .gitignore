@@ -25,4 +25,4 @@ __debug**
 *.log
 package
 *.tar.gz
-!.obelisk
+!.codex

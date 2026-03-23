@@ -34,6 +34,7 @@ func (h *ShopHandler) RegisterHandler(engine *gin.RouterGroup) {
 	engine.PUT("/shop-categories/:id", h.updateShopCategory)
 	engine.PUT("/shop-categories/:id/publish", h.publishShopCategory)
 	engine.PUT("/shop-categories/:id/unpublish", h.unpublishShopCategory)
+	engine.GET("/shop-categories/:id/changes", h.listShopCategoryChangesByShopCategoryID)
 	engine.DELETE("/shop-categories/:id", h.deleteShopCategory)
 	engine.GET("/shop-category-changes", h.listShopCategoryChanges)
 	engine.GET("/shop-category-changes/:id", h.getShopCategoryChangeByID)
@@ -203,6 +204,20 @@ func (h *ShopHandler) unpublishShopCategory(c *gin.Context) {
 		commonRouter.ToError(c, "shop category not found")
 		return
 	}
+	commonRouter.ToJson(c, r, e)
+}
+func (h *ShopHandler) listShopCategoryChangesByShopCategoryID(c *gin.Context) {
+	id, ok := parseShopID(c)
+	if !ok {
+		return
+	}
+	var q shopDTO.ShopCategoryChangeQueryDTO
+	if c.ShouldBindQuery(&q) != nil {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	q.ShopCategoryID = uint64(id)
+	r, e := h.shopService.ListShopCategoryChangesByShopCategoryID(id, q.Page, q.PageIndex, q.PageSize)
 	commonRouter.ToJson(c, r, e)
 }
 

@@ -70,6 +70,8 @@ export class ShopCategoryChangeRecord {
   newUpperLimit = 0;
 
   createdTime?: string;
+
+  updatedTime?: string;
 }
 
 export interface ShopListQuery {
@@ -156,7 +158,7 @@ export async function unpublishProductCategory(id: number) {
 }
 
 export async function fetchProductCategoryChanges(shopCategoryId: number) {
-  return getPage(ShopCategoryChangeRecord, "/shop-category-changes", {
+  return getPage(ShopCategoryChangeRecord, `/shop-categories/${shopCategoryId}/changes`, {
     pageIndex: 1,
     pageSize: 100,
     shopCategoryId,

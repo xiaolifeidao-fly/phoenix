@@ -223,7 +223,7 @@ export function ProductCategoryManagementPanel() {
       title: "操作",
       key: "actions",
       fixed: "right",
-      width: 168,
+      width: 208,
       render: (_, record) => (
         <Space size={4}>
           <Tooltip title="编辑类目">
@@ -286,7 +286,12 @@ export function ProductCategoryManagementPanel() {
   ];
 
   const historyColumns: ColumnsType<ShopCategoryChangeRecord> = [
-    { title: "时间", dataIndex: "createdTime", width: 180, render: (value?: string) => formatDateTime(value) },
+    {
+      title: "时间",
+      key: "changeTime",
+      width: 180,
+      render: (_, record) => formatDateTime(record.updatedTime || record.createdTime),
+    },
     { title: "旧价格", dataIndex: "oldPrice", width: 120 },
     { title: "新价格", dataIndex: "newPrice", width: 120 },
     {
