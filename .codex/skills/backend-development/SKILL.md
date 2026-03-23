@@ -21,6 +21,9 @@ version: 1.1.0
 
 当前仓库采用 Go multi-module 结构，核心目录如下：
 
+## Kakrolot 是原项目的Java服务端
+   当前是正在用go来重构原来的Java端的代码
+
 ## 当前项目的核心调用链
 
 ```text
