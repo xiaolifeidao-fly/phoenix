@@ -3,6 +3,7 @@ package barry
 import (
 	"context"
 	barryDTO "service/barry/dto"
+	"strings"
 )
 
 const orderSummaryPath = "barry.services.order-summary.path"
@@ -32,6 +33,18 @@ func (s *OrderSummaryService) List(ctx context.Context, query barryDTO.OrderSumm
 		"startAt", query.StartAt,
 		"endAt", query.EndAt,
 	), response)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func (s *OrderSummaryService) RecordSummary(ctx context.Context, code, sumDate string) (*barryDTO.DetailResponseDTO[barryDTO.RecordSummaryDTO], error) {
+	response := &barryDTO.DetailResponseDTO[barryDTO.RecordSummaryDTO]{}
+	requestURL := innerServicePath(barryInnerRecordSummaryPath)
+	requestURL = strings.ReplaceAll(requestURL, "{code}", strings.TrimSpace(code))
+	requestURL = strings.ReplaceAll(requestURL, "{sumDate}", strings.TrimSpace(sumDate))
+	err := s.client.GetAbsolute(ctx, requestURL, nil, response)
 	if err != nil {
 		return nil, err
 	}

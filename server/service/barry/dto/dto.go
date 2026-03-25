@@ -267,6 +267,7 @@ func (dto *ProductCategoryListResponseDTO) UnmarshalJSON(data []byte) error {
 }
 
 type SaveProductCategoryDTO struct {
+	ID               int      `json:"id,omitempty"`
 	ShopGroupID      int64    `json:"shopGroupId"`
 	Name             string   `json:"name"`
 	Code             string   `json:"code"`
@@ -370,6 +371,84 @@ type UserDTO struct {
 	Status   string `json:"status,omitempty"`
 }
 
+type PaymentMethodDTO struct {
+	BarryBaseDTO
+	Type    string `json:"type,omitempty"`
+	Name    string `json:"name,omitempty"`
+	Account string `json:"account,omitempty"`
+}
+
+type UserDetailDTO struct {
+	BarryBaseDTO
+	Username         string              `json:"username"`
+	Password         string              `json:"password,omitempty"`
+	OriginalPassword string              `json:"originalPassword,omitempty"`
+	Channel          string              `json:"channel,omitempty"`
+	InventCode       string              `json:"inventCode,omitempty"`
+	AlipayName       string              `json:"alipayName,omitempty"`
+	AlipayAccount    string              `json:"alipayAccount,omitempty"`
+	Role             string              `json:"role,omitempty"`
+	PaymentMethods   []*PaymentMethodDTO `json:"paymentMethods,omitempty"`
+}
+
+type UserDetailQueryDTO struct {
+	RequestDTO
+	Username string `json:"username,omitempty" form:"username"`
+	Channel  string `json:"channel,omitempty" form:"channel"`
+}
+
+type SaveUserDetailDTO struct {
+	Username         string `json:"username" binding:"required"`
+	Password         string `json:"password,omitempty"`
+	OriginalPassword string `json:"originalPassword,omitempty"`
+	Channel          string `json:"channel,omitempty"`
+	InventCode       string `json:"inventCode,omitempty"`
+	AlipayName       string `json:"alipayName,omitempty"`
+	AlipayAccount    string `json:"alipayAccount,omitempty"`
+	Role             string `json:"role,omitempty"`
+}
+
+type UpdateUserDetailDTO struct {
+	Username         string `json:"username" binding:"required"`
+	Password         string `json:"password,omitempty"`
+	OriginalPassword string `json:"originalPassword,omitempty"`
+	Channel          string `json:"channel,omitempty"`
+	InventCode       string `json:"inventCode,omitempty"`
+	AlipayName       string `json:"alipayName,omitempty"`
+	AlipayAccount    string `json:"alipayAccount,omitempty"`
+	Role             string `json:"role,omitempty"`
+}
+
+type UserWithdrawRecordDTO struct {
+	BarryBaseDTO
+	Channel        string `json:"channel,omitempty"`
+	Username       string `json:"username,omitempty"`
+	Points         int64  `json:"points,omitempty"`
+	Status         string `json:"status,omitempty"`
+	Description    string `json:"description,omitempty"`
+	ApplyTime      string `json:"applyTime,omitempty"`
+	ApproveTime    string `json:"approveTime,omitempty"`
+	PaymentID      int64  `json:"paymentId,omitempty"`
+	PaymentType    string `json:"paymentType,omitempty"`
+	PaymentName    string `json:"paymentName,omitempty"`
+	PaymentAccount string `json:"paymentAccount,omitempty"`
+}
+
+type UserWithdrawRecordQueryDTO struct {
+	RequestDTO
+	Username  string `json:"username,omitempty" form:"username"`
+	Channel   string `json:"channel,omitempty" form:"channel"`
+	Status    string `json:"status,omitempty" form:"status"`
+	StartTime string `json:"startTime,omitempty" form:"startTime"`
+	EndTime   string `json:"endTime,omitempty" form:"endTime"`
+}
+
+type UserWithdrawActionDTO struct {
+	Username                  string `json:"username,omitempty"`
+	UserPointWithdrawRecordID int64  `json:"userPointWithdrawRecordId" binding:"required"`
+	Description               string `json:"description,omitempty"`
+}
+
 type UserQueryDTO struct {
 	PageQueryDTO
 	RequestDTO
@@ -461,4 +540,54 @@ type OrderSummaryQueryDTO struct {
 	ProductTypeCode string `json:"productTypeCode,omitempty" form:"productTypeCode"`
 	StartAt         string `json:"startAt,omitempty" form:"startAt"`
 	EndAt           string `json:"endAt,omitempty" form:"endAt"`
+}
+
+type RecordSummaryDTO struct {
+	TotalNum      int64 `json:"totalNum"`
+	PendingNum    int64 `json:"pendingNum"`
+	UnCheckNum    int64 `json:"unCheckNum"`
+	CheckedNum    int64 `json:"checkedNum"`
+	CheckErrorNum int64 `json:"checkErrorNum"`
+}
+
+type ManualTaskStatisticsQueryDTO struct {
+	StartDate   string `json:"startDate,omitempty" form:"startDate"`
+	EndDate     string `json:"endDate,omitempty" form:"endDate"`
+	ShopGroupID int64  `json:"shopGroupId,omitempty" form:"shopGroupId"`
+	Keyword     string `json:"keyword,omitempty" form:"keyword"`
+}
+
+type ManualTaskStatisticsGroupOptionDTO struct {
+	ID            int64  `json:"id"`
+	Name          string `json:"name"`
+	BusinessType  string `json:"businessType,omitempty"`
+	BusinessCode  string `json:"businessCode,omitempty"`
+	DashboardSort int    `json:"dashboardSort"`
+}
+
+type ManualTaskStatisticsDetailDTO struct {
+	ShopGroupID     int64   `json:"shopGroupId"`
+	Name            string  `json:"name"`
+	BusinessType    string  `json:"businessType,omitempty"`
+	BusinessCode    string  `json:"businessCode,omitempty"`
+	TotalNum        int64   `json:"totalNum"`
+	PendingNum      int64   `json:"pendingNum"`
+	WaitNum         int64   `json:"waitNum"`
+	DoneNum         int64   `json:"doneNum"`
+	ErrorNum        int64   `json:"errorNum"`
+	CompletionRate  float64 `json:"completionRate"`
+	CompletionCount int64   `json:"completionCount"`
+}
+
+type ManualTaskStatisticsDTO struct {
+	StartDate    string                                `json:"startDate"`
+	EndDate      string                                `json:"endDate"`
+	TotalNum     int64                                 `json:"totalNum"`
+	PendingNum   int64                                 `json:"pendingNum"`
+	WaitNum      int64                                 `json:"waitNum"`
+	DoneNum      int64                                 `json:"doneNum"`
+	ErrorNum     int64                                 `json:"errorNum"`
+	GroupCount   int                                   `json:"groupCount"`
+	DetailList   []*ManualTaskStatisticsDetailDTO      `json:"detailList"`
+	GroupOptions []*ManualTaskStatisticsGroupOptionDTO `json:"groupOptions"`
 }

@@ -3,10 +3,10 @@ package initialization
 import (
 	"common/middleware/db"
 	"common/middleware/redis"
-	"common/middleware/storage/oss"
 	"common/middleware/vipper"
 	"fmt"
 	"log"
+	"time"
 	"web-api/routers"
 )
 
@@ -58,26 +58,26 @@ var initializers = []Initializer{
 		},
 	},
 
-	{
-		Order: OssInit,
-		Name:  "Router",
-		InitFn: func() error {
-			dirPrefix := vipper.GetString("oss.dirPrefix")
-			bucketName := vipper.GetString("oss.bucketName")
-			accessKeyId := vipper.GetString("oss.accessKeyId")
-			accessKeySecret := vipper.GetString("oss.accessKeySecret")
-			endpoint := vipper.GetString("oss.endpoint")
-			ossEntity := &oss.OssEntity{
-				DirPrefix:       dirPrefix,
-				Endpoint:        endpoint,
-				BucketName:      bucketName,
-				AccessKeyId:     accessKeyId,
-				AccessKeySecret: accessKeySecret,
-			}
-			oss.Setup(ossEntity)
-			return nil
-		},
-	},
+	// {
+	// 	Order: OssInit,
+	// 	Name:  "Router",
+	// 	InitFn: func() error {
+	// 		dirPrefix := vipper.GetString("oss.dirPrefix")
+	// 		bucketName := vipper.GetString("oss.bucketName")
+	// 		accessKeyId := vipper.GetString("oss.accessKeyId")
+	// 		accessKeySecret := vipper.GetString("oss.accessKeySecret")
+	// 		endpoint := vipper.GetString("oss.endpoint")
+	// 		ossEntity := &oss.OssEntity{
+	// 			DirPrefix:       dirPrefix,
+	// 			Endpoint:        endpoint,
+	// 			BucketName:      bucketName,
+	// 			AccessKeyId:     accessKeyId,
+	// 			AccessKeySecret: accessKeySecret,
+	// 		}
+	// 		oss.Setup(ossEntity)
+	// 		return nil
+	// 	},
+	// },
 	// {
 	// 	Order:  IpManagerInit,
 	// 	Name:   "IP Manager",
@@ -108,16 +108,17 @@ func Init() error {
 	// 按顺序执行初始化
 	for _, init := range initializers {
 		log.Printf("Initializing %s...", init.Name)
+		start := time.Now()
 		if err := init.InitFn(); err != nil {
 			switch init.Order {
 			case RedisInit, OssInit:
-				log.Printf("Skipping optional initializer %s: %v", init.Name, err)
+				log.Printf("Skipping optional initializer %s after %s: %v", init.Name, time.Since(start), err)
 				continue
 			default:
-				return fmt.Errorf("failed to initialize %s: %v", init.Name, err)
+				return fmt.Errorf("failed to initialize %s after %s: %v", init.Name, time.Since(start), err)
 			}
 		}
-		log.Printf("%s initialized successfully", init.Name)
+		log.Printf("%s initialized successfully in %s", init.Name, time.Since(start))
 	}
 	return nil
 }

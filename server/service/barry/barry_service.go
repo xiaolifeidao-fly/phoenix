@@ -8,14 +8,18 @@ type BarryService struct {
 	Channel         *ChannelService
 	UserPoint       *UserPointService
 	User            *UserService
+	UserDetail      *UserDetailService
+	UserWithdraw    *UserWithdrawService
 	PointWithdraw   *PointWithdrawService
 	Entry           *EntryService
 	Return          *ReturnService
 	OrderSummary    *OrderSummaryService
+	ManualTaskStats *ManualTaskStatisticsService
 }
 
 func NewBarryService() *BarryService {
 	client := NewClient()
+	orderSummaryService := NewOrderSummaryService(client)
 	return &BarryService{
 		client:          client,
 		ProductType:     NewProductTypeService(client),
@@ -23,10 +27,13 @@ func NewBarryService() *BarryService {
 		Channel:         NewChannelService(client),
 		UserPoint:       NewUserPointService(client),
 		User:            NewUserService(client),
+		UserDetail:      NewUserDetailService(client),
+		UserWithdraw:    NewUserWithdrawService(client),
 		PointWithdraw:   NewPointWithdrawService(client),
 		Entry:           NewEntryService(client),
 		Return:          NewReturnService(client),
-		OrderSummary:    NewOrderSummaryService(client),
+		OrderSummary:    orderSummaryService,
+		ManualTaskStats: NewManualTaskStatisticsService(orderSummaryService),
 	}
 }
 

@@ -11,6 +11,7 @@ func (h *BarryHandler) registerTransactionRoutes(engine *gin.RouterGroup) {
 	engine.GET("/barry/entries", h.listEntries)
 	engine.GET("/barry/returns", h.listReturns)
 	engine.GET("/barry/order-summaries", h.listOrderSummaries)
+	engine.GET("/barry/manual-task-statistics", h.getManualTaskStatistics)
 }
 
 func (h *BarryHandler) listEntries(c *gin.Context) {
@@ -56,4 +57,18 @@ func (h *BarryHandler) listOrderSummaries(c *gin.Context) {
 		return
 	}
 	commonRouter.ToJson(c, response.Data, nil)
+}
+
+func (h *BarryHandler) getManualTaskStatistics(c *gin.Context) {
+	var q barryDTO.ManualTaskStatisticsQueryDTO
+	if c.ShouldBindQuery(&q) != nil {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := h.barryService.ManualTaskStats.Summary(c.Request.Context(), q)
+	if err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	commonRouter.ToJson(c, response, nil)
 }

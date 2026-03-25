@@ -18,6 +18,15 @@ const (
 	barryInnerChannelDetailListPath   = "barry.url.inner.channel.detail.list.suffix"
 	barryInnerChannelDetailSavePath   = "barry.url.inner.channel.detail.save.list.suffix"
 	barryInnerChannelDetailUpdatePath = "barry.url.inner.channel.detail.update.list.suffix"
+	barryInnerUserDetailListPath      = "barry.url.inner.user.detail.list.suffix"
+	barryInnerUserDetailFindPath      = "barry.url.inner.user.detail.find.suffix"
+	barryInnerUserDetailSavePath      = "barry.url.inner.user.detail.save.suffix"
+	barryInnerUserDetailUpdatePath    = "barry.url.inner.user.detail.update.suffix"
+	barryInnerRecordSummaryPath       = "barry.url.inner.record.summary.suffix"
+	barryInnerUserWithdrawRecordPath  = "barry.url.inner.point.user.withdraw.record.suffix"
+	barryInnerUserWithdrawAccountPath = "barry.url.inner.point.user.withdraw.account.suffix"
+	barryInnerUserWithdrawFinishPath  = "barry.url.inner.point.user.withdraw.finish.suffix"
+	barryInnerUserWithdrawCancelPath  = "barry.url.inner.point.user.withdraw.cancel.suffix"
 )
 
 func servicePath(configKey string) string {

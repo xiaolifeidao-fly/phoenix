@@ -288,6 +288,32 @@ func (s *OrderService) GetOrderRecordByID(id uint) (*orderDTO.OrderRecordDTO, er
 	}
 	return db.ToDTO[orderDTO.OrderRecordDTO](entity), nil
 }
+
+func (s *OrderService) ListOrderRecordsByStatus(status string, limit int) ([]*orderDTO.OrderRecordDTO, error) {
+	if s.orderRecordRepository.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	status = strings.TrimSpace(status)
+	if status == "" {
+		return nil, fmt.Errorf("status is required")
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	var entities []*orderRepository.OrderRecord
+	if err := s.orderRecordRepository.Db.
+		Where("active = ? AND order_status = ?", 1, status).
+		Order("id ASC").
+		Limit(limit).
+		Find(&entities).Error; err != nil {
+		return nil, err
+	}
+	return db.ToDTOs[orderDTO.OrderRecordDTO](entities), nil
+}
+
 func (s *OrderService) CreateOrderRecord(req *orderDTO.CreateOrderRecordDTO) (*orderDTO.OrderRecordDTO, error) {
 	if s.orderRecordRepository.Db == nil {
 		return nil, fmt.Errorf("database is not initialized")
@@ -455,6 +481,32 @@ func (s *OrderService) GetOrderRefundRecordByID(id uint) (*orderDTO.OrderRefundR
 	}
 	return db.ToDTO[orderDTO.OrderRefundRecordDTO](entity), nil
 }
+
+func (s *OrderService) ListOrderRefundRecordsByStatus(status string, limit int) ([]*orderDTO.OrderRefundRecordDTO, error) {
+	if s.orderRefundRecordRepository.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	status = strings.TrimSpace(status)
+	if status == "" {
+		return nil, fmt.Errorf("status is required")
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	var entities []*orderRepository.OrderRefundRecord
+	if err := s.orderRefundRecordRepository.Db.
+		Where("active = ? AND order_refund_status = ?", 1, status).
+		Order("id ASC").
+		Limit(limit).
+		Find(&entities).Error; err != nil {
+		return nil, err
+	}
+	return db.ToDTOs[orderDTO.OrderRefundRecordDTO](entities), nil
+}
+
 func (s *OrderService) CreateOrderRefundRecord(req *orderDTO.CreateOrderRefundRecordDTO) (*orderDTO.OrderRefundRecordDTO, error) {
 	if s.orderRefundRecordRepository.Db == nil {
 		return nil, fmt.Errorf("database is not initialized")

@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"time"
 
@@ -88,17 +90,16 @@ func (c *Client) buildAbsoluteURL(requestURL string, query url.Values) (string, 
 	if trimmedURL == "" {
 		return "", fmt.Errorf("barry request url is empty")
 	}
-	if len(query) == 0 {
-		return trimmedURL, nil
-	}
 	parsedURL, err := url.Parse(trimmedURL)
 	if err != nil {
 		return "", err
 	}
 	encodedQuery := parsedURL.Query()
-	for key, values := range query {
-		for _, value := range values {
-			encodedQuery.Add(key, value)
+	if len(query) > 0 {
+		for key, values := range query {
+			for _, value := range values {
+				encodedQuery.Add(key, value)
+			}
 		}
 	}
 	parsedURL.RawQuery = encodedQuery.Encode()
@@ -107,15 +108,19 @@ func (c *Client) buildAbsoluteURL(requestURL string, query url.Values) (string, 
 
 func (c *Client) do(ctx context.Context, method, requestURL string, requestBody any, response any) error {
 	var body io.Reader
+	var requestPayload string
 	if requestBody != nil {
 		payload, err := json.Marshal(requestBody)
 		if err != nil {
+			log.Printf("barry request encode failed: method=%s url=%s err=%v", method, requestURL, err)
 			return err
 		}
-		body = strings.NewReader(string(payload))
+		requestPayload = string(payload)
+		body = strings.NewReader(requestPayload)
 	}
 	request, err := http.NewRequestWithContext(ctx, method, requestURL, body)
 	if err != nil {
+		log.Printf("barry request build failed: method=%s url=%s err=%v", method, requestURL, err)
 		return err
 	}
 	request.Header.Set("Content-Type", "application/json")
@@ -131,22 +136,79 @@ func (c *Client) do(ctx context.Context, method, requestURL string, requestBody 
 	httpClient.Timeout = c.timeout
 	resp, err := httpClient.Do(request)
 	if err != nil {
+		log.Printf("barry request error: method=%s url=%s body=%s err=%v", method, requestURL, requestPayload, err)
 		return err
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
+		log.Printf("barry response read failed: method=%s url=%s err=%v", method, requestURL, err)
 		return err
 	}
+	respBodyString := strings.TrimSpace(string(respBody))
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return fmt.Errorf("barry request failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+		log.Printf("barry request failed: method=%s url=%s status=%d body=%s", method, requestURL, resp.StatusCode, respBodyString)
+		return fmt.Errorf("barry request failed: status=%d body=%s", resp.StatusCode, respBodyString)
 	}
 	if response == nil || len(respBody) == 0 {
 		return nil
 	}
 	if err := json.Unmarshal(respBody, response); err != nil {
+		log.Printf("barry response decode failed: method=%s url=%s body=%s err=%v", method, requestURL, respBodyString, err)
 		return fmt.Errorf("barry response decode failed: %w", err)
 	}
+	if !isBarryResponseSuccess(response) {
+		log.Printf("barry business failed: method=%s url=%s code=%s message=%s body=%s", method, requestURL, extractBarryStringField(response, "Code"), extractBarryStringField(response, "Message"), respBodyString)
+	}
 	return nil
+}
+
+func isBarryResponseSuccess(response any) bool {
+	value := reflect.ValueOf(response)
+	if !value.IsValid() {
+		return true
+	}
+	if value.Kind() == reflect.Pointer {
+		if value.IsNil() {
+			return true
+		}
+		value = value.Elem()
+	}
+	if value.Kind() != reflect.Struct {
+		return true
+	}
+	successField := value.FieldByName("Success")
+	if !successField.IsValid() || successField.Kind() != reflect.Bool {
+		return true
+	}
+	if successField.Bool() {
+		return true
+	}
+	codeField := value.FieldByName("Code")
+	if codeField.IsValid() && codeField.Kind() == reflect.String && codeField.String() == "0" {
+		return true
+	}
+	return false
+}
+
+func extractBarryStringField(response any, fieldName string) string {
+	value := reflect.ValueOf(response)
+	if !value.IsValid() {
+		return ""
+	}
+	if value.Kind() == reflect.Pointer {
+		if value.IsNil() {
+			return ""
+		}
+		value = value.Elem()
+	}
+	if value.Kind() != reflect.Struct {
+		return ""
+	}
+	field := value.FieldByName(fieldName)
+	if !field.IsValid() || field.Kind() != reflect.String {
+		return ""
+	}
+	return field.String()
 }
