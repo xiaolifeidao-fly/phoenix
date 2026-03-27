@@ -1,8 +1,11 @@
 package ip
 
 import (
+	dictionaryService "blade/service/dictionary/service"
 	"common/middleware/vipper"
 	"fmt"
+	"log"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -41,11 +44,11 @@ func NewViperSceneConfigResolver() *ViperSceneConfigResolver {
 }
 
 func (r *ViperSceneConfigResolver) Resolve(scene Scene) (*ProviderConfig, error) {
-	url := strings.TrimSpace(vipper.GetString(scene.ProxyRequestURLKey()))
-	suffix := strings.TrimSpace(vipper.GetString(scene.ProxyRequestSuffixKey()))
-	api := strings.TrimSpace(vipper.GetString(scene.ProxyRequestAPIKey()))
-	akey := strings.TrimSpace(vipper.GetString(scene.ProxyRequestAKey()))
-	disabled := vipper.GetBool(scene.ProxyRequestDisabledKey())
+	url := strings.TrimSpace(r.getConfigValue(scene.ProxyRequestURLKey()))
+	suffix := strings.TrimSpace(r.getConfigValue(scene.ProxyRequestSuffixKey()))
+	api := strings.TrimSpace(r.getConfigValue(scene.ProxyRequestAPIKey()))
+	akey := strings.TrimSpace(r.getConfigValue(scene.ProxyRequestAKey()))
+	disabled := r.getConfigBool(scene.ProxyRequestDisabledKey())
 
 	if disabled {
 		return &ProviderConfig{Scene: scene, Disabled: true}, nil
@@ -67,6 +70,34 @@ func (r *ViperSceneConfigResolver) Resolve(scene Scene) (*ProviderConfig, error)
 		AKey:    akey,
 		Timeout: timeout,
 	}, nil
+}
+
+func (r *ViperSceneConfigResolver) getConfigValue(key string) string {
+	if value, ok := r.getDictionaryValue(key); ok {
+		return value
+	}
+	return vipper.GetString(key)
+}
+
+func (r *ViperSceneConfigResolver) getConfigBool(key string) bool {
+	if value, ok := r.getDictionaryValue(key); ok {
+		parsed, err := strconv.ParseBool(strings.TrimSpace(value))
+		if err != nil {
+			log.Printf("ip v2 invalid bool dictionary config %s=%q: %v", key, value, err)
+		} else {
+			return parsed
+		}
+	}
+	return vipper.GetBool(key)
+}
+
+func (r *ViperSceneConfigResolver) getDictionaryValue(key string) (string, bool) {
+	service := dictionaryService.NewDictionaryService()
+	dict, err := service.GetByCode(key)
+	if err != nil || dict == nil {
+		return "", false
+	}
+	return dict.Value, true
 }
 
 func GetV2RefreshInterval() time.Duration {
