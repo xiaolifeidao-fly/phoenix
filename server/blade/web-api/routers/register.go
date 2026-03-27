@@ -1,7 +1,9 @@
 package routers
 
 import (
+	"blade/web-api/pkg/ip"
 	"blade/web-api/pkg/task"
+	"blade/web-api/pkg/webdevice"
 	"common/middleware/routers"
 	"log"
 	"time"
@@ -16,6 +18,8 @@ func registerHandler() []routers.Handler {
 	}
 
 	return []routers.Handler{
+		build("ip", func() routers.Handler { return ip.NewIPHandler() }),
 		build("task", func() routers.Handler { return task.NewTaskHandler() }),
+		build("webdevice", func() routers.Handler { return webdevice.NewWebDeviceHandler() }),
 	}
 }

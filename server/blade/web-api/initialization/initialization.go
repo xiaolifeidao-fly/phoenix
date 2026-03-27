@@ -1,6 +1,7 @@
 package initialization
 
 import (
+	ipBusiness "blade/web-api/business/ip"
 	taskConsumer "blade/web-api/pkg/task/consumer"
 	"blade/web-api/routers"
 	"common/middleware/db"
@@ -17,6 +18,7 @@ const (
 	ConfigInit InitOrder = iota
 	DBInit
 	RedisInit
+	IPV2Init
 	RouterInit
 	TaskConsumerInit
 )
@@ -49,6 +51,16 @@ var initializers = []Initializer{
 		Name:  "Redis",
 		InitFn: func() error {
 			return redis.InitRedisClient(vipper.GetString("redis.addr"), vipper.GetString("redis.password"))
+		},
+	},
+	{
+		Order: IPV2Init,
+		Name:  "IPV2",
+		InitFn: func() error {
+			if !ipBusiness.IsV2Enabled() {
+				return nil
+			}
+			return ipBusiness.InitDefaultV2Manager()
 		},
 	},
 	{

@@ -90,12 +90,24 @@ type DefaultTaskProcessor struct {
 
 func NewDefaultTaskProcessor() *DefaultTaskProcessor {
 	service := taskService.NewTaskService()
-	return &DefaultTaskProcessor{
+	processor := &DefaultTaskProcessor{
 		taskService: service,
 		registry: NewTaskHandlerRegistry(service.DefaultTaskType(), &LoggingTaskUnitHandler{
 			sleep: 100 * time.Millisecond,
 		}),
 	}
+	videoPlayHandler := NewVideoPlayTaskUnitHandler()
+	for _, taskType := range []string{
+		TaskTypeVideoPlay,
+		"play_video",
+		"videoPlay",
+		"video-play",
+	} {
+		if err := processor.RegisterHandler(taskType, videoPlayHandler); err != nil {
+			log.Printf("register task handler failed, taskType=%s err=%v", taskType, err)
+		}
+	}
+	return processor
 }
 
 func (p *DefaultTaskProcessor) RegisterHandler(taskType string, handler TaskUnitHandler) error {
