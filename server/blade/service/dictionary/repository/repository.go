@@ -3,6 +3,8 @@ package repository
 import (
 	"common/middleware/db"
 	"fmt"
+
+	"gorm.io/gorm"
 )
 
 type DictionaryRepository struct {
@@ -21,9 +23,12 @@ func (r *DictionaryRepository) GetByCode(code string) (*Dictionary, error) {
 		return nil, fmt.Errorf("database is not initialized")
 	}
 	var dict Dictionary
-	err := r.Db.Where("code = ? AND active = ?", code, 1).First(&dict).Error
+	err := r.QueryOneBySQL(&dict, "SELECT * FROM dictionary WHERE code = ? AND active = 1 ORDER BY id ASC LIMIT 1", code)
 	if err != nil {
 		return nil, err
+	}
+	if dict.Id == 0 {
+		return nil, gorm.ErrRecordNotFound
 	}
 	return &dict, nil
 }
@@ -33,6 +38,6 @@ func (r *DictionaryRepository) GetByType(typeStr string) ([]*Dictionary, error) 
 		return nil, fmt.Errorf("database is not initialized")
 	}
 	var dicts []*Dictionary
-	err := r.Db.Where("type = ? AND active = ?", typeStr, 1).Order("id ASC").Find(&dicts).Error
+	err := r.QueryBySQL(&dicts, "SELECT * FROM dictionary WHERE type = ? AND active = 1 ORDER BY id ASC", typeStr)
 	return dicts, err
 }

@@ -3,6 +3,8 @@ package repository
 import (
 	"common/middleware/db"
 	"fmt"
+
+	"gorm.io/gorm"
 )
 
 type WebDeviceRepository struct {
@@ -21,9 +23,12 @@ func (r *WebDeviceRepository) FindByWebID(webID string) (*WebDevice, error) {
 		return nil, fmt.Errorf("database is not initialized")
 	}
 	var entity WebDevice
-	err := r.Db.Where("webid = ? AND active = ?", webID, 1).First(&entity).Error
+	err := r.QueryOneBySQL(&entity, "SELECT * FROM web_device WHERE webid = ? AND active = 1 ORDER BY id ASC LIMIT 1", webID)
 	if err != nil {
 		return nil, err
+	}
+	if entity.Id == 0 {
+		return nil, gorm.ErrRecordNotFound
 	}
 	return &entity, nil
 }
@@ -33,7 +38,7 @@ func (r *WebDeviceRepository) FindAllActive() ([]*WebDevice, error) {
 		return nil, fmt.Errorf("database is not initialized")
 	}
 	var entities []*WebDevice
-	err := r.Db.Where("active = ?", 1).Order("id ASC").Find(&entities).Error
+	err := r.QueryBySQL(&entities, "SELECT * FROM web_device WHERE active = 1 ORDER BY id ASC")
 	return entities, err
 }
 
@@ -42,10 +47,7 @@ func (r *WebDeviceRepository) FindActiveRange(startID, limit int64) ([]*WebDevic
 		return nil, fmt.Errorf("database is not initialized")
 	}
 	var entities []*WebDevice
-	err := r.Db.Where("id > ? AND active = ?", startID, 1).
-		Order("id ASC").
-		Limit(int(limit)).
-		Find(&entities).Error
+	err := r.QueryBySQL(&entities, "SELECT * FROM web_device WHERE id > ? AND active = 1 ORDER BY id ASC LIMIT ?", startID, limit)
 	return entities, err
 }
 
@@ -54,10 +56,7 @@ func (r *WebDeviceRepository) FindActiveRangeWithin(startID, limit, maxID int64)
 		return nil, fmt.Errorf("database is not initialized")
 	}
 	var entities []*WebDevice
-	err := r.Db.Where("id > ? AND id <= ? AND active = ?", startID, maxID, 1).
-		Order("id ASC").
-		Limit(int(limit)).
-		Find(&entities).Error
+	err := r.QueryBySQL(&entities, "SELECT * FROM web_device WHERE id > ? AND id <= ? AND active = 1 ORDER BY id ASC LIMIT ?", startID, maxID, limit)
 	return entities, err
 }
 
@@ -66,9 +65,12 @@ func (r *WebDeviceRepository) MinIDGreaterThan(startID int64) (int64, error) {
 		return 0, fmt.Errorf("database is not initialized")
 	}
 	var entity WebDevice
-	err := r.Db.Where("id > ?", startID).Order("id ASC").First(&entity).Error
+	err := r.QueryOneBySQL(&entity, "SELECT id FROM web_device WHERE id > ? ORDER BY id ASC LIMIT 1", startID)
 	if err != nil {
 		return 0, err
+	}
+	if entity.Id == 0 {
+		return 0, gorm.ErrRecordNotFound
 	}
 	return int64(entity.Id), nil
 }
@@ -89,9 +91,12 @@ func (r *HQWebDeviceRepository) FindByWebID(webID string) (*HQWebDevice, error) 
 		return nil, fmt.Errorf("database is not initialized")
 	}
 	var entity HQWebDevice
-	err := r.Db.Where("webid = ? AND active = ?", webID, 1).First(&entity).Error
+	err := r.QueryOneBySQL(&entity, "SELECT * FROM hq_web_device WHERE webid = ? AND active = 1 ORDER BY id ASC LIMIT 1", webID)
 	if err != nil {
 		return nil, err
+	}
+	if entity.Id == 0 {
+		return nil, gorm.ErrRecordNotFound
 	}
 	return &entity, nil
 }

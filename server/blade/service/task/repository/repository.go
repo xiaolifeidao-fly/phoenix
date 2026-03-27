@@ -3,6 +3,8 @@ package repository
 import (
 	"common/middleware/db"
 	"fmt"
+
+	"gorm.io/gorm"
 )
 
 type TaskRepository struct {
@@ -22,9 +24,12 @@ func (r *TaskRepository) FindByBusinessID(businessID string) (*TaskRecord, error
 	}
 
 	var entity TaskRecord
-	err := r.Db.Where("business_id = ? AND active = ?", businessID, 1).First(&entity).Error
+	err := r.QueryOneBySQL(&entity, "SELECT * FROM blade_task_record WHERE business_id = ? AND active = 1 ORDER BY id ASC LIMIT 1", businessID)
 	if err != nil {
 		return nil, err
+	}
+	if entity.Id == 0 {
+		return nil, gorm.ErrRecordNotFound
 	}
 	return &entity, nil
 }

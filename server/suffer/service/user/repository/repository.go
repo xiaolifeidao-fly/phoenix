@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	userDTO "suffer/service/user/dto"
+
+	"gorm.io/gorm"
 )
 
 type UserRepository struct {
@@ -23,8 +25,11 @@ func (r *UserRepository) FindByUsername(username string) (*User, error) {
 		return nil, fmt.Errorf("database is not initialized")
 	}
 	var entity User
-	if err := r.Db.Where("username = ? AND active = ?", username, 1).First(&entity).Error; err != nil {
+	if err := r.QueryOneBySQL(&entity, "SELECT * FROM user WHERE username = ? AND active = 1 ORDER BY id ASC LIMIT 1", username); err != nil {
 		return nil, err
+	}
+	if entity.Id == 0 {
+		return nil, gorm.ErrRecordNotFound
 	}
 	return &entity, nil
 }
@@ -33,39 +38,28 @@ func (r *UserRepository) CountActiveByRoles(roles []string) (int64, error) {
 	if r.Db == nil {
 		return 0, fmt.Errorf("database is not initialized")
 	}
-	var count int64
-	if err := r.Db.Model(&User{}).Where("active = ?", 1).Where("role IN ?", roles).Count(&count).Error; err != nil {
-		return 0, err
+	if len(roles) == 0 {
+		return 0, nil
 	}
-	return count, nil
+	return r.CountBySQL("SELECT id FROM user WHERE active = 1 AND role IN ?", roles)
 }
 
 func (r *UserRepository) CountRecentLoginUsers() (int64, error) {
 	if r.Db == nil {
 		return 0, fmt.Errorf("database is not initialized")
 	}
-	var count int64
-	if err := r.Db.Model(&User{}).
-		Where("active = ?", 1).
-		Where("last_login_time IS NOT NULL").
-		Where("last_login_time > ?", "1970-01-02 00:00:00").
-		Count(&count).Error; err != nil {
-		return 0, err
-	}
-	return count, nil
+	return r.CountBySQL(`SELECT id
+	FROM user
+	WHERE active = 1
+		AND last_login_time IS NOT NULL
+		AND last_login_time > ?`, "1970-01-02 00:00:00")
 }
 
 func (r *UserRepository) CountActiveAccounts() (int64, error) {
 	if r.Db == nil {
 		return 0, fmt.Errorf("database is not initialized")
 	}
-	var count int64
-	if err := r.Db.Table("account").
-		Where("active = ?", 1).
-		Count(&count).Error; err != nil {
-		return 0, err
-	}
-	return count, nil
+	return r.CountBySQL("SELECT id FROM account WHERE active = 1")
 }
 
 func (r *UserRepository) CountUsersByQuery(query userDTO.UserQueryDTO) (int64, error) {

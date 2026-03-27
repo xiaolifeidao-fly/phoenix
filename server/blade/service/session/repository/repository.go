@@ -3,6 +3,8 @@ package repository
 import (
 	"common/middleware/db"
 	"fmt"
+
+	"gorm.io/gorm"
 )
 
 type SessionRepository struct {
@@ -21,9 +23,12 @@ func (r *SessionRepository) FindByUID(uid string) (*SessionRecord, error) {
 		return nil, fmt.Errorf("database is not initialized")
 	}
 	var entity SessionRecord
-	err := r.Db.Where("uid = ? AND active = ?", uid, 1).First(&entity).Error
+	err := r.QueryOneBySQL(&entity, "SELECT * FROM session_record WHERE uid = ? AND active = 1 ORDER BY id ASC LIMIT 1", uid)
 	if err != nil {
 		return nil, err
+	}
+	if entity.Id == 0 {
+		return nil, gorm.ErrRecordNotFound
 	}
 	return &entity, nil
 }
@@ -33,9 +38,7 @@ func (r *SessionRepository) FindActiveSessions() ([]*SessionRecord, error) {
 		return nil, fmt.Errorf("database is not initialized")
 	}
 	var entities []*SessionRecord
-	err := r.Db.Where("status = ? AND active = ?", "ACTIVE", 1).
-		Order("id ASC").
-		Find(&entities).Error
+	err := r.QueryBySQL(&entities, "SELECT * FROM session_record WHERE status = ? AND active = 1 ORDER BY id ASC", "ACTIVE")
 	return entities, err
 }
 
@@ -44,8 +47,6 @@ func (r *SessionRepository) FindByDeviceID(deviceID string) ([]*SessionRecord, e
 		return nil, fmt.Errorf("database is not initialized")
 	}
 	var entities []*SessionRecord
-	err := r.Db.Where("device_id = ? AND active = ?", deviceID, 1).
-		Order("id ASC").
-		Find(&entities).Error
+	err := r.QueryBySQL(&entities, "SELECT * FROM session_record WHERE device_id = ? AND active = 1 ORDER BY id ASC", deviceID)
 	return entities, err
 }
