@@ -26,7 +26,7 @@ ENV SERVER_TARGET=${SERVER_TARGET} \
     JWT_SECRET=${JWT_SECRET}
 
 COPY . ./
-RUN pnpm run build
+RUN mkdir -p public && pnpm run build
 
 FROM node:20-alpine AS runtime
 
