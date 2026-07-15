@@ -1,10 +1,13 @@
-FROM node:20-alpine AS dependencies
+ARG BASE_IMAGE=node:20-alpine
+ARG NPM_REGISTRY=https://registry.npmmirror.com
+FROM ${BASE_IMAGE} AS dependencies
 
+ARG NPM_REGISTRY
 WORKDIR /app
-RUN corepack enable
+RUN corepack enable && pnpm config set registry "${NPM_REGISTRY}"
 
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --prefer-offline
 
 FROM dependencies AS builder
 
