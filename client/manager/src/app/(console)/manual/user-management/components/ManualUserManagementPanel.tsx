@@ -241,6 +241,12 @@ export function ManualUserManagementPanel() {
       ),
     },
     {
+      title: "用户ID",
+      dataIndex: "id",
+      width: 120,
+      render: (value: number) => value || "-",
+    },
+    {
       title: "渠道 / 邀请码",
       key: "channel",
       width: 180,
@@ -336,7 +342,7 @@ export function ManualUserManagementPanel() {
             showSizeChanger: false,
             onChange: (page, pageSize) => void loadUsers(page, pageSize),
           }}
-          scroll={{ x: 800 }}
+          scroll={{ x: 920 }}
           style={{ marginTop: 20 }}
         />
       </section>
