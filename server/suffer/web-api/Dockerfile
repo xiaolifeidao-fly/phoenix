@@ -1,5 +1,9 @@
 ARG BASE_IMAGE=golang:1.21-alpine
+ARG GOPROXY=https://goproxy.cn,direct
 FROM ${BASE_IMAGE} AS builder
+
+ARG GOPROXY
+ENV GOPROXY=${GOPROXY}
 
 WORKDIR /src
 

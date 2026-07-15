@@ -1,4 +1,8 @@
+ARG GOPROXY=https://goproxy.cn,direct
 FROM golang:1.21-alpine
+
+ARG GOPROXY
+ENV GOPROXY=${GOPROXY}
 
 WORKDIR /src
 
