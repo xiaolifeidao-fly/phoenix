@@ -1,0 +1,10 @@
+FROM golang:1.21-alpine
+
+WORKDIR /src
+
+COPY common/go.mod common/go.sum ./common/
+COPY suffer/service/go.mod suffer/service/go.sum ./suffer/service/
+COPY suffer/web-api/go.mod suffer/web-api/go.sum ./suffer/web-api/
+
+WORKDIR /src/suffer/web-api
+RUN go mod download

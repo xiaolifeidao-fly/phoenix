@@ -1,13 +1,24 @@
-FROM golang:1.21-alpine AS builder
+ARG BASE_IMAGE=golang:1.21-alpine
+FROM ${BASE_IMAGE} AS builder
 
 WORKDIR /src
 
+COPY common/go.mod common/go.sum ./common/
+COPY suffer/service/go.mod suffer/service/go.sum ./suffer/service/
+COPY suffer/web-api/go.mod suffer/web-api/go.sum ./suffer/web-api/
+
+WORKDIR /src/suffer/web-api
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
+
+WORKDIR /src
 COPY common ./common
 COPY suffer/service ./suffer/service
 COPY suffer/web-api ./suffer/web-api
 
 WORKDIR /src/suffer/web-api
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/web-api ./cmd.go
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/web-api ./cmd.go
 
 FROM alpine:3.20
 
