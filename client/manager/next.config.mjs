@@ -20,12 +20,20 @@ const CORS_HEADERS = [
     },
 ];
 
+function normalizeBasePath(value) {
+  const path = (value || "").trim().replace(/^\/+|\/+$/g, "");
+  return path ? `/${path}` : "";
+}
+
+const appBasePath = normalizeBasePath(process.env.APP_BASE_PATH ?? "/suffer-web");
+
 const nextConfig = {
-    // basePath: "/indo-whatsapp",
+    basePath: appBasePath,
     env: {
       JWT_SECRET : process.env.JWT_SECRET,
       SERVER_TARGET : process.env.SERVER_TARGET,
-      APP_URL_PREFIX : process.env.APP_URL_PREFIX
+      APP_URL_PREFIX : process.env.APP_URL_PREFIX,
+      APP_BASE_PATH: appBasePath,
     },
     reactStrictMode: false,
     async headers() {

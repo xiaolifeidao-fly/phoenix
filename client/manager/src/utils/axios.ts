@@ -4,6 +4,9 @@ import axios from "axios";
 import { plainToInstance } from "class-transformer";
 import { clearAuthToken, getAuthToken } from "@/utils/auth";
 
+const appBasePath = process.env.APP_BASE_PATH || "";
+const loginPath = `${appBasePath}/login`;
+
 export interface ApiResponse<T> {
   success: boolean;
   code: number;
@@ -18,7 +21,7 @@ export interface PageResult<T> {
 }
 
 export const instance = axios.create({
-  baseURL: "/api",
+  baseURL: `${appBasePath}/api`,
   timeout: 10000,
 });
 
@@ -37,8 +40,8 @@ function handleAuthFailure(message?: string | null, error?: string | null) {
     return;
   }
   clearAuthToken();
-  if (typeof window !== "undefined" && window.location.pathname !== "/login") {
-    window.location.href = "/login";
+  if (typeof window !== "undefined" && window.location.pathname !== loginPath) {
+    window.location.href = loginPath;
   }
 }
 

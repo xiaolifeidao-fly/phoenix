@@ -11,6 +11,7 @@ require('dotenv').config();
 
 const prefix = process.env.APP_URL_PREFIX;
 const target = process.env.SERVER_TARGET;
+const appBasePath = normalizeBasePath(process.env.APP_BASE_PATH ?? '/suffer-web');
 
 
 export default async function handler(req, res) {
@@ -19,9 +20,7 @@ export default async function handler(req, res) {
     const proxy = createProxyMiddleware({
       target: target, // 设置代理目标地址
       changeOrigin: true, // 设置请求头中的 Host 为目标地址的 Host
-      pathRewrite: {
-        "^/api": prefix, // 将请求中的 /api 前缀替换为空字符串
-      },
+      pathRewrite: rewriteApiPath,
       headers: req.headers,
       onProxyReq: (proxyReq, req, res) => {
         // Add debug logs
@@ -71,6 +70,18 @@ async function request(url, req){
 }
 
 function getTargetUrl(url){
-  url = url.replace("/api",prefix)
-  return target  + url;
+  return target + rewriteApiPath(url);
+}
+
+function rewriteApiPath(url = '') {
+  let path = url;
+  if (appBasePath && path.startsWith(`${appBasePath}/`)) {
+    path = path.slice(appBasePath.length);
+  }
+  return path.replace(/^\/api(?=\/|$)/, prefix || '');
+}
+
+function normalizeBasePath(value) {
+  const path = (value || '').trim().replace(/^\/+|\/+$/g, '');
+  return path ? `/${path}` : '';
 }
