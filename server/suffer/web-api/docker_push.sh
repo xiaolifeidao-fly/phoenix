@@ -3,4 +3,4 @@ set -euo pipefail
 
 : "${DOCKER_REGISTRY:?DOCKER_REGISTRY is required}"
 
-docker push "${DOCKER_REGISTRY}/ak_rg/web-api:latest"
+docker push "${DOCKER_REGISTRY}/ak_rg/phoenix-suffer-web-api:latest"
