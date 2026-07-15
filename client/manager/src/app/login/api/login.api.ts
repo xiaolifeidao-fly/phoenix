@@ -9,6 +9,9 @@ export interface LoginPayload {
 
 export interface LoginResponse {
   token: string;
+  username?: string;
+  name?: string;
+  roleName?: string;
 }
 
 export async function login(payload: LoginPayload) {

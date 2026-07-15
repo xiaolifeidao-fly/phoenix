@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  CreditCardOutlined,
   EditOutlined,
   PlusOutlined,
   ReloadOutlined,
@@ -11,26 +12,27 @@ import {
   Button,
   Form,
   Input,
-  Modal,
   Select,
   Space,
   Table,
-  Tag,
   Typography,
   message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { WorkspaceDrawer } from "@/components/manager-shell/WorkspaceDrawer";
 import { fetchManualChannels, type ManualChannelRecord } from "../../api/channel.api";
 import {
   createManualUser,
   fetchManualUserDetail,
+  fetchManualUserPaymentMethods,
   fetchManualUsers,
+  type ManualPaymentMethodRecord,
   type ManualUserPayload,
   type ManualUserRecord,
   updateManualUser,
 } from "../../api/user.api";
 
-const { Paragraph, Text, Title } = Typography;
+const { Text } = Typography;
 
 interface UserFormValues {
   username: string;
@@ -52,22 +54,31 @@ export function ManualUserManagementPanel() {
   const [submitting, setSubmitting] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<ManualUserRecord | null>(null);
+  const [paymentDrawerOpen, setPaymentDrawerOpen] = useState(false);
+  const [paymentUser, setPaymentUser] = useState<ManualUserRecord | null>(null);
+  const [paymentMethods, setPaymentMethods] = useState<ManualPaymentMethodRecord[]>([]);
+  const [paymentLoading, setPaymentLoading] = useState(false);
   const [filters, setFilters] = useState({
     channel: "",
     keyword: "",
   });
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 10, total: 0 });
 
-  const loadUsers = async () => {
+  const loadUsers = async (pageIndex = pagination.current, pageSize = pagination.pageSize) => {
     setLoading(true);
     try {
       const result = await fetchManualUsers({
         channel: filters.channel.trim() || undefined,
         username: filters.keyword.trim() || undefined,
+        pageIndex,
+        pageSize,
       });
-      setUsers(result);
+      setUsers(result.data);
+      setPagination((current) => ({ ...current, current: pageIndex, pageSize, total: result.total }));
     } catch (error) {
       message.error(error instanceof Error ? error.message : "加载人工用户失败");
       setUsers([]);
+      setPagination((current) => ({ ...current, total: 0 }));
     } finally {
       setLoading(false);
     }
@@ -113,28 +124,11 @@ export function ManualUserManagementPanel() {
 
   const stats = useMemo(
     () => [
-      { label: "人工用户总数", value: users.length },
-      { label: "已绑定支付宝", value: users.filter((item) => Boolean(item.alipayAccount)).length },
-      { label: "已配置支付方式", value: users.filter((item) => (item.paymentMethods ?? []).length > 0).length },
-      { label: "渠道数", value: new Set(users.map((item) => item.channel).filter(Boolean)).size },
+      { label: "人工用户总数", value: pagination.total },
+      { label: "当前页数量", value: users.length },
     ],
-    [users],
+    [pagination.total, users],
   );
-
-  const filteredUsers = useMemo(() => {
-    const channel = filters.channel.trim().toLowerCase();
-    const keyword = filters.keyword.trim().toLowerCase();
-    return users.filter((item) => {
-      const matchChannel = !channel || (item.channel || "").toLowerCase() === channel;
-      const matchKeyword =
-        !keyword ||
-        (item.username || "").toLowerCase().includes(keyword) ||
-        (item.role || "").toLowerCase().includes(keyword) ||
-        (item.inventCode || "").toLowerCase().includes(keyword) ||
-        (item.alipayAccount || "").toLowerCase().includes(keyword);
-      return matchChannel && matchKeyword;
-    });
-  }, [filters, users]);
 
   const openCreateModal = () => {
     setEditingUser(null);
@@ -196,6 +190,44 @@ export function ManualUserManagementPanel() {
     }
   };
 
+  const openPaymentDrawer = async (record: ManualUserRecord) => {
+    setPaymentUser(record);
+    setPaymentMethods([]);
+    setPaymentDrawerOpen(true);
+    setPaymentLoading(true);
+    try {
+      const result = await fetchManualUserPaymentMethods({
+        username: record.username,
+        channel: record.channel || undefined,
+      });
+      setPaymentMethods(result);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "加载支付信息失败");
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
+  const paymentColumns: ColumnsType<ManualPaymentMethodRecord> = [
+    {
+      title: "类型",
+      dataIndex: "type",
+      width: 120,
+      render: (value?: string) => value || "-",
+    },
+    {
+      title: "名称",
+      dataIndex: "name",
+      width: 160,
+      render: (value?: string) => value || "-",
+    },
+    {
+      title: "账号",
+      dataIndex: "account",
+      render: (value?: string) => value || "-",
+    },
+  ];
+
   const columns: ColumnsType<ManualUserRecord> = [
     {
       title: "用户名",
@@ -220,33 +252,6 @@ export function ManualUserManagementPanel() {
       ),
     },
     {
-      title: "支付宝信息",
-      key: "alipay",
-      width: 220,
-      render: (_, record) => (
-        <Space direction="vertical" size={2}>
-          <Text>{record.alipayName || "-"}</Text>
-          <Text type="secondary">{record.alipayAccount || "未绑定"}</Text>
-        </Space>
-      ),
-    },
-    {
-      title: "支付方式",
-      dataIndex: "paymentMethods",
-      render: (value?: ManualUserRecord["paymentMethods"]) =>
-        value && value.length > 0 ? (
-          <Space size={[6, 6]} wrap>
-            {value.map((item, index) => (
-              <Tag key={`${item.type}-${item.account}-${index}`} color="blue">
-                {`${item.type || "PAY"}:${item.account || item.name || "-"}`}
-              </Tag>
-            ))}
-          </Space>
-        ) : (
-          "-"
-        ),
-    },
-    {
       title: "更新时间",
       dataIndex: "updatedTime",
       width: 180,
@@ -256,46 +261,22 @@ export function ManualUserManagementPanel() {
       title: "操作",
       key: "actions",
       fixed: "right",
-      width: 80,
+      width: 180,
       render: (_, record) => (
-        <Button type="text" icon={<EditOutlined />} onClick={() => void openEditModal(record)}>
-          编辑
-        </Button>
+        <Space size={4}>
+          <Button type="text" icon={<EditOutlined />} onClick={() => void openEditModal(record)}>
+            编辑
+          </Button>
+          <Button type="text" icon={<CreditCardOutlined />} onClick={() => void openPaymentDrawer(record)}>
+            支付信息
+          </Button>
+        </Space>
       ),
     },
   ];
 
   return (
     <div className="manager-page-stack">
-      <section className="manager-shell-card manager-grid-bg" style={{ borderRadius: 30, padding: 28 }}>
-        <Space direction="vertical" size={14} style={{ width: "100%" }}>
-          <Tag
-            bordered={false}
-            style={{
-              width: "fit-content",
-              margin: 0,
-              borderRadius: 999,
-              paddingInline: 12,
-              paddingBlock: 6,
-              fontWeight: 700,
-              color: "var(--manager-primary-strong)",
-              background: "rgba(93, 125, 246, 0.12)",
-            }}
-          >
-            用户管理
-          </Tag>
-          <div>
-            <div className="manager-brand-kicker">Manual Console</div>
-            <Title level={2} className="manager-display-title" style={{ margin: "14px 0 10px" }}>
-              人工用户管理
-            </Title>
-            <Paragraph style={{ maxWidth: 760, margin: 0, color: "var(--manager-text-soft)" }}>
-              迁移旧版 `UserDetailController` 的 Barry 用户详情能力，支持按渠道筛选、查看支付方式，并在控制台内直接新增或更新人工账号。
-            </Paragraph>
-          </div>
-        </Space>
-      </section>
-
       <section className="manager-stats-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
         {stats.map((item) => (
           <div key={item.label} className="manager-data-card">
@@ -307,7 +288,7 @@ export function ManualUserManagementPanel() {
         ))}
       </section>
 
-      <section className="manager-data-card">
+      <section className="manager-data-card manager-toolbar-panel">
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "space-between" }}>
           <Space wrap size={12}>
             <Select
@@ -324,16 +305,16 @@ export function ManualUserManagementPanel() {
             />
             <Input
               className="manager-filter-input"
-              placeholder="搜索用户名、角色、邀请码或支付宝账号"
+              placeholder="搜索用户名、角色或邀请码"
               prefix={<SearchOutlined />}
               value={filters.keyword}
               onChange={(event) => setFilters((current) => ({ ...current, keyword: event.target.value }))}
               style={{ width: 320, maxWidth: "100%", height: 44 }}
             />
-            <Button type="primary" onClick={() => void loadUsers()}>
+            <Button type="primary" onClick={() => void loadUsers(1)}>
               查询
             </Button>
-            <Button icon={<ReloadOutlined />} onClick={() => void loadUsers()}>
+            <Button icon={<ReloadOutlined />} onClick={() => void loadUsers(1)}>
               刷新
             </Button>
           </Space>
@@ -346,27 +327,33 @@ export function ManualUserManagementPanel() {
         <Table
           rowKey={(record) => `${record.id || 0}-${record.username}`}
           loading={loading}
-          dataSource={filteredUsers}
+          dataSource={users}
           columns={columns}
-          pagination={{ pageSize: 10, showSizeChanger: false }}
-          scroll={{ x: 1100 }}
+          pagination={{
+            current: pagination.current,
+            pageSize: pagination.pageSize,
+            total: pagination.total,
+            showSizeChanger: false,
+            onChange: (page, pageSize) => void loadUsers(page, pageSize),
+          }}
+          scroll={{ x: 800 }}
           style={{ marginTop: 20 }}
         />
       </section>
 
-      <Modal
+      <WorkspaceDrawer
         title={editingUser ? "编辑人工用户" : "新增人工用户"}
         open={modalOpen}
-        onCancel={() => {
+        onClose={() => {
           setModalOpen(false);
           setEditingUser(null);
         }}
-        onOk={() => void handleSubmit()}
         okText={editingUser ? "保存更新" : "创建用户"}
-        confirmLoading={submitting}
-        destroyOnHidden
+        submitting={submitting}
+        width={600}
+        onSubmit={handleSubmit}
       >
-        <Form form={form} layout="vertical" initialValues={{ role: "" }}>
+        <Form className="manager-form-skin" form={form} layout="vertical" initialValues={{ role: "" }} preserve={false}>
           <Form.Item name="username" label="用户名" rules={[{ required: true, message: "请输入用户名" }]}>
             <Input placeholder="请输入 Barry 用户名" disabled={Boolean(editingUser)} />
           </Form.Item>
@@ -399,7 +386,27 @@ export function ManualUserManagementPanel() {
             <Input placeholder="请输入角色标识" />
           </Form.Item>
         </Form>
-      </Modal>
+      </WorkspaceDrawer>
+
+      <WorkspaceDrawer
+        title={paymentUser ? `支付信息 · ${paymentUser.username}` : "支付信息"}
+        open={paymentDrawerOpen}
+        cancelText="关闭"
+        width={620}
+        onClose={() => {
+          setPaymentDrawerOpen(false);
+          setPaymentUser(null);
+          setPaymentMethods([]);
+        }}
+      >
+        <Table<ManualPaymentMethodRecord>
+          rowKey={(record) => `${record.id || 0}-${record.type}-${record.account}`}
+          loading={paymentLoading}
+          dataSource={paymentMethods}
+          columns={paymentColumns}
+          pagination={false}
+        />
+      </WorkspaceDrawer>
     </div>
   );
 }

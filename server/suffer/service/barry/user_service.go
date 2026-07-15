@@ -5,8 +5,6 @@ import (
 	barryDTO "suffer/service/barry/dto"
 )
 
-const userPath = "barry.services.user.path"
-
 type UserService struct {
 	client *Client
 }
@@ -17,7 +15,7 @@ func NewUserService(client *Client) *UserService {
 
 func (s *UserService) List(ctx context.Context, query barryDTO.UserQueryDTO) (*barryDTO.ListResponseDTO[barryDTO.UserDTO], error) {
 	response := &barryDTO.ListResponseDTO[barryDTO.UserDTO]{}
-	err := s.client.Get(ctx, servicePath(userPath), buildValues(
+	err := s.client.GetAbsolute(ctx, innerServicePath(barryInnerAppUserListPath), buildValues(
 		"requestId", query.RequestID,
 		"page", query.Page,
 		"pageIndex", query.PageIndex,
@@ -27,6 +25,9 @@ func (s *UserService) List(ctx context.Context, query barryDTO.UserQueryDTO) (*b
 		"name", query.Name,
 		"phone", query.Phone,
 		"status", query.Status,
+		"channel", query.Channel,
+		"group", query.Group,
+		"shopCategoryId", query.ShopCategoryID,
 	), response)
 	if err != nil {
 		return nil, err

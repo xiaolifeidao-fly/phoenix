@@ -1,13 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   DeleteOutlined,
   EditOutlined,
-  PartitionOutlined,
   PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
+  TagsOutlined,
 } from "@ant-design/icons";
 import {
   Button,
@@ -36,21 +36,6 @@ export function TenantManagementPanel() {
   const [bindingOpen, setBindingOpen] = useState(false);
   const [editingTenant, setEditingTenant] = useState<TenantRecord | null>(null);
   const [bindingTenant, setBindingTenant] = useState<TenantRecord | null>(null);
-
-  const stats = useMemo(
-    () => [
-      { label: "租户总数", value: total },
-      {
-        label: "已绑定类目租户",
-        value: tenants.filter((item) => (item.currentCategories?.length ?? 0) > 0).length,
-      },
-      {
-        label: "当前绑定类目数",
-        value: tenants.reduce((sum, item) => sum + (item.currentCategories?.length ?? 0), 0),
-      },
-    ],
-    [tenants, total],
-  );
 
   const columns: ColumnsType<TenantRecord> = [
     {
@@ -86,64 +71,51 @@ export function TenantManagementPanel() {
       },
     },
     {
-      title: "类目编辑",
-      key: "bindingAction",
-      width: 120,
+      title: "操作",
+      key: "actions",
+      width: 160,
       render: (_, record) => (
-        <Button
-          type="primary"
-          icon={<PartitionOutlined />}
-          onClick={() => {
-            setBindingTenant(record);
-            setBindingOpen(true);
-          }}
-          style={{
-            color: "#ffffff",
-            border: "none",
-            background: "linear-gradient(135deg, #5d7df6 0%, #6d8cff 100%)",
-          }}
-        >
-          编辑
-        </Button>
-      ),
-    },
-    {
-      title: "修改",
-      key: "editAction",
-      width: 96,
-      render: (_, record) => (
-        <Tooltip title="修改租户">
-          <Button
-            type="text"
-            icon={<EditOutlined />}
-            onClick={() => {
-              setEditingTenant(record);
-              setFormOpen(true);
+        <Space size={8}>
+          <Tooltip title="Categories">
+            <Button
+              type="text"
+              aria-label="Edit categories"
+              icon={<TagsOutlined style={{ fontSize: 14 }} />}
+              onClick={() => {
+                setBindingTenant(record);
+                setBindingOpen(true);
+              }}
+              style={{
+                color: "#5d7df6",
+              }}
+            />
+          </Tooltip>
+          <Tooltip title="修改租户">
+            <Button
+              type="text"
+              icon={<EditOutlined />}
+              onClick={() => {
+                setEditingTenant(record);
+                setFormOpen(true);
+              }}
+            />
+          </Tooltip>
+          <Popconfirm
+            title="确认删除这个租户吗？"
+            okText="删除"
+            cancelText="取消"
+            onConfirm={async () => {
+              try {
+                await removeTenant(record.id);
+                message.success("租户已删除");
+              } catch (error) {
+                message.error(error instanceof Error ? error.message : "删除租户失败");
+              }
             }}
-          />
-        </Tooltip>
-      ),
-    },
-    {
-      title: "删除",
-      key: "deleteAction",
-      width: 96,
-      render: (_, record) => (
-        <Popconfirm
-          title="确认删除这个租户吗？"
-          okText="删除"
-          cancelText="取消"
-          onConfirm={async () => {
-            try {
-              await removeTenant(record.id);
-              message.success("租户已删除");
-            } catch (error) {
-              message.error(error instanceof Error ? error.message : "删除租户失败");
-            }
-          }}
-        >
-          <Button danger type="text" icon={<DeleteOutlined />} />
-        </Popconfirm>
+          >
+            <Button danger type="text" icon={<DeleteOutlined />} />
+          </Popconfirm>
+        </Space>
       ),
     },
   ];
@@ -161,21 +133,7 @@ export function TenantManagementPanel() {
 
   return (
     <div className="manager-page-stack">
-      <section
-        className="manager-stats-grid"
-        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}
-      >
-        {stats.map((item) => (
-          <div key={item.label} className="manager-data-card">
-            <div className="manager-section-label">{item.label}</div>
-            <div className="manager-display-title" style={{ fontSize: 32, marginTop: 12 }}>
-              {item.value}
-            </div>
-          </div>
-        ))}
-      </section>
-
-      <section className="manager-data-card">
+      <section className="manager-data-card manager-toolbar-panel">
         <div
           style={{
             display: "flex",

@@ -1,6 +1,41 @@
 package dto
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"strings"
+)
+
+type StringID string
+
+func (id *StringID) UnmarshalJSON(data []byte) error {
+	value := strings.TrimSpace(string(data))
+	if value == "" || value == "null" {
+		*id = ""
+		return nil
+	}
+	if strings.HasPrefix(value, "\"") {
+		var text string
+		if err := json.Unmarshal(data, &text); err != nil {
+			return err
+		}
+		*id = StringID(text)
+		return nil
+	}
+	var number json.Number
+	if err := json.Unmarshal(data, &number); err != nil {
+		return err
+	}
+	*id = StringID(number.String())
+	return nil
+}
+
+func (id StringID) MarshalJSON() ([]byte, error) {
+	return json.Marshal(string(id))
+}
+
+func (id StringID) String() string {
+	return string(id)
+}
 
 type RequestDTO struct {
 	RequestID string `json:"requestId,omitempty"`
@@ -299,6 +334,274 @@ func (dto *ProductCategoryActionResultDTO) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+type AssignConfigDTO struct {
+	BarryBaseDTO
+	QueueCode       string   `json:"queueCode"`
+	ShopTypeID      int      `json:"shopTypeId"`
+	QueueSize       int      `json:"queueSize"`
+	LoopNum         int      `json:"loopNum"`
+	AssignScale     *float64 `json:"assignScale,omitempty"`
+	ExpireTimes     int      `json:"expireTimes"`
+	AssignModel     string   `json:"assignModel"`
+	StrategyName    string   `json:"strategyName"`
+	AssignRiskTimes int      `json:"assignRiskTimes,omitempty"`
+	AssignRiskScale *float64 `json:"assignRiskScale,omitempty"`
+	AssignType      string   `json:"assignType,omitempty"`
+	SpeedByHour     int      `json:"speedByHour,omitempty"`
+	AssignNum       int      `json:"assignNum,omitempty"`
+	BatchAssignNum  int      `json:"batchAssignNum,omitempty"`
+	MonitorOrder    *bool    `json:"monitorOrder,omitempty"`
+	CheckNowNum     *bool    `json:"checkNowNum,omitempty"`
+	TodayDistinct   *bool    `json:"todayDistinct,omitempty"`
+}
+
+type AssignConfigQueryDTO struct {
+	RequestDTO
+	ShopTypeID int `json:"shopTypeId,omitempty" form:"shopTypeId"`
+}
+
+type SaveAssignConfigDTO struct {
+	ID              int      `json:"id,omitempty"`
+	QueueCode       string   `json:"queueCode"`
+	ShopTypeID      int      `json:"shopTypeId"`
+	QueueSize       int      `json:"queueSize"`
+	LoopNum         int      `json:"loopNum"`
+	AssignScale     *float64 `json:"assignScale,omitempty"`
+	ExpireTimes     int      `json:"expireTimes"`
+	AssignModel     string   `json:"assignModel"`
+	StrategyName    string   `json:"strategyName"`
+	AssignRiskTimes int      `json:"assignRiskTimes,omitempty"`
+	AssignRiskScale *float64 `json:"assignRiskScale,omitempty"`
+	AssignType      string   `json:"assignType,omitempty"`
+	SpeedByHour     int      `json:"speedByHour,omitempty"`
+	AssignNum       int      `json:"assignNum,omitempty"`
+	BatchAssignNum  int      `json:"batchAssignNum,omitempty"`
+	MonitorOrder    *bool    `json:"monitorOrder,omitempty"`
+	CheckNowNum     *bool    `json:"checkNowNum,omitempty"`
+	TodayDistinct   *bool    `json:"todayDistinct,omitempty"`
+}
+
+type AssignConfigListResponseDTO struct {
+	Success bool               `json:"success"`
+	Code    string             `json:"code,omitempty"`
+	Message string             `json:"message,omitempty"`
+	Data    []*AssignConfigDTO `json:"data,omitempty"`
+}
+
+func (dto *AssignConfigListResponseDTO) UnmarshalJSON(data []byte) error {
+	success, code, message, _, list, err := decodeBarryListResponse[AssignConfigDTO](data)
+	if err != nil {
+		return err
+	}
+	dto.Success = success
+	dto.Code = code
+	dto.Message = message
+	dto.Data = list
+	return nil
+}
+
+type AssignConfigActionResultDTO struct {
+	Success bool             `json:"success"`
+	Code    string           `json:"code,omitempty"`
+	Message string           `json:"message,omitempty"`
+	Data    *AssignConfigDTO `json:"data,omitempty"`
+}
+
+func (dto *AssignConfigActionResultDTO) UnmarshalJSON(data []byte) error {
+	success, code, message, detail, err := decodeBarryDetailResponse[AssignConfigDTO](data)
+	if err != nil {
+		return err
+	}
+	dto.Success = success
+	dto.Code = code
+	dto.Message = message
+	dto.Data = detail
+	return nil
+}
+
+type JudgeConfigDTO struct {
+	BarryBaseDTO
+	ShopTypeID           int    `json:"shopTypeId"`
+	JudgeType            string `json:"judgeType,omitempty"`
+	AgainJudgeType       string `json:"againJudgeType,omitempty"`
+	AgainJudgeFlag       *bool  `json:"againJudgeFlag,omitempty"`
+	AgainJudgeDelayTimes int    `json:"againJudgeDelayTimes"`
+	AssignConfigID       int    `json:"assignConfigId,omitempty"`
+}
+
+type JudgeConfigQueryDTO struct {
+	RequestDTO
+	ShopTypeID int `json:"shopTypeId,omitempty" form:"shopTypeId"`
+}
+
+type SaveJudgeConfigDTO struct {
+	ID                   int    `json:"id,omitempty"`
+	ShopTypeID           int    `json:"shopTypeId"`
+	JudgeType            string `json:"judgeType"`
+	AgainJudgeType       string `json:"againJudgeType,omitempty"`
+	AgainJudgeFlag       *bool  `json:"againJudgeFlag"`
+	AgainJudgeDelayTimes int    `json:"againJudgeDelayTimes"`
+	AssignConfigID       int    `json:"assignConfigId"`
+}
+
+type JudgeConfigListResponseDTO struct {
+	Success bool              `json:"success"`
+	Code    string            `json:"code,omitempty"`
+	Message string            `json:"message,omitempty"`
+	Data    []*JudgeConfigDTO `json:"data,omitempty"`
+}
+
+func (dto *JudgeConfigListResponseDTO) UnmarshalJSON(data []byte) error {
+	success, code, message, _, list, err := decodeBarryListResponse[JudgeConfigDTO](data)
+	if err != nil {
+		return err
+	}
+	dto.Success = success
+	dto.Code = code
+	dto.Message = message
+	dto.Data = list
+	return nil
+}
+
+type JudgeConfigActionResultDTO struct {
+	Success bool            `json:"success"`
+	Code    string          `json:"code,omitempty"`
+	Message string          `json:"message,omitempty"`
+	Data    *JudgeConfigDTO `json:"data,omitempty"`
+}
+
+func (dto *JudgeConfigActionResultDTO) UnmarshalJSON(data []byte) error {
+	success, code, message, detail, err := decodeBarryDetailResponse[JudgeConfigDTO](data)
+	if err != nil {
+		return err
+	}
+	dto.Success = success
+	dto.Code = code
+	dto.Message = message
+	dto.Data = detail
+	return nil
+}
+
+// AssignUidRuleDTO 分配策略-uid(投稿账号)维度过滤规则, 按品类(shopCategoryId)维护, user 域.
+type AssignUidRuleDTO struct {
+	BarryBaseDTO
+	ShopCategoryID  int64    `json:"shopCategoryId"`
+	Enabled         bool     `json:"enabled"`
+	MinFansNum      int64    `json:"minFansNum"`
+	MinItemNum      int64    `json:"minItemNum"`
+	MinInteractRate *float64 `json:"minInteractRate,omitempty"`
+}
+
+type AssignUidRuleQueryDTO struct {
+	RequestDTO
+	ShopCategoryID int64 `json:"shopCategoryId,omitempty" form:"shopCategoryId"`
+}
+
+type SaveAssignUidRuleDTO struct {
+	ID              int      `json:"id,omitempty"`
+	ShopCategoryID  int64    `json:"shopCategoryId"`
+	Enabled         bool     `json:"enabled"`
+	MinFansNum      int64    `json:"minFansNum"`
+	MinItemNum      int64    `json:"minItemNum"`
+	MinInteractRate *float64 `json:"minInteractRate,omitempty"`
+}
+
+// AssignVideoRuleDTO 分配策略-视频(候选任务)维度过滤规则, 按品类(shopCategoryId)维护, shop 域.
+type AssignVideoRuleDTO struct {
+	BarryBaseDTO
+	ShopCategoryID     int64  `json:"shopCategoryId"`
+	Enabled            bool   `json:"enabled"`
+	URLFilterEnabled   bool   `json:"urlFilterEnabled"`
+	URLKeywords        string `json:"urlKeywords,omitempty"`
+	URLIncludeEnabled  bool   `json:"urlIncludeEnabled"`
+	URLIncludeKeywords string `json:"urlIncludeKeywords,omitempty"`
+	AdFilterEnabled    bool   `json:"adFilterEnabled"`
+}
+
+type AssignVideoRuleQueryDTO struct {
+	RequestDTO
+	ShopCategoryID int64 `json:"shopCategoryId,omitempty" form:"shopCategoryId"`
+}
+
+type SaveAssignVideoRuleDTO struct {
+	ID                 int    `json:"id,omitempty"`
+	ShopCategoryID     int64  `json:"shopCategoryId"`
+	Enabled            bool   `json:"enabled"`
+	URLFilterEnabled   bool   `json:"urlFilterEnabled"`
+	URLKeywords        string `json:"urlKeywords,omitempty"`
+	URLIncludeEnabled  bool   `json:"urlIncludeEnabled"`
+	URLIncludeKeywords string `json:"urlIncludeKeywords,omitempty"`
+	AdFilterEnabled    bool   `json:"adFilterEnabled"`
+}
+
+// AssignRefundRuleDTO 分配策略-退单维度规则(按分发轮次判断退单/异常打标), 按品类(shopCategoryId)维护, shop 域.
+type AssignRefundRuleDTO struct {
+	BarryBaseDTO
+	ShopCategoryID          int64 `json:"shopCategoryId"`
+	Enabled                 bool  `json:"enabled"`
+	RefundRoundThreshold    int64 `json:"refundRoundThreshold"`
+	ExceptionRoundThreshold int64 `json:"exceptionRoundThreshold"`
+}
+
+type AssignRefundRuleQueryDTO struct {
+	RequestDTO
+	ShopCategoryID int64 `json:"shopCategoryId,omitempty" form:"shopCategoryId"`
+}
+
+type SaveAssignRefundRuleDTO struct {
+	ID                      int   `json:"id,omitempty"`
+	ShopCategoryID          int64 `json:"shopCategoryId"`
+	Enabled                 bool  `json:"enabled"`
+	RefundRoundThreshold    int64 `json:"refundRoundThreshold"`
+	ExceptionRoundThreshold int64 `json:"exceptionRoundThreshold"`
+}
+
+// AssignVideoUserRuleDTO 分配策略-指定用户的视频维度过滤规则(覆盖品类全局视频规则), 按(shopCategoryId,userId)维护, user 域.
+type AssignVideoUserRuleDTO struct {
+	BarryBaseDTO
+	ShopCategoryID     int64  `json:"shopCategoryId"`
+	UserID             int64  `json:"userId"`
+	Username           string `json:"username,omitempty"`
+	URLFilterEnabled   bool   `json:"urlFilterEnabled"`
+	URLKeywords        string `json:"urlKeywords,omitempty"`
+	URLIncludeEnabled  bool   `json:"urlIncludeEnabled"`
+	URLIncludeKeywords string `json:"urlIncludeKeywords,omitempty"`
+	AdFilterEnabled    bool   `json:"adFilterEnabled"`
+}
+
+type AssignVideoUserRuleQueryDTO struct {
+	RequestDTO
+	ShopCategoryID int64 `json:"shopCategoryId,omitempty" form:"shopCategoryId"`
+}
+
+type SaveAssignVideoUserRuleDTO struct {
+	ID                 int    `json:"id,omitempty"`
+	ShopCategoryID     int64  `json:"shopCategoryId"`
+	UserID             int64  `json:"userId"`
+	URLFilterEnabled   bool   `json:"urlFilterEnabled"`
+	URLKeywords        string `json:"urlKeywords,omitempty"`
+	URLIncludeEnabled  bool   `json:"urlIncludeEnabled"`
+	URLIncludeKeywords string `json:"urlIncludeKeywords,omitempty"`
+	AdFilterEnabled    bool   `json:"adFilterEnabled"`
+}
+
+type DeleteAssignVideoUserRuleDTO struct {
+	ShopCategoryID int64 `json:"shopCategoryId" form:"shopCategoryId"`
+	UserID         int64 `json:"userId" form:"userId"`
+}
+
+// AssignSwitchQueryDTO 分配策略维度总开关查询(白名单/uid), 按品类.
+type AssignSwitchQueryDTO struct {
+	RequestDTO
+	ShopCategoryID int64 `json:"shopCategoryId,omitempty" form:"shopCategoryId"`
+}
+
+// SaveAssignSwitchDTO 开/关某品类的维度总开关. enabled=true 开(插入), false 关(删除).
+type SaveAssignSwitchDTO struct {
+	ShopCategoryID int64 `json:"shopCategoryId"`
+	Enabled        bool  `json:"enabled"`
+}
+
 type ChannelDTO struct {
 	Code string `json:"code"`
 	Name string `json:"name"`
@@ -364,11 +667,48 @@ type UserPointQueryDTO struct {
 }
 
 type UserDTO struct {
-	UserID   string `json:"userId"`
-	Username string `json:"username"`
-	Name     string `json:"name"`
-	Phone    string `json:"phone,omitempty"`
-	Status   string `json:"status,omitempty"`
+	UserID         StringID `json:"userId"`
+	Username       string   `json:"username"`
+	Channel        string   `json:"channel,omitempty"`
+	Name           string   `json:"name"`
+	Phone          string   `json:"phone,omitempty"`
+	Status         string   `json:"status,omitempty"`
+	Group          string   `json:"group,omitempty"`
+	GroupName      string   `json:"groupName,omitempty"`
+	ShopCategoryID StringID `json:"shopCategoryId,omitempty"`
+}
+
+type UserWhitelistDTO struct {
+	BarryBaseDTO
+	UserID         StringID `json:"userId"`
+	Username       string   `json:"username"`
+	Channel        string   `json:"channel,omitempty"`
+	Name           string   `json:"name,omitempty"`
+	Group          string   `json:"group,omitempty"`
+	GroupName      string   `json:"groupName,omitempty"`
+	ShopCategoryID StringID `json:"shopCategoryId,omitempty"`
+	Status         string   `json:"status,omitempty"`
+	Active         *bool    `json:"active,omitempty"`
+}
+
+type UserWhitelistQueryDTO struct {
+	PageQueryDTO
+	RequestDTO
+	ShopCategoryID string `json:"shopCategoryId,omitempty" form:"shopCategoryId" binding:"required"`
+	Group          string `json:"group,omitempty" form:"group"`
+	UserID         string `json:"userId,omitempty" form:"userId"`
+	Username       string `json:"username,omitempty" form:"username"`
+	Status         string `json:"status,omitempty" form:"status"`
+}
+
+type UpdateUserWhitelistStatusDTO struct {
+	ID     int64 `json:"id"`
+	Active *bool `json:"active" binding:"required"`
+}
+
+type SaveUserWhitelistDTO struct {
+	UserID         int64 `json:"userId" binding:"required"`
+	ShopCategoryID int64 `json:"shopCategoryId" binding:"required"`
 }
 
 type PaymentMethodDTO struct {
@@ -392,6 +732,7 @@ type UserDetailDTO struct {
 }
 
 type UserDetailQueryDTO struct {
+	PageQueryDTO
 	RequestDTO
 	Username string `json:"username,omitempty" form:"username"`
 	Channel  string `json:"channel,omitempty" form:"channel"`
@@ -452,11 +793,14 @@ type UserWithdrawActionDTO struct {
 type UserQueryDTO struct {
 	PageQueryDTO
 	RequestDTO
-	UserID   string `json:"userId,omitempty" form:"userId"`
-	Username string `json:"username,omitempty" form:"username"`
-	Name     string `json:"name,omitempty" form:"name"`
-	Phone    string `json:"phone,omitempty" form:"phone"`
-	Status   string `json:"status,omitempty" form:"status"`
+	UserID         string `json:"userId,omitempty" form:"userId"`
+	Username       string `json:"username,omitempty" form:"username"`
+	Name           string `json:"name,omitempty" form:"name"`
+	Phone          string `json:"phone,omitempty" form:"phone"`
+	Status         string `json:"status,omitempty" form:"status"`
+	Channel        string `json:"channel,omitempty" form:"channel"`
+	Group          string `json:"group,omitempty" form:"group"`
+	ShopCategoryID string `json:"shopCategoryId,omitempty" form:"shopCategoryId"`
 }
 
 type PointWithdrawDTO struct {
@@ -551,43 +895,103 @@ type RecordSummaryDTO struct {
 }
 
 type ManualTaskStatisticsQueryDTO struct {
-	StartDate   string `json:"startDate,omitempty" form:"startDate"`
-	EndDate     string `json:"endDate,omitempty" form:"endDate"`
-	ShopGroupID int64  `json:"shopGroupId,omitempty" form:"shopGroupId"`
-	Keyword     string `json:"keyword,omitempty" form:"keyword"`
+	StartDate       string `json:"startDate,omitempty" form:"startDate"`
+	EndDate         string `json:"endDate,omitempty" form:"endDate"`
+	ShopCategoryIDs string `json:"shopCategoryIds,omitempty" form:"shopCategoryIds"`
+	UserID          int64  `json:"userId,omitempty" form:"userId"`
+	Page            int    `json:"page,omitempty" form:"page"`
+	PageSize        int    `json:"pageSize,omitempty" form:"pageSize"`
 }
 
-type ManualTaskStatisticsGroupOptionDTO struct {
-	ID            int64  `json:"id"`
-	Name          string `json:"name"`
-	BusinessType  string `json:"businessType,omitempty"`
-	BusinessCode  string `json:"businessCode,omitempty"`
-	DashboardSort int    `json:"dashboardSort"`
+type ManualShopCategoryOptionDTO struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+	Code string `json:"code,omitempty"`
 }
 
-type ManualTaskStatisticsDetailDTO struct {
-	ShopGroupID     int64   `json:"shopGroupId"`
-	Name            string  `json:"name"`
-	BusinessType    string  `json:"businessType,omitempty"`
-	BusinessCode    string  `json:"businessCode,omitempty"`
-	TotalNum        int64   `json:"totalNum"`
-	PendingNum      int64   `json:"pendingNum"`
-	WaitNum         int64   `json:"waitNum"`
-	DoneNum         int64   `json:"doneNum"`
-	ErrorNum        int64   `json:"errorNum"`
-	CompletionRate  float64 `json:"completionRate"`
-	CompletionCount int64   `json:"completionCount"`
+type ManualUserOptionDTO struct {
+	ID       int64  `json:"id"`
+	Username string `json:"username"`
+	Nickname string `json:"nickname,omitempty"`
+}
+
+type ShopCategoryTaskSummaryDTO struct {
+	ShopCategoryID       int64   `json:"shopCategoryId"`
+	ShopCategoryName     string  `json:"shopCategoryName"`
+	DistinctUserCount    int64   `json:"distinctUserCount"`
+	DistinctExtUserCount int64   `json:"distinctExtUserCount"`
+	TotalOrderScore      int64   `json:"totalOrderScore"`
+	TotalNum             int64   `json:"totalNum"`
+	PendingNum           int64   `json:"pendingNum"`
+	UnCheckNum           int64   `json:"unCheckNum"`
+	CheckedNum           int64   `json:"checkedNum"`
+	CheckErrorNum        int64   `json:"checkErrorNum"`
+	DeleteNum            int64   `json:"deleteNum"`
+	SecretNum            int64   `json:"secretNum"`
+	ApprovalRate         float64 `json:"approvalRate"`
+}
+
+type UserTaskSummaryDTO struct {
+	ShopCategoryTaskSummaryDTO
+	UserID       int64  `json:"userId"`
+	Username     string `json:"username"`
+	UpAccountNum int64  `json:"upAccountNum"`
 }
 
 type ManualTaskStatisticsDTO struct {
-	StartDate    string                                `json:"startDate"`
-	EndDate      string                                `json:"endDate"`
-	TotalNum     int64                                 `json:"totalNum"`
-	PendingNum   int64                                 `json:"pendingNum"`
-	WaitNum      int64                                 `json:"waitNum"`
-	DoneNum      int64                                 `json:"doneNum"`
-	ErrorNum     int64                                 `json:"errorNum"`
-	GroupCount   int                                   `json:"groupCount"`
-	DetailList   []*ManualTaskStatisticsDetailDTO      `json:"detailList"`
-	GroupOptions []*ManualTaskStatisticsGroupOptionDTO `json:"groupOptions"`
+	StartDate               string                         `json:"startDate"`
+	EndDate                 string                         `json:"endDate"`
+	TotalNum                int64                          `json:"totalNum"`
+	PendingNum              int64                          `json:"pendingNum"`
+	UnCheckNum              int64                          `json:"unCheckNum"`
+	CheckedNum              int64                          `json:"checkedNum"`
+	CheckErrorNum           int64                          `json:"checkErrorNum"`
+	DeleteNum               int64                          `json:"deleteNum"`
+	SecretNum               int64                          `json:"secretNum"`
+	DistinctUpAccountNum    int64                          `json:"distinctUpAccountNum"`
+	ShopCategoryOptions     []*ManualShopCategoryOptionDTO `json:"shopCategoryOptions"`
+	ShopCategorySummaryList []*ShopCategoryTaskSummaryDTO  `json:"shopCategorySummaryList"`
+	UserSummaryList         []*UserTaskSummaryDTO          `json:"userSummaryList"`
+	UserSummaryTotal        int64                          `json:"userSummaryTotal"`
+	UserSummaryPage         int                            `json:"userSummaryPage"`
+	UserSummaryPageSize     int                            `json:"userSummaryPageSize"`
+}
+
+type WorkbenchDashboardMetricQueryDTO struct {
+	StartDate       string `json:"startDate,omitempty" form:"startDate"`
+	EndDate         string `json:"endDate,omitempty" form:"endDate"`
+	ShopCategoryIDs string `json:"shopCategoryIds,omitempty" form:"shopCategoryIds"`
+}
+
+type WorkbenchDashboardCategoryMetricDTO struct {
+	ShopCategoryID int64  `json:"shopCategoryId"`
+	CategoryName   string `json:"categoryName"`
+	CategoryCode   string `json:"categoryCode"`
+	Value          int64  `json:"value"`
+}
+
+type WorkbenchDashboardMetricDTO struct {
+	StartDate    string                                 `json:"startDate"`
+	EndDate      string                                 `json:"endDate"`
+	Value        int64                                  `json:"value"`
+	CategoryList []*WorkbenchDashboardCategoryMetricDTO `json:"categoryList"`
+}
+
+type OrderStatusStatisticDTO struct {
+	OrderStatus string `json:"order_status"`
+	Count       int64  `json:"count"`
+}
+
+type WorkbenchDashboardManualSubmittedComparisonDTO struct {
+	Count           int64   `json:"count"`
+	YesterdayCount  int64   `json:"yesterdayCount"`
+	CountChange     int64   `json:"countChange"`
+	CountChangeRate float64 `json:"countChangeRate"`
+}
+
+type WorkbenchUserOverviewDTO struct {
+	UserCount          int64 `json:"userCount"`
+	AccountCount       int64 `json:"accountCount"`
+	OnlineUserCount    int64 `json:"onlineUserCount"`
+	OnlineAccountCount int64 `json:"onlineAccountCount"`
 }

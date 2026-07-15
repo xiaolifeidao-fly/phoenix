@@ -7,21 +7,9 @@ import {
   ReloadOutlined,
   SearchOutlined,
 } from "@ant-design/icons";
-import {
-  Button,
-  Form,
-  Input,
-  InputNumber,
-  Modal,
-  Select,
-  Space,
-  Switch,
-  Table,
-  Tag,
-  Typography,
-  message,
-} from "antd";
+import { Button, Form, Input, InputNumber, Select, Space, Switch, Table, Tag, Tooltip, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { WorkspaceDrawer } from "@/components/manager-shell/WorkspaceDrawer";
 import {
   createManualChannel,
   fetchManualChannels,
@@ -30,7 +18,7 @@ import {
   updateManualChannel,
 } from "../../api/channel.api";
 
-const { Paragraph, Text, Title } = Typography;
+const { Text } = Typography;
 
 interface ChannelFormValues {
   code: string;
@@ -93,16 +81,6 @@ export function ManualChannelManagementPanel() {
       return matchKeyword && matchType && matchAllowAssign;
     });
   }, [channels, filters]);
-
-  const stats = useMemo(
-    () => [
-      { label: "渠道总数", value: channels.length },
-      { label: "允许接单", value: channels.filter((item) => item.allowAssign).length },
-      { label: "工作室渠道", value: channels.filter((item) => item.type === "MERCHANT").length },
-      { label: "散户渠道", value: channels.filter((item) => item.type === "RETAILER").length },
-    ],
-    [channels],
-  );
 
   const openCreateModal = () => {
     setEditingChannel(null);
@@ -233,58 +211,18 @@ export function ManualChannelManagementPanel() {
       title: "操作",
       key: "actions",
       fixed: "right",
-      width: 80,
+      width: 56,
       render: (_, record) => (
-        <Button type="text" icon={<EditOutlined />} onClick={() => openEditModal(record)}>
-          编辑
-        </Button>
+        <Tooltip title="编辑">
+          <Button type="text" aria-label="编辑" icon={<EditOutlined />} onClick={() => openEditModal(record)} />
+        </Tooltip>
       ),
     },
   ];
 
   return (
     <div className="manager-page-stack">
-      <section className="manager-shell-card manager-grid-bg" style={{ borderRadius: 30, padding: 28 }}>
-        <Space direction="vertical" size={14} style={{ width: "100%" }}>
-          <Tag
-            bordered={false}
-            style={{
-              width: "fit-content",
-              margin: 0,
-              borderRadius: 999,
-              paddingInline: 12,
-              paddingBlock: 6,
-              fontWeight: 700,
-              color: "var(--manager-primary-strong)",
-              background: "rgba(93, 125, 246, 0.12)",
-            }}
-          >
-            渠道管理
-          </Tag>
-          <div>
-            <div className="manager-brand-kicker">Manual Console</div>
-            <Title level={2} className="manager-display-title" style={{ margin: "14px 0 10px" }}>
-              人工渠道管理
-            </Title>
-            <Paragraph style={{ maxWidth: 760, margin: 0, color: "var(--manager-text-soft)" }}>
-              对接 Barry 的人工用户渠道详情接口，支持查看渠道配置、新增渠道与更新佣金比例、接单开关和上限。
-            </Paragraph>
-          </div>
-        </Space>
-      </section>
-
-      <section className="manager-stats-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-        {stats.map((item) => (
-          <div key={item.label} className="manager-data-card">
-            <div className="manager-section-label">{item.label}</div>
-            <div className="manager-display-title" style={{ fontSize: 32, marginTop: 12 }}>
-              {item.value}
-            </div>
-          </div>
-        ))}
-      </section>
-
-      <section className="manager-data-card">
+      <section className="manager-data-card manager-toolbar-panel">
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "space-between" }}>
           <Space wrap size={12}>
             <Input
@@ -343,18 +281,19 @@ export function ManualChannelManagementPanel() {
         />
       </section>
 
-      <Modal
+      <WorkspaceDrawer
         title={editingChannel ? "编辑人工渠道" : "新建人工渠道"}
         open={modalOpen}
-        onCancel={() => {
+        onClose={() => {
           setModalOpen(false);
           setEditingChannel(null);
         }}
-        onOk={() => void handleSubmit()}
-        confirmLoading={submitting}
-        destroyOnClose
+        onSubmit={handleSubmit}
+        submitting={submitting}
+        okText={editingChannel ? "保存渠道" : "创建渠道"}
+        width={620}
       >
-        <Form<ChannelFormValues> form={form} layout="vertical" preserve={false}>
+        <Form<ChannelFormValues> className="manager-form-skin" form={form} layout="vertical" preserve={false}>
           <Form.Item name="name" label="渠道名称" rules={[{ required: true, message: "请输入渠道名称" }]}>
             <Input placeholder="例如：火车工作室" />
           </Form.Item>
@@ -384,7 +323,7 @@ export function ManualChannelManagementPanel() {
             <Input.TextArea rows={4} placeholder="补充这个渠道的投放说明、风控提醒或运营备注" />
           </Form.Item>
         </Form>
-      </Modal>
+      </WorkspaceDrawer>
     </div>
   );
 }

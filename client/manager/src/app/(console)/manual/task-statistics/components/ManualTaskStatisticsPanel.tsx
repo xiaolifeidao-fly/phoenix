@@ -1,472 +1,149 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import dayjs, { type Dayjs } from "dayjs";
-import {
-  AppstoreOutlined,
-  BarChartOutlined,
-  CheckCircleOutlined,
-  ClockCircleOutlined,
-  ReloadOutlined,
-  SearchOutlined,
-  WarningOutlined,
-} from "@ant-design/icons";
-import {
-  Button,
-  DatePicker,
-  Empty,
-  Input,
-  Progress,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Typography,
-  message,
-} from "antd";
+import localeData from "dayjs/plugin/localeData";
+import weekday from "dayjs/plugin/weekday";
+import { CheckCircleOutlined, ClockCircleOutlined, ReloadOutlined, SearchOutlined, TeamOutlined, WarningOutlined } from "@ant-design/icons";
+import { Button, DatePicker, Empty, Select, Space, Table, Tag, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import type { TablePaginationConfig } from "antd/es/table/interface";
 import {
+  fetchManualTaskStatisticUsers,
   fetchManualTaskStatistics,
-  type ManualTaskStatisticsDetail,
   type ManualTaskStatisticsOverview,
+  type ManualUserOption,
+  type ShopCategoryTaskSummary,
+  type UserTaskSummary,
 } from "../../api/task-statistics.api";
 
-const { Paragraph, Text, Title } = Typography;
+const { Text, Title } = Typography;
 const { RangePicker } = DatePicker;
 
-type DateRangeValue = [Dayjs | null, Dayjs | null] | null;
+dayjs.extend(weekday);
+dayjs.extend(localeData);
 
 const defaultDateRange: [Dayjs, Dayjs] = [dayjs().startOf("day"), dayjs().startOf("day")];
 
 export function ManualTaskStatisticsPanel() {
   const [loading, setLoading] = useState(false);
   const [overview, setOverview] = useState<ManualTaskStatisticsOverview | null>(null);
-  const [filters, setFilters] = useState({
-    keyword: "",
-    shopGroupId: undefined as number | undefined,
-    dateRange: defaultDateRange,
-  });
+  const [userOptions, setUserOptions] = useState<ManualUserOption[]>([]);
+  const userOptionCacheRef = useRef(new Map<number, ManualUserOption>());
+  const [filters, setFilters] = useState({ dateRange: defaultDateRange, shopCategoryIds: [] as number[], userId: undefined as number | undefined, page: 1, pageSize: 20 });
 
-  const loadOverview = async (
-    nextFilters: {
-      keyword: string;
-      shopGroupId: number | undefined;
-      dateRange: [Dayjs, Dayjs];
-    } = filters,
-  ) => {
+  const loadOverview = async (nextFilters = filters) => {
     setLoading(true);
     try {
       const [startDate, endDate] = nextFilters.dateRange;
-      const result = await fetchManualTaskStatistics({
-        keyword: nextFilters.keyword.trim() || undefined,
-        shopGroupId: nextFilters.shopGroupId,
-        startDate: startDate ? startDate.format("YYYY-MM-DD") : undefined,
-        endDate: endDate ? endDate.format("YYYY-MM-DD") : undefined,
-      });
-      setOverview(result);
+      setOverview(
+        await fetchManualTaskStatistics({
+          startDate: startDate.format("YYYY-MM-DD"),
+          endDate: endDate.format("YYYY-MM-DD"),
+          shopCategoryIds: nextFilters.shopCategoryIds.length ? nextFilters.shopCategoryIds.join(",") : undefined,
+          userId: nextFilters.userId,
+          page: nextFilters.page,
+          pageSize: nextFilters.pageSize,
+        }),
+      );
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "加载人工任务情况失败");
+      message.error(error instanceof Error ? error.message : "加载人工任务统计失败");
       setOverview(null);
     } finally {
       setLoading(false);
     }
   };
 
+  const searchUsers = async (keyword?: string) => {
+    const normalizedKeyword = keyword?.trim().toLowerCase() ?? "";
+    const cachedOptions = Array.from(userOptionCacheRef.current.values()).filter((user) =>
+      !normalizedKeyword || user.username.toLowerCase().includes(normalizedKeyword) || user.nickname?.toLowerCase().includes(normalizedKeyword),
+    );
+    if (cachedOptions.length > 0) {
+      setUserOptions(cachedOptions);
+      return;
+    }
+    try {
+      const fetchedOptions = await fetchManualTaskStatisticUsers(keyword);
+      fetchedOptions.forEach((user) => userOptionCacheRef.current.set(user.id, user));
+      setUserOptions(fetchedOptions);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "加载人工用户列表失败");
+    }
+  };
+
   useEffect(() => {
     void loadOverview();
+    void searchUsers();
   }, []);
 
-  const stats = useMemo(() => {
-    if (!overview) {
-      return [];
-    }
-    return [
-      {
-        label: "任务总量",
-        value: formatCount(overview.totalNum),
-        hint: "Barry 汇总回传的总任务数",
-        icon: <BarChartOutlined />,
-        accent: "#316DCA",
-        background: "linear-gradient(135deg, rgba(49,109,202,0.16), rgba(80,163,255,0.08))",
-      },
-      {
-        label: "待审核",
-        value: formatCount(overview.waitNum),
-        hint: "当前仍需人工处理的审核量",
-        icon: <ClockCircleOutlined />,
-        accent: "#B26A16",
-        background: "linear-gradient(135deg, rgba(237,165,80,0.16), rgba(255,219,167,0.12))",
-      },
-      {
-        label: "已完成",
-        value: formatCount(overview.doneNum),
-        hint: "已审核完成的任务数量",
-        icon: <CheckCircleOutlined />,
-        accent: "#1E8A5A",
-        background: "linear-gradient(135deg, rgba(39,174,96,0.18), rgba(144,238,144,0.10))",
-      },
-      {
-        label: "异常数",
-        value: formatCount(overview.errorNum),
-        hint: "审核异常或回查失败的记录数",
-        icon: <WarningOutlined />,
-        accent: "#BA3C30",
-        background: "linear-gradient(135deg, rgba(219,76,63,0.16), rgba(255,196,189,0.12))",
-      },
-      {
-        label: "处理中",
-        value: formatCount(overview.pendingNum),
-        hint: "已进入处理流转但未出审核结果",
-        icon: <AppstoreOutlined />,
-        accent: "#7357C8",
-        background: "linear-gradient(135deg, rgba(115,87,200,0.15), rgba(191,177,239,0.1))",
-      },
-      {
-        label: "统计分组",
-        value: formatCount(overview.groupCount),
-        hint: "当前纳入统计的 dashboard 分组数",
-        icon: <BarChartOutlined />,
-        accent: "#1A7D83",
-        background: "linear-gradient(135deg, rgba(26,125,131,0.16), rgba(158,231,232,0.10))",
-      },
-    ];
-  }, [overview]);
-
-  const topGroups = useMemo(() => (overview?.detailList ?? []).slice(0, 3), [overview]);
-
-  const groupOptions = useMemo(
-    () =>
-      (overview?.groupOptions ?? []).map((item) => ({
-        label: item.businessType ? `${item.name} (${item.businessType})` : item.name,
-        value: item.id,
-      })),
+  const categoryOptions = useMemo(
+    () => (overview?.shopCategoryOptions ?? []).map((item) => ({ value: item.id, label: item.code ? `${item.name} (${item.code})` : item.name })),
     [overview],
   );
 
-  const columns: ColumnsType<ManualTaskStatisticsDetail> = [
-    {
-      title: "任务分组",
-      dataIndex: "name",
-      width: 240,
-      render: (value: string, record) => (
-        <Space direction="vertical" size={2}>
-          <Text style={{ color: "var(--manager-text)", fontWeight: 600 }}>{value || "-"}</Text>
-          <Text type="secondary">{record.businessType || record.businessCode || "未配置 Barry 编码"}</Text>
-        </Space>
-      ),
-    },
-    {
-      title: "总量",
-      dataIndex: "totalNum",
-      width: 110,
-      render: (value: number) => formatCount(value),
-    },
-    {
-      title: "处理中",
-      dataIndex: "pendingNum",
-      width: 110,
-      render: (value: number) => <Tag color="processing">{formatCount(value)}</Tag>,
-    },
-    {
-      title: "待审核",
-      dataIndex: "waitNum",
-      width: 110,
-      render: (value: number) => <Tag color="gold">{formatCount(value)}</Tag>,
-    },
-    {
-      title: "已完成",
-      dataIndex: "doneNum",
-      width: 110,
-      render: (value: number) => <Tag color="success">{formatCount(value)}</Tag>,
-    },
-    {
-      title: "异常",
-      dataIndex: "errorNum",
-      width: 110,
-      render: (value: number) => <Tag color="error">{formatCount(value)}</Tag>,
-    },
-    {
-      title: "完成率",
-      dataIndex: "completionRate",
-      width: 220,
-      render: (_: number, record) => (
-        <Space direction="vertical" size={6} style={{ width: "100%" }}>
-          <Progress
-            percent={Number((record.completionRate * 100).toFixed(1))}
-            strokeColor="#2AA876"
-            trailColor="rgba(128, 145, 171, 0.18)"
-            size="small"
-            showInfo={false}
-          />
-          <Text type="secondary">{`${formatPercent(record.completionRate)} · 完成 ${formatCount(record.doneNum)} / ${formatCount(
-            record.completionCount,
-          )}`}</Text>
-        </Space>
-      ),
-    },
+  const selectedUser = filters.userId ? userOptionCacheRef.current.get(filters.userId) : undefined;
+  const resolvedUserOptions = selectedUser && !userOptions.some((user) => user.id === selectedUser.id) ? [selectedUser, ...userOptions] : userOptions;
+
+  const categoryColumns: ColumnsType<ShopCategoryTaskSummary> = [
+    { title: "人工商品", dataIndex: "shopCategoryName", width: 180, render: (value) => <Text strong>{value || "-"}</Text> },
+    { title: "处理用户", dataIndex: "distinctUserCount", width: 100, render: formatCount },
+    { title: "上号数量", dataIndex: "distinctExtUserCount", width: 110, render: formatCount },
+    { title: "总任务", dataIndex: "totalNum", width: 100, render: formatCount },
+    { title: "处理中", dataIndex: "pendingNum", width: 100, render: (value) => <Tag color="processing">{formatCount(value)}</Tag> },
+    { title: "待审核", dataIndex: "unCheckNum", width: 100, render: (value) => <Tag color="gold">{formatCount(value)}</Tag> },
+    { title: "审核通过", dataIndex: "checkedNum", width: 110, render: (value) => <Tag color="success">{formatCount(value)}</Tag> },
+    { title: "审核异常", dataIndex: "checkErrorNum", width: 110, render: (value) => <Tag color="error">{formatCount(value)}</Tag> },
+    { title: "通过率", dataIndex: "approvalRate", width: 100, render: formatPercent },
+  ];
+
+  const userColumns: ColumnsType<UserTaskSummary> = [
+    { title: "人工用户", dataIndex: "username", width: 160, render: (value) => <Text strong>{value || "-"}</Text> },
+    { title: "人工商品", dataIndex: "shopCategoryName", width: 180 },
+    { title: "上号数量", dataIndex: "upAccountNum", width: 110, render: formatCount },
+    { title: "总任务", dataIndex: "totalNum", width: 100, render: formatCount },
+    { title: "处理中", dataIndex: "pendingNum", width: 100, render: (value) => <Tag color="processing">{formatCount(value)}</Tag> },
+    { title: "待审核", dataIndex: "unCheckNum", width: 100, render: (value) => <Tag color="gold">{formatCount(value)}</Tag> },
+    { title: "审核通过", dataIndex: "checkedNum", width: 110, render: (value) => <Tag color="success">{formatCount(value)}</Tag> },
+    { title: "审核异常", dataIndex: "checkErrorNum", width: 110, render: (value) => <Tag color="error">{formatCount(value)}</Tag> },
+    { title: "通过率", dataIndex: "approvalRate", width: 100, render: formatPercent },
+  ];
+
+  const cards = [
+    { label: "任务总量", value: overview?.totalNum, icon: <ClockCircleOutlined />, color: "#316DCA" },
+    { label: "总上号数量", value: overview?.distinctUpAccountNum, icon: <TeamOutlined />, color: "#6E43C4" },
+    { label: "待审核", value: overview?.unCheckNum, icon: <WarningOutlined />, color: "#B26A16" },
+    { label: "审核通过", value: overview?.checkedNum, icon: <CheckCircleOutlined />, color: "#1E8A5A" },
+    { label: "审核异常", value: overview?.checkErrorNum, icon: <WarningOutlined />, color: "#BA3C30" },
   ];
 
   return (
     <div className="manager-page-stack">
-      <section className="manager-shell-card manager-grid-bg" style={{ borderRadius: 30, padding: 28 }}>
-        <Space direction="vertical" size={14} style={{ width: "100%" }}>
-          <Tag
-            bordered={false}
-            style={{
-              width: "fit-content",
-              margin: 0,
-              borderRadius: 999,
-              paddingInline: 12,
-              paddingBlock: 6,
-              fontWeight: 700,
-              color: "var(--manager-primary-strong)",
-              background: "rgba(93, 125, 246, 0.12)",
-            }}
-          >
-            任务统计
-          </Tag>
-          <div>
-            <div className="manager-brand-kicker">Manual Console</div>
-            <Title level={2} className="manager-display-title" style={{ margin: "14px 0 10px" }}>
-              人工任务情况统计台
-            </Title>
-            <Paragraph style={{ maxWidth: 820, margin: 0, color: "var(--manager-text-soft)" }}>
-              基于本地 dashboard 分组配置汇总 Barry 的人工订单审核情况，可按日期范围、统计分组和关键词快速查看待审核、已完成、处理中与异常任务。
-            </Paragraph>
-          </div>
-          <Space size={[8, 8]} wrap>
-            <Tag color="blue">{`统计范围 ${overview?.startDate || dayjs().format("YYYY-MM-DD")} ~ ${
-              overview?.endDate || dayjs().format("YYYY-MM-DD")
-            }`}</Tag>
-            <Tag color="geekblue">{`分组 ${formatCount(overview?.groupCount ?? 0)}`}</Tag>
-            <Tag color="green">{`完成率 ${formatPercent(resolveOverviewCompletionRate(overview))}`}</Tag>
-          </Space>
-        </Space>
-      </section>
-
       <section className="manager-shell-card" style={{ borderRadius: 28, padding: 24 }}>
         <Space direction="vertical" size={18} style={{ width: "100%" }}>
-          <div>
-            <div className="manager-section-label">筛选条件</div>
-            <Title level={4} style={{ margin: "10px 0 0" }}>
-              快速定位当前人工任务压力
-            </Title>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: 14,
-              alignItems: "end",
-            }}
-          >
-            <div>
-              <Text type="secondary">日期范围</Text>
-              <RangePicker
-                style={{ width: "100%", marginTop: 8 }}
-                value={filters.dateRange}
-                allowClear={false}
-                onChange={(value: DateRangeValue) =>
-                  setFilters((current) => ({
-                    ...current,
-                    dateRange:
-                      value && value[0] && value[1]
-                        ? [value[0].startOf("day"), value[1].startOf("day")]
-                        : defaultDateRange,
-                  }))
-                }
-              />
-            </div>
-
-            <div>
-              <Text type="secondary">统计分组</Text>
-              <Select
-                allowClear
-                placeholder="全部 dashboard 分组"
-                style={{ width: "100%", marginTop: 8 }}
-                options={groupOptions}
-                value={filters.shopGroupId}
-                onChange={(value) => setFilters((current) => ({ ...current, shopGroupId: value }))}
-              />
-            </div>
-
-            <div>
-              <Text type="secondary">关键词</Text>
-              <Input
-                allowClear
-                placeholder="支持分组名、Barry 编码检索"
-                style={{ marginTop: 8 }}
-                value={filters.keyword}
-                onChange={(event) => setFilters((current) => ({ ...current, keyword: event.target.value }))}
-                onPressEnter={() => void loadOverview()}
-              />
-            </div>
-
-            <Space>
-              <Button type="primary" icon={<SearchOutlined />} onClick={() => void loadOverview()} loading={loading}>
-                查询
-              </Button>
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={() => {
-                  const resetFilters = {
-                    keyword: "",
-                    shopGroupId: undefined,
-                    dateRange: defaultDateRange,
-                  };
-                  setFilters(resetFilters);
-                  void loadOverview(resetFilters);
-                }}
-              >
-                重置
-              </Button>
-            </Space>
+          <div><div className="manager-section-label">筛选条件</div><Title level={4} style={{ margin: "10px 0 0" }}>定位人工任务处理情况</Title></div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, alignItems: "end" }}>
+            <div><Text type="secondary">日期范围</Text><RangePicker style={{ width: "100%", marginTop: 8 }} value={filters.dateRange} allowClear={false} onChange={(value) => setFilters((current) => ({ ...current, dateRange: value && value[0] && value[1] ? ([value[0].startOf("day"), value[1].startOf("day")] as unknown as [Dayjs, Dayjs]) : defaultDateRange }))} /></div>
+            <div><Text type="secondary">人工商品</Text><Select mode="multiple" allowClear maxTagCount="responsive" placeholder="全部人工商品" style={{ width: "100%", marginTop: 8 }} options={categoryOptions} value={filters.shopCategoryIds} onChange={(value) => setFilters((current) => ({ ...current, shopCategoryIds: value }))} /></div>
+            <div><Text type="secondary">人工用户</Text><Select allowClear showSearch filterOption={false} placeholder="输入用户名或昵称搜索" style={{ width: "100%", marginTop: 8 }} options={resolvedUserOptions.map((user) => ({ value: user.id, label: user.nickname ? `${user.username} (${user.nickname})` : user.username }))} value={filters.userId} onSearch={(value) => void searchUsers(value)} onChange={(value) => setFilters((current) => ({ ...current, userId: value }))} /></div>
+            <Space><Button type="primary" icon={<SearchOutlined />} loading={loading} onClick={() => { const next = { ...filters, page: 1 }; setFilters(next); void loadOverview(next); }}>查询</Button><Button icon={<ReloadOutlined />} onClick={() => { const reset = { dateRange: defaultDateRange, shopCategoryIds: [] as number[], userId: undefined, page: 1, pageSize: 20 }; setFilters(reset); void loadOverview(reset); }}>重置</Button></Space>
           </div>
         </Space>
       </section>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-          gap: 16,
-        }}
-      >
-        {stats.map((metric) => (
-          <article
-            key={metric.label}
-            className="manager-data-card"
-            style={{ borderRadius: 24, padding: 22, background: metric.background }}
-          >
-            <Space direction="vertical" size={10} style={{ width: "100%" }}>
-              <div
-                style={{
-                  width: 44,
-                  height: 44,
-                  display: "grid",
-                  placeItems: "center",
-                  borderRadius: 14,
-                  background: "rgba(255,255,255,0.8)",
-                  color: metric.accent,
-                  fontSize: 18,
-                }}
-              >
-                {metric.icon}
-              </div>
-              <div className="manager-section-label">{metric.label}</div>
-              <div className="manager-display-title" style={{ fontSize: 28, color: "var(--manager-text)" }}>
-                {metric.value}
-              </div>
-              <Text type="secondary">{metric.hint}</Text>
-            </Space>
-          </article>
-        ))}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16 }}>
+        {cards.map((card) => <article key={card.label} className="manager-data-card" style={{ borderRadius: 24, padding: 22 }}><Space direction="vertical" size={10}><span style={{ color: card.color, fontSize: 20 }}>{card.icon}</span><div className="manager-section-label">{card.label}</div><div className="manager-display-title" style={{ fontSize: 28 }}>{formatCount(card.value)}</div></Space></article>)}
       </div>
 
-      <section className="manager-shell-card" style={{ borderRadius: 28, padding: 24 }}>
-        <Space direction="vertical" size={18} style={{ width: "100%" }}>
-          <div>
-            <div className="manager-section-label">重点分组</div>
-            <Title level={4} style={{ margin: "10px 0 0" }}>
-              当前完成量最高的人工任务池
-            </Title>
-          </div>
-
-          {topGroups.length > 0 ? (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                gap: 16,
-              }}
-            >
-              {topGroups.map((item, index) => (
-                <article
-                  key={`${item.shopGroupId}-${item.name}`}
-                  style={{
-                    borderRadius: 24,
-                    padding: 20,
-                    background:
-                      index === 0
-                        ? "linear-gradient(145deg, rgba(36, 115, 214, 0.14), rgba(255,255,255,0.94))"
-                        : "linear-gradient(180deg, rgba(255,255,255,0.98), rgba(244,248,253,0.96))",
-                    border: "1px solid rgba(145, 171, 212, 0.24)",
-                  }}
-                >
-                  <Space direction="vertical" size={10} style={{ width: "100%" }}>
-                    <Space align="center" style={{ justifyContent: "space-between", width: "100%" }}>
-                      <Text strong style={{ color: "var(--manager-text)", fontSize: 16 }}>
-                        {item.name}
-                      </Text>
-                      <Tag color={index === 0 ? "blue" : "default"}>{`Top ${index + 1}`}</Tag>
-                    </Space>
-                    <Text type="secondary">{item.businessType || item.businessCode || "未配置 Barry 编码"}</Text>
-                    <Space size={18} wrap>
-                      <MetricInline label="已完成" value={formatCount(item.doneNum)} />
-                      <MetricInline label="待审核" value={formatCount(item.waitNum)} />
-                      <MetricInline label="完成率" value={formatPercent(item.completionRate)} />
-                    </Space>
-                  </Space>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <Empty description="当前筛选条件下暂无人工任务分组" />
-          )}
-        </Space>
-      </section>
-
-      <section className="manager-shell-card" style={{ borderRadius: 28, padding: 24 }}>
-        <Space direction="vertical" size={18} style={{ width: "100%" }}>
-          <div>
-            <div className="manager-section-label">明细列表</div>
-            <Title level={4} style={{ margin: "10px 0 0" }}>
-              分组查看人工任务完成情况
-            </Title>
-          </div>
-
-          <Table<ManualTaskStatisticsDetail>
-            rowKey={(record) => `${record.shopGroupId}-${record.businessType || record.businessCode || record.name}`}
-            loading={loading}
-            columns={columns}
-            dataSource={overview?.detailList ?? []}
-            pagination={false}
-            scroll={{ x: 980 }}
-            locale={{ emptyText: <Empty description="暂无人工任务数据" /> }}
-          />
-        </Space>
-      </section>
+      <StatisticTable title="按人工商品汇总" description="与 Kakrolot 的商品分类任务统计口径一致" loading={loading} columns={categoryColumns} data={overview?.shopCategorySummaryList ?? []} rowKey={(record) => record.shopCategoryId} />
+      <StatisticTable title="按人工用户与商品明细" description="展示每位人工用户在各人工商品下的任务处理结果" loading={loading} columns={userColumns} data={overview?.userSummaryList ?? []} rowKey={(record) => `${record.userId}-${record.shopCategoryId}`} pagination={{ current: overview?.userSummaryPage ?? filters.page, pageSize: overview?.userSummaryPageSize ?? filters.pageSize, total: overview?.userSummaryTotal ?? 0, showSizeChanger: true, showTotal: (total) => `共 ${total} 条`, onChange: (page, pageSize) => { const next = { ...filters, page, pageSize }; setFilters(next); void loadOverview(next); } }} />
     </div>
   );
 }
 
-function MetricInline({ label, value }: { label: string; value: string }) {
-  return (
-    <Space direction="vertical" size={2}>
-      <Text type="secondary">{label}</Text>
-      <Text strong style={{ color: "var(--manager-text)" }}>
-        {value}
-      </Text>
-    </Space>
-  );
+function StatisticTable<T extends object>({ title, description, loading, columns, data, rowKey, pagination = false }: { title: string; description: string; loading: boolean; columns: ColumnsType<T>; data: T[]; rowKey: (record: T) => string | number; pagination?: false | TablePaginationConfig }) {
+  return <section className="manager-shell-card" style={{ borderRadius: 28, padding: 24 }}><Space direction="vertical" size={18} style={{ width: "100%" }}><div><div className="manager-section-label">统计明细</div><Title level={4} style={{ margin: "10px 0 4px" }}>{title}</Title><Text type="secondary">{description}</Text></div><Table<T> rowKey={rowKey} loading={loading} columns={columns} dataSource={data} pagination={pagination} scroll={{ x: 1080 }} locale={{ emptyText: <Empty description="当前筛选条件下暂无任务数据" /> }} /></Space></section>;
 }
 
-function formatCount(value: number) {
-  return Number(value || 0).toLocaleString("zh-CN");
-}
-
-function formatPercent(value: number) {
-  return `${(Number(value || 0) * 100).toFixed(1)}%`;
-}
-
-function resolveOverviewCompletionRate(overview: ManualTaskStatisticsOverview | null) {
-  if (!overview) {
-    return 0;
-  }
-  const denominator = Number(overview.waitNum || 0) + Number(overview.doneNum || 0);
-  if (denominator <= 0) {
-    return 0;
-  }
-  return Number(overview.doneNum || 0) / denominator;
-}
+function formatCount(value?: number) { return Number(value || 0).toLocaleString("zh-CN"); }
+function formatPercent(value?: number) { return `${(Number(value || 0) * 100).toFixed(2)}%`; }

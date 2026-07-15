@@ -4,11 +4,21 @@ import (
 	baseDTO "common/base/dto"
 	"common/middleware/db"
 	"fmt"
+	"math/big"
 	"strings"
 	orderDTO "suffer/service/order/dto"
 	orderRepository "suffer/service/order/repository"
 
 	"gorm.io/gorm"
+)
+
+// 订单状态常量（与 order-gateway / order-handler 保持一致）
+const (
+	OrderStatusInit          = "INIT"
+	OrderStatusPending       = "PENDING"
+	OrderStatusDone          = "DONE"
+	OrderStatusRefund        = "REFUND"
+	OrderStatusRefundPending = "REFUND_PENDING"
 )
 
 type OrderService struct {
@@ -267,6 +277,18 @@ func (s *OrderService) ListOrderRecords(query orderDTO.OrderRecordQueryDTO) (*ba
 	}
 	if value := strings.TrimSpace(query.ExternalOrderID); value != "" {
 		dbQuery = dbQuery.Where("external_order_id = ?", value)
+	}
+	if value := strings.TrimSpace(query.UserName); value != "" {
+		dbQuery = dbQuery.Where("user_name LIKE ?", "%"+value+"%")
+	}
+	if value := strings.TrimSpace(query.Channel); value != "" {
+		dbQuery = dbQuery.Where("channel = ?", value)
+	}
+	if value := strings.TrimSpace(query.StartTime); value != "" {
+		dbQuery = dbQuery.Where("created_time >= ?", value)
+	}
+	if value := strings.TrimSpace(query.EndTime); value != "" {
+		dbQuery = dbQuery.Where("created_time <= ?", value)
 	}
 	var total int64
 	if err := dbQuery.Count(&total).Error; err != nil {
@@ -569,4 +591,112 @@ func (s *OrderService) DeleteOrderRefundRecord(id uint) error {
 	entity.Active = 0
 	_, err = s.orderRefundRecordRepository.SaveOrUpdate(entity)
 	return err
+}
+
+// RefundOrderRecord 管理端退单：校验订单状态并生成退单记录，同步将订单置为退款中。
+// 仅 PENDING / INIT 状态允许退单，且不允许对同一订单重复退单。
+func (s *OrderService) RefundOrderRecord(id uint, operator string) (*orderDTO.OrderRefundRecordDTO, error) {
+	if s.orderRecordRepository.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	entity, err := s.orderRecordRepository.FindById(id)
+	if err != nil {
+		return nil, err
+	}
+	if entity.Active == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	status := strings.TrimSpace(entity.OrderStatus)
+	if status != OrderStatusPending && status != OrderStatusInit {
+		return nil, fmt.Errorf("订单不允许退单")
+	}
+	var refundCount int64
+	if err := s.orderRefundRecordRepository.Db.Model(&orderRepository.OrderRefundRecord{}).
+		Where("active = ? AND order_id = ?", 1, uint64(entity.Id)).Count(&refundCount).Error; err != nil {
+		return nil, err
+	}
+	if refundCount > 0 {
+		return nil, fmt.Errorf("不允许重复退单")
+	}
+	created, err := s.orderRefundRecordRepository.Create(&orderRepository.OrderRefundRecord{
+		TenantID:          entity.TenantID,
+		OrderID:           uint64(entity.Id),
+		RefundAmount:      defaultOrderDecimal(entity.OrderAmount),
+		ShopCategoryID:    entity.ShopCategoryID,
+		RefundNum:         0,
+		OrderRefundStatus: OrderStatusRefundPending,
+	})
+	if err != nil {
+		return nil, err
+	}
+	entity.OrderStatus = OrderStatusRefundPending
+	if op := strings.TrimSpace(operator); op != "" {
+		entity.UpdatedBy = op
+	}
+	if _, err := s.orderRecordRepository.SaveOrUpdate(entity); err != nil {
+		return nil, err
+	}
+	return db.ToDTO[orderDTO.OrderRefundRecordDTO](created), nil
+}
+
+// BkOrderRecord 管理端补款：校验订单状态并生成补款记录与金额明细。
+// 仅 REFUND / DONE 状态允许补款，补款数量需在订单总量范围内，且不允许重复补款。
+func (s *OrderService) BkOrderRecord(id uint, num uint64, operator string) (*orderDTO.OrderBkRecordDTO, error) {
+	if s.orderRecordRepository.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	if num == 0 {
+		return nil, fmt.Errorf("补款数量无效")
+	}
+	entity, err := s.orderRecordRepository.FindById(id)
+	if err != nil {
+		return nil, err
+	}
+	if entity.Active == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	status := strings.TrimSpace(entity.OrderStatus)
+	if status != OrderStatusRefund && status != OrderStatusDone {
+		return nil, fmt.Errorf("此订单不允许补款")
+	}
+	if entity.OrderNum > 0 && int64(num) > entity.OrderNum {
+		return nil, fmt.Errorf("补款数量不能大于此订单的总数量")
+	}
+	var bkCount int64
+	if err := s.orderBkRecordRepository.Db.Model(&orderRepository.OrderBkRecord{}).
+		Where("active = ? AND order_id = ?", 1, uint64(entity.Id)).Count(&bkCount).Error; err != nil {
+		return nil, err
+	}
+	if bkCount > 0 {
+		return nil, fmt.Errorf("不能重复补款")
+	}
+	amount := multiplyOrderDecimal(entity.Price, num)
+	created, err := s.orderBkRecordRepository.Create(&orderRepository.OrderBkRecord{
+		TenantID:       entity.TenantID,
+		OrderID:        uint64(entity.Id),
+		Amount:         amount,
+		Num:            num,
+		ShopCategoryID: entity.ShopCategoryID,
+		ShopID:         entity.ShopID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.orderAmountDetailRepository.Create(&orderRepository.OrderAmountDetail{
+		OrderID:             uint64(entity.Id),
+		OrderConsumerAmount: amount,
+		Description:         "补款:" + amount + "元",
+	}); err != nil {
+		return nil, err
+	}
+	return db.ToDTO[orderDTO.OrderBkRecordDTO](created), nil
+}
+
+func multiplyOrderDecimal(price string, num uint64) string {
+	rat, ok := new(big.Rat).SetString(strings.TrimSpace(price))
+	if !ok {
+		return "0.00000000"
+	}
+	rat.Mul(rat, new(big.Rat).SetUint64(num))
+	return rat.FloatString(8)
 }

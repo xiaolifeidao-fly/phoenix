@@ -2,6 +2,7 @@ package barry
 
 import (
 	commonRouter "common/middleware/routers"
+	"context"
 	barryDTO "suffer/service/barry/dto"
 
 	"github.com/gin-gonic/gin"
@@ -12,6 +13,12 @@ func (h *BarryHandler) registerTransactionRoutes(engine *gin.RouterGroup) {
 	engine.GET("/barry/returns", h.listReturns)
 	engine.GET("/barry/order-summaries", h.listOrderSummaries)
 	engine.GET("/barry/manual-task-statistics", h.getManualTaskStatistics)
+	engine.GET("/barry/workbench-dashboard/user-overview", h.getWorkbenchUserOverview)
+	engine.GET("/barry/workbench-dashboard/task-remaining", h.getWorkbenchTaskRemaining)
+	engine.GET("/barry/workbench-dashboard/manual-submitted", h.getWorkbenchManualSubmitted)
+	engine.GET("/barry/workbench-dashboard/manual-submitted-comparison", h.getWorkbenchManualSubmittedComparison)
+	engine.GET("/barry/workbench-dashboard/actual-completed", h.getWorkbenchActualCompleted)
+	engine.GET("/barry/manual-task-statistics/users", h.listManualTaskStatisticUsers)
 }
 
 func (h *BarryHandler) listEntries(c *gin.Context) {
@@ -71,4 +78,50 @@ func (h *BarryHandler) getManualTaskStatistics(c *gin.Context) {
 		return
 	}
 	commonRouter.ToJson(c, response, nil)
+}
+
+func (h *BarryHandler) getWorkbenchUserOverview(c *gin.Context) {
+	response, err := h.barryService.WorkbenchDashboardStats.UserOverview(c.Request.Context())
+	commonRouter.ToJson(c, response, err)
+}
+
+func (h *BarryHandler) getWorkbenchTaskRemaining(c *gin.Context) {
+	h.getWorkbenchMetric(c, h.barryService.WorkbenchDashboardStats.TaskRemaining)
+}
+
+func (h *BarryHandler) getWorkbenchManualSubmitted(c *gin.Context) {
+	h.getWorkbenchMetric(c, h.barryService.WorkbenchDashboardStats.ManualSubmitted)
+}
+
+func (h *BarryHandler) getWorkbenchManualSubmittedComparison(c *gin.Context) {
+	var q barryDTO.WorkbenchDashboardMetricQueryDTO
+	if c.ShouldBindQuery(&q) != nil {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := h.barryService.WorkbenchDashboardStats.ManualSubmittedComparison(c.Request.Context(), q)
+	commonRouter.ToJson(c, response, err)
+}
+
+func (h *BarryHandler) getWorkbenchActualCompleted(c *gin.Context) {
+	h.getWorkbenchMetric(c, h.barryService.WorkbenchDashboardStats.ActualCompleted)
+}
+
+func (h *BarryHandler) getWorkbenchMetric(c *gin.Context, getter func(context.Context, barryDTO.WorkbenchDashboardMetricQueryDTO) (*barryDTO.WorkbenchDashboardMetricDTO, error)) {
+	var q barryDTO.WorkbenchDashboardMetricQueryDTO
+	if c.ShouldBindQuery(&q) != nil {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := getter(c.Request.Context(), q)
+	commonRouter.ToJson(c, response, err)
+}
+
+func (h *BarryHandler) listManualTaskStatisticUsers(c *gin.Context) {
+	users, err := h.barryService.ManualTaskStats.Users(c.Request.Context(), c.Query("keyword"))
+	if err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	commonRouter.ToJson(c, users, nil)
 }

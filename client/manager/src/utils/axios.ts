@@ -69,7 +69,7 @@ export async function getDataList<T>(
   params?: Record<string, string | number | undefined>,
 ): Promise<T[]> {
   const response = await instance.get<ApiResponse<T[]>>(url, { params });
-  return plainToInstance(cls, unwrapResponse(response.data));
+  return plainToInstance(cls, unwrapResponse(response.data) ?? []);
 }
 
 export async function getPage<T>(

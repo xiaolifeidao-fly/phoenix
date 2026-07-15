@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
-import { Button, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
+import { Button, Form, Input, InputNumber, Popconfirm, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { WorkspaceDrawer } from "@/components/manager-shell/WorkspaceDrawer";
 import { type ShopPayload, type ShopRecord } from "../../api/product.api";
 import { useProductManagement } from "../../hooks/useProductManagement";
 
@@ -170,7 +171,7 @@ export function ProductManagementPanel() {
         ))}
       </section>
 
-      <section className="manager-data-card">
+      <section className="manager-data-card manager-toolbar-panel">
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "space-between" }}>
           <Space wrap size={12}>
             <Input
@@ -223,18 +224,18 @@ export function ProductManagementPanel() {
         />
       </section>
 
-      <Modal
+      <WorkspaceDrawer
         title={editingProduct ? "编辑商品" : "新建商品"}
         open={modalOpen}
-        onCancel={() => {
+        onClose={() => {
           setModalOpen(false);
           setEditingProduct(null);
         }}
-        onOk={() => void handleSubmit()}
-        confirmLoading={submitting}
-        destroyOnClose
+        onSubmit={handleSubmit}
+        okText={editingProduct ? "保存商品" : "创建商品"}
+        submitting={submitting}
       >
-        <Form<ProductFormValues> form={form} layout="vertical" preserve={false}>
+        <Form<ProductFormValues> className="manager-form-skin" form={form} layout="vertical" preserve={false}>
           <Form.Item name="name" label="商品名称" rules={[{ required: true, message: "请输入商品名称" }]}>
             <Input placeholder="例如：米音点赞" />
           </Form.Item>
@@ -259,7 +260,7 @@ export function ProductManagementPanel() {
             />
           </Form.Item>
         </Form>
-      </Modal>
+      </WorkspaceDrawer>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import (
 	"log"
 	"suffer/web-api/pkg/account"
 	"suffer/web-api/pkg/barry"
+	"suffer/web-api/pkg/dashboard"
 	"suffer/web-api/pkg/login"
 	"suffer/web-api/pkg/notice"
 	"suffer/web-api/pkg/order"
@@ -26,6 +27,7 @@ func registerHandler() []routers.Handler {
 	return []routers.Handler{
 		build("account", func() routers.Handler { return account.NewAccountHandler() }),
 		build("barry", func() routers.Handler { return barry.NewBarryHandler() }),
+		build("dashboard", func() routers.Handler { return dashboard.NewDashboardHandler() }),
 		build("login", func() routers.Handler { return login.NewLoginHandler() }),
 		build("notice", func() routers.Handler { return notice.NewNoticeHandler() }),
 		build("order", func() routers.Handler { return order.NewOrderHandler() }),

@@ -42,7 +42,7 @@ export class ShopCategoryOption {
   status = "";
 }
 
-export interface TenantListQuery {
+export interface TenantListQuery extends Record<string, string | number | undefined> {
   pageIndex?: number;
   pageSize?: number;
   name?: string;

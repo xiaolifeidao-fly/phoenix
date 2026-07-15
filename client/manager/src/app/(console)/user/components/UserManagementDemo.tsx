@@ -15,6 +15,7 @@ import {
 } from "@ant-design/icons";
 import {
   Button,
+  Form,
   Input,
   InputNumber,
   message,
@@ -27,6 +28,7 @@ import {
   Typography,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { WorkspaceDrawer } from "@/components/manager-shell/WorkspaceDrawer";
 import {
   createAccount,
   createTenantUser,
@@ -42,6 +44,21 @@ import { UserFormModal } from "./UserFormModal";
 import { useUserManagement } from "../hooks/useUserManagement";
 
 const { Text } = Typography;
+
+type UserActionMode = "role" | "remark" | "password" | "tenant" | "recharge";
+
+interface UserActionState {
+  mode: UserActionMode;
+  record: UserRecord;
+}
+
+interface UserActionFormValues {
+  role?: string;
+  remark?: string;
+  password?: string;
+  tenantId?: number;
+  amount?: number;
+}
 
 const roleColors: Record<string, string> = {
   admin: "rgba(170,192,238,0.18)",
@@ -79,6 +96,9 @@ export function UserManagementDemo() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserRecord | null>(null);
   const [tenantOptions, setTenantOptions] = useState<TenantOption[]>([]);
+  const [actionForm] = Form.useForm<UserActionFormValues>();
+  const [actionState, setActionState] = useState<UserActionState | null>(null);
+  const [actionSubmitting, setActionSubmitting] = useState(false);
 
   const activeCount = users.filter((item) => resolveUserStatus(item) === "normal").length;
   const boundCount = users.filter((item) => Boolean(item.tenantName?.trim())).length;
@@ -122,69 +142,41 @@ export function UserManagementDemo() {
     }
   };
 
-  const handleChangeRole = (record: UserRecord) => {
-    let nextRole = record.role;
-    Modal.confirm({
-      title: "修改角色",
-      content: (
-        <Select<string>
-          defaultValue={record.role || "member"}
-          style={{ width: "100%", marginTop: 16 }}
-          onChange={(value) => {
-            nextRole = value;
-          }}
-          options={[
-            { label: "管理员", value: "admin" },
-            { label: "经理", value: "manager" },
-            { label: "审计", value: "auditor" },
-            { label: "代理", value: "member" },
-          ]}
-        />
-      ),
-      onOk: async () => {
-        await patchUser(record.id, { role: nextRole });
+  const openUserActionDrawer = (mode: UserActionMode, record: UserRecord) => {
+    setActionState({ mode, record });
+    actionForm.setFieldsValue({
+      role: record.role || "member",
+      remark: record.remark || "",
+      password: "",
+      tenantId: record.tenantId || undefined,
+      amount: undefined,
+    });
+  };
+
+  const closeUserActionDrawer = () => {
+    setActionState(null);
+    actionForm.resetFields();
+  };
+
+  const handleUserActionSubmit = async () => {
+    if (!actionState) {
+      return;
+    }
+    const values = await actionForm.validateFields();
+    const { mode, record } = actionState;
+
+    setActionSubmitting(true);
+    try {
+      if (mode === "role") {
+        await patchUser(record.id, { role: values.role || "member" });
         message.success("角色已更新");
-      },
-    });
-  };
-
-  const handleChangeRemark = (record: UserRecord) => {
-    let nextRemark = record.remark || "";
-    Modal.confirm({
-      title: "修改备注",
-      content: (
-        <Input.TextArea
-          rows={4}
-          defaultValue={record.remark}
-          placeholder="请输入备注"
-          style={{ marginTop: 16 }}
-          onChange={(event) => {
-            nextRemark = event.target.value;
-          }}
-        />
-      ),
-      onOk: async () => {
-        await patchUser(record.id, { remark: nextRemark });
+      }
+      if (mode === "remark") {
+        await patchUser(record.id, { remark: values.remark || "" });
         message.success("备注已更新");
-      },
-    });
-  };
-
-  const handleChangePassword = (record: UserRecord) => {
-    let nextPassword = "";
-    Modal.confirm({
-      title: "修改密码",
-      content: (
-        <Input.Password
-          placeholder="请输入新密码"
-          style={{ marginTop: 16 }}
-          onChange={(event) => {
-            nextPassword = event.target.value;
-          }}
-        />
-      ),
-      onOk: async () => {
-        const password = nextPassword.trim();
+      }
+      if (mode === "password") {
+        const password = values.password?.trim();
         if (!password) {
           throw new Error("请输入新密码");
         }
@@ -193,66 +185,23 @@ export function UserManagementDemo() {
           originPassword: password,
         });
         message.success("密码已更新");
-      },
-    });
-  };
-
-  const handleChangeTenant = (record: UserRecord) => {
-    let nextTenantId = record.tenantId ?? 0;
-    Modal.confirm({
-      title: "修改租户",
-      content: (
-        <Select<number>
-          allowClear
-          defaultValue={record.tenantId || undefined}
-          placeholder="请选择租户"
-          style={{ width: "100%", marginTop: 16 }}
-          onChange={(value) => {
-            nextTenantId = value ?? 0;
-          }}
-          options={tenantOptions.map((item) => ({
-            label: item.name || item.code,
-            value: item.id,
-          }))}
-        />
-      ),
-      onOk: async () => {
+      }
+      if (mode === "tenant") {
+        const nextTenantId = values.tenantId ?? 0;
         if (!nextTenantId) {
           if (record.tenantUserId) {
             await deleteTenantUser(record.tenantUserId);
           }
-          await refresh();
-          message.success("租户已更新");
-          return;
-        }
-        if (record.tenantUserId) {
+        } else if (record.tenantUserId) {
           await updateTenantUser(record.tenantUserId, { tenantId: nextTenantId });
         } else {
           await createTenantUser({ userId: record.id, tenantId: nextTenantId });
         }
         await refresh();
         message.success("租户已更新");
-      },
-    });
-  };
-
-  const handleRecharge = (record: UserRecord) => {
-    let amount = 0;
-    Modal.confirm({
-      title: "充值",
-      content: (
-        <InputNumber<number>
-          min={0}
-          step={1}
-          precision={2}
-          placeholder="请输入充值金额"
-          style={{ width: "100%", marginTop: 16 }}
-          onChange={(value) => {
-            amount = Number(value ?? 0);
-          }}
-        />
-      ),
-      onOk: async () => {
+      }
+      if (mode === "recharge") {
+        const amount = Number(values.amount ?? 0);
         if (amount <= 0) {
           throw new Error("请输入大于 0 的金额");
         }
@@ -268,8 +217,13 @@ export function UserManagementDemo() {
         }
         await refresh();
         message.success("充值成功");
-      },
-    });
+      }
+      closeUserActionDrawer();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "操作失败");
+    } finally {
+      setActionSubmitting(false);
+    }
   };
 
   const handleToggleFreeze = (record: UserRecord) => {
@@ -394,7 +348,7 @@ export function UserManagementDemo() {
                 size="small"
                 type="text"
                 icon={<PartitionOutlined />}
-                onClick={() => handleChangeTenant(record)}
+                onClick={() => openUserActionDrawer("tenant", record)}
               />
             </Tooltip>
             <Tooltip title="修改角色">
@@ -402,7 +356,7 @@ export function UserManagementDemo() {
                 size="small"
                 type="text"
                 icon={<TeamOutlined />}
-                onClick={() => handleChangeRole(record)}
+                onClick={() => openUserActionDrawer("role", record)}
               />
             </Tooltip>
             <Tooltip title="修改备注">
@@ -410,7 +364,7 @@ export function UserManagementDemo() {
                 size="small"
                 type="text"
                 icon={<EditOutlined />}
-                onClick={() => handleChangeRemark(record)}
+                onClick={() => openUserActionDrawer("remark", record)}
               />
             </Tooltip>
             <Tooltip title="修改密码">
@@ -418,7 +372,7 @@ export function UserManagementDemo() {
                 size="small"
                 type="text"
                 icon={<LockOutlined />}
-                onClick={() => handleChangePassword(record)}
+                onClick={() => openUserActionDrawer("password", record)}
               />
             </Tooltip>
             <Tooltip title="充值">
@@ -426,7 +380,7 @@ export function UserManagementDemo() {
                 size="small"
                 type="text"
                 icon={<WalletOutlined />}
-                onClick={() => handleRecharge(record)}
+                onClick={() => openUserActionDrawer("recharge", record)}
               />
             </Tooltip>
             <Tooltip title={frozen ? "解冻" : "冻结"}>
@@ -460,7 +414,7 @@ export function UserManagementDemo() {
         ))}
       </section>
 
-      <section className="manager-data-card">
+      <section className="manager-data-card manager-toolbar-panel">
         <div
           style={{
             display: "flex",
@@ -567,6 +521,70 @@ export function UserManagementDemo() {
         }}
         onSubmit={handleSubmit}
       />
+
+      <WorkspaceDrawer
+        open={Boolean(actionState)}
+        title={resolveUserActionTitle(actionState?.mode)}
+        okText="保存"
+        submitting={actionSubmitting}
+        width={520}
+        onClose={closeUserActionDrawer}
+        onSubmit={handleUserActionSubmit}
+      >
+        {actionState ? (
+          <Form<UserActionFormValues> className="manager-form-skin" form={actionForm} layout="vertical" preserve={false}>
+            <div className="manager-drawer-record">
+              <Text strong>{actionState.record.username || "-"}</Text>
+              <Text type="secondary">{`用户ID ${actionState.record.id}`}</Text>
+            </div>
+            {actionState.mode === "role" ? (
+              <Form.Item name="role" label="角色" rules={[{ required: true, message: "请选择角色" }]}>
+                <Select
+                  options={[
+                    { label: "管理员", value: "admin" },
+                    { label: "经理", value: "manager" },
+                    { label: "审计", value: "auditor" },
+                    { label: "代理", value: "member" },
+                  ]}
+                />
+              </Form.Item>
+            ) : null}
+            {actionState.mode === "remark" ? (
+              <Form.Item name="remark" label="备注">
+                <Input.TextArea rows={5} placeholder="请输入备注" />
+              </Form.Item>
+            ) : null}
+            {actionState.mode === "password" ? (
+              <Form.Item name="password" label="新密码" rules={[{ required: true, message: "请输入新密码" }]}>
+                <Input.Password placeholder="请输入新密码" />
+              </Form.Item>
+            ) : null}
+            {actionState.mode === "tenant" ? (
+              <Form.Item name="tenantId" label="绑定租户">
+                <Select<number>
+                  allowClear
+                  placeholder="请选择租户，清空则解绑"
+                  options={tenantOptions.map((item) => ({
+                    label: item.name || item.code,
+                    value: item.id,
+                  }))}
+                />
+              </Form.Item>
+            ) : null}
+            {actionState.mode === "recharge" ? (
+              <Form.Item name="amount" label="充值金额" rules={[{ required: true, message: "请输入充值金额" }]}>
+                <InputNumber<number>
+                  min={0}
+                  step={1}
+                  precision={2}
+                  placeholder="请输入充值金额"
+                  style={{ width: "100%" }}
+                />
+              </Form.Item>
+            ) : null}
+          </Form>
+        ) : null}
+      </WorkspaceDrawer>
     </div>
   );
 }
@@ -618,6 +636,23 @@ function formatStatus(value: string) {
       return "冻结";
     default:
       return value ? `未知(${value})` : "-";
+  }
+}
+
+function resolveUserActionTitle(mode?: UserActionMode) {
+  switch (mode) {
+    case "role":
+      return "修改角色";
+    case "remark":
+      return "修改备注";
+    case "password":
+      return "修改密码";
+    case "tenant":
+      return "修改租户";
+    case "recharge":
+      return "账户充值";
+    default:
+      return "用户操作";
   }
 }
 

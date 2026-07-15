@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import dayjs, { type Dayjs } from "dayjs";
+import localeData from "dayjs/plugin/localeData";
+import weekday from "dayjs/plugin/weekday";
 import {
   CheckCircleOutlined,
   CloseCircleOutlined,
@@ -31,10 +33,13 @@ import {
   type ManualWithdrawRecord,
 } from "../../api/withdraw.api";
 
-const { Paragraph, Text, Title } = Typography;
+const { Text, Title } = Typography;
 const { RangePicker } = DatePicker;
 
-type DateRangeValue = [Dayjs | null, Dayjs | null] | null;
+dayjs.extend(weekday);
+dayjs.extend(localeData);
+
+type DateRangeFilterValue = [Dayjs, Dayjs];
 
 interface ActionState {
   mode: "account" | "finish" | "cancel";
@@ -65,8 +70,10 @@ export function ManualWithdrawApprovalPanel() {
     username: "",
     channel: "",
     status: "",
-    dateRange: [dayjs().startOf("day"), dayjs().endOf("day")] as [Dayjs, Dayjs],
+    dateRange: createDefaultDateRange(),
   });
+
+  const dateRangeValue = useMemo(() => normalizeDateRange(filters.dateRange), [filters.dateRange]);
 
   const loadChannels = async () => {
     setChannelLoading(true);
@@ -84,7 +91,7 @@ export function ManualWithdrawApprovalPanel() {
   const loadRecords = async () => {
     setLoading(true);
     try {
-      const [startTime, endTime] = filters.dateRange;
+      const [startTime, endTime] = normalizeDateRange(filters.dateRange);
       const result = await fetchManualWithdrawRecords({
         username: filters.username.trim() || undefined,
         channel: filters.channel || undefined,
@@ -272,35 +279,6 @@ export function ManualWithdrawApprovalPanel() {
 
   return (
     <div className="manager-page-stack">
-      <section className="manager-shell-card manager-grid-bg" style={{ borderRadius: 30, padding: 28 }}>
-        <Space direction="vertical" size={14} style={{ width: "100%" }}>
-          <Tag
-            bordered={false}
-            style={{
-              width: "fit-content",
-              margin: 0,
-              borderRadius: 999,
-              paddingInline: 12,
-              paddingBlock: 6,
-              fontWeight: 700,
-              color: "var(--manager-primary-strong)",
-              background: "rgba(93, 125, 246, 0.12)",
-            }}
-          >
-            提现审批
-          </Tag>
-          <div>
-            <div className="manager-brand-kicker">Manual Console</div>
-            <Title level={2} className="manager-display-title" style={{ margin: "14px 0 10px" }}>
-              人工提现审批台
-            </Title>
-            <Paragraph style={{ maxWidth: 760, margin: 0, color: "var(--manager-text-soft)" }}>
-              对接 Barry 用户提现记录与审核动作，支持按用户、渠道、状态、时间筛选，并执行结算、核销、驳回。
-            </Paragraph>
-          </div>
-        </Space>
-      </section>
-
       <div
         style={{
           display: "grid",
@@ -354,14 +332,17 @@ export function ManualWithdrawApprovalPanel() {
             />
             <RangePicker
               showTime
-              value={filters.dateRange}
-              onChange={(value: DateRangeValue) => {
+              value={dateRangeValue}
+              onChange={(value) => {
                 if (!value || !value[0] || !value[1]) {
-                  setFilters((current) => ({ ...current, dateRange: [dayjs().startOf("day"), dayjs().endOf("day")] }));
+                  setFilters((current) => ({ ...current, dateRange: createDefaultDateRange() }));
                   return;
                 }
-                const [startTime, endTime] = value;
-                setFilters((current) => ({ ...current, dateRange: [startTime, endTime] as [Dayjs, Dayjs] }));
+                const [startTime, endTime] = normalizeDateRange(value);
+                setFilters((current) => ({
+                  ...current,
+                  dateRange: [startTime.startOf("second"), endTime.startOf("second")],
+                }));
               }}
             />
             <Button type="primary" icon={<SearchOutlined />} onClick={() => void loadRecords()}>
@@ -415,6 +396,35 @@ export function ManualWithdrawApprovalPanel() {
       </Modal>
     </div>
   );
+}
+
+function createDefaultDateRange(): DateRangeFilterValue {
+  return [dayjs().startOf("day"), dayjs().endOf("day")];
+}
+
+function normalizeDateRange(value: unknown): DateRangeFilterValue {
+  if (!Array.isArray(value)) {
+    return createDefaultDateRange();
+  }
+
+  const [startValue, endValue] = value;
+  const defaultRange = createDefaultDateRange();
+  return [normalizeDayjs(startValue, defaultRange[0]), normalizeDayjs(endValue, defaultRange[1])];
+}
+
+function normalizeDayjs(value: unknown, fallback: Dayjs) {
+  if (dayjs.isDayjs(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" || value instanceof Date || typeof value === "number") {
+    const parsedValue = dayjs(value);
+    if (parsedValue.isValid()) {
+      return parsedValue;
+    }
+  }
+
+  return fallback;
 }
 
 function resolveModalTitle(mode?: ActionState["mode"]) {

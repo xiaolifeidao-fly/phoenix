@@ -125,6 +125,15 @@ type OrderRecordQueryDTO struct {
 	BusinessID      string `form:"businessId"`
 	BusinessKey     string `form:"businessKey"`
 	ExternalOrderID string `form:"externalOrderId"`
+	UserName        string `form:"userName"`
+	Channel         string `form:"channel"`
+	StartTime       string `form:"startTime"`
+	EndTime         string `form:"endTime"`
+}
+
+// BkOrderRequestDTO 订单补款请求
+type BkOrderRequestDTO struct {
+	Num uint64 `json:"num"`
 }
 
 type OrderRefundRecordDTO struct {

@@ -84,7 +84,7 @@ export class ShopCategoryChangeRecord {
   updatedTime?: string;
 }
 
-export interface ShopListQuery {
+export interface ShopListQuery extends Record<string, string | number | undefined> {
   pageIndex?: number;
   pageSize?: number;
   code?: string;
@@ -100,7 +100,7 @@ export interface ShopPayload {
   approveFlag: number;
 }
 
-export interface ShopCategoryListQuery {
+export interface ShopCategoryListQuery extends Record<string, string | number | undefined> {
   pageIndex?: number;
   pageSize?: number;
   shopId?: number;

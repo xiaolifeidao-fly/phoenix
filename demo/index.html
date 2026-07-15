@@ -622,6 +622,39 @@
       font-weight: 700;
     }
 
+    .ledger-compare {
+      padding: 12px;
+      border-top: 1px solid var(--line);
+      background: #fbfcfb;
+    }
+
+    .ledger-compare-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 850;
+    }
+
+    .ledger-compare-title span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .ledger-compare .match {
+      color: var(--green-2);
+      font-weight: 850;
+    }
+
+    .ledger-compare .mismatch {
+      color: var(--red);
+      font-weight: 850;
+    }
+
     .hidden {
       display: none;
     }
@@ -762,6 +795,9 @@
                   <button class="active" type="button" data-account-view="system">系统计算</button>
                   <button type="button" data-account-view="manual">人工录入</button>
                 </div>
+                <button class="btn" id="editAccountBtn" type="button" hidden>编辑</button>
+                <button class="btn primary" id="saveAccountBtn" type="button" hidden>保存</button>
+                <button class="btn" id="cancelAccountEditBtn" type="button" hidden>取消</button>
                 <button class="btn primary" id="addAccountBtn" type="button" hidden>新增记录</button>
               </div>
             </div>
@@ -934,6 +970,8 @@
       { id: 4, date: "2026-06-01", subject: "社区3", kind: "社区", debtRmb: 9400, debtU: 1301, balanceRmb: 21300, balanceU: 3000 },
       { id: 5, date: "2026-06-01", subject: "代收方", kind: "代收方", debtRmb: 16720, debtU: 2350, balanceRmb: 17650, balanceU: 2480 }
     ];
+    let accountManualEditing = false;
+    let accountManualDraftRows = [];
 
     const accountFields = [
       { key: "debtRmb", label: "欠款金额 RMB" },
@@ -1015,10 +1053,67 @@
       });
     }
 
+    function getLedgerCategoryTotal(category) {
+      return ledgerRows
+        .filter((row) => row.type === "出款" && row.category === category)
+        .reduce((sum, row) => {
+          sum.amountRmb += Number(row.amountRmb) || 0;
+          sum.amountU += Number(row.amountU) || 0;
+          return sum;
+        }, { amountRmb: 0, amountU: 0 });
+    }
+
+    function buildLedgerComparisons(input) {
+      const manualOutRow = manualRows.find((row) => row.name === "总出款");
+      const receivableRow = upstreamRows.find((row) => row.name === "应收金额");
+      const outComparisons = [
+        { label: "大户出账", category: "大户出款", targetLabel: "人工维度总出款", targetRmb: manualOutRow?.bigRmb, targetU: manualOutRow?.bigU },
+        { label: "小户出账", category: "小户出款", targetLabel: "人工维度总出款", targetRmb: manualOutRow?.smallRmb, targetU: manualOutRow?.smallU }
+      ].map((item) => {
+        const ledger = getLedgerCategoryTotal(item.category);
+        const targetRmb = Number(item.targetRmb) || 0;
+        const targetU = Number(item.targetU) || 0;
+        const diffRmb = ledger.amountRmb - targetRmb;
+        const diffU = ledger.amountU - targetU;
+
+        return {
+          ...item,
+          ledgerRmb: ledger.amountRmb,
+          ledgerU: ledger.amountU,
+          targetRmb,
+          targetU,
+          diffRmb,
+          diffU,
+          matched: diffRmb === 0 && diffU === 0
+        };
+      });
+
+      const receivableRmb = receivableRow ? (Number(receivableRow.realRmb) || 0) + (Number(receivableRow.communityRmb) || 0) : 0;
+      const receivableU = receivableRow ? (Number(receivableRow.realU) || 0) + (Number(receivableRow.communityU) || 0) : 0;
+      const inputDiffRmb = input.amountRmb - receivableRmb;
+      const inputDiffU = input.amountU - receivableU;
+
+      return [
+        ...outComparisons,
+        {
+          label: "总计入账",
+          targetLabel: "上游维度应收金额",
+          ledgerRmb: input.amountRmb,
+          ledgerU: input.amountU,
+          targetRmb: receivableRmb,
+          targetU: receivableU,
+          diffRmb: inputDiffRmb,
+          diffU: inputDiffU,
+          matched: inputDiffRmb === 0 && inputDiffU === 0
+        }
+      ];
+    }
+
     function renderLedgerSummary() {
       const out = sumLedger("出款");
       const input = sumLedger("入账");
       const categoryRows = buildLedgerCategorySummary();
+      const compareRows = buildLedgerComparisons(input);
       const net = {
         amountRmb: input.amountRmb - out.amountRmb,
         amountU: input.amountU - out.amountU,
@@ -1054,6 +1149,42 @@
             <tr class="total-row"><td>净额</td><td class="name-col">净入账</td>${tdNum(net.amountRmb)}${tdNum(net.amountU)}${tdNum(net.feeRmb)}${tdNum(net.feeU)}</tr>
           </tbody>
         </table>
+        <div class="ledger-compare" aria-label="出入账差异对比">
+          <div class="ledger-compare-title">
+            <strong>出入账差异对比</strong>
+            <span>出账对比人工维度「总出款」，入账对比上游维度「应收金额」</span>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th class="name-col">对比项</th>
+                <th>出入账 RMB</th>
+                <th>对账基准</th>
+                <th>基准 RMB</th>
+                <th>差异 RMB</th>
+                <th>出入账 U</th>
+                <th>基准 U</th>
+                <th>差异 U</th>
+                <th>结果</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${compareRows.map((row) => `
+                <tr class="readonly">
+                  <td class="name-col">${row.label}</td>
+                  ${tdNum(row.ledgerRmb)}
+                  <td>${row.targetLabel}</td>
+                  ${tdNum(row.targetRmb)}
+                  ${tdNum(row.diffRmb)}
+                  ${tdNum(row.ledgerU)}
+                  ${tdNum(row.targetU)}
+                  ${tdNum(row.diffU)}
+                  <td class="${row.matched ? "match" : "mismatch"}">${row.matched ? "一致" : "有差异"}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
       `;
     }
 
@@ -1134,8 +1265,17 @@
       return (diff / base) * 100;
     }
 
+    function cloneAccountRows(rows) {
+      return rows.map((row) => ({ ...row }));
+    }
+
+    function getEditableAccountRows() {
+      return accountManualEditing ? accountManualDraftRows : manualAccountRows;
+    }
+
     function renderAccountManual() {
       const container = document.getElementById("accountManual");
+      const rows = getEditableAccountRows();
       container.innerHTML = `
         <table aria-label="账户状态人工录入">
           <thead>
@@ -1147,14 +1287,21 @@
             </tr>
           </thead>
           <tbody>
-            ${manualAccountRows.map((row) => `
+            ${rows.map((row) => `
               <tr data-account-id="${row.id}">
-                <td><input class="cell-input text" data-account-field="date" type="date" value="${row.date}"></td>
-                <td><input class="cell-input text" data-account-field="subject" value="${row.subject}"></td>
-                <td><input class="cell-input text" data-account-field="kind" value="${row.kind}"></td>
-                ${accountFields.map((field) => `
-                  <td><input class="cell-input" data-account-field="${field.key}" value="${row[field.key]}"></td>
-                `).join("")}
+                ${accountManualEditing ? `
+                  <td><input class="cell-input text" data-account-field="date" type="date" value="${row.date}"></td>
+                  <td><input class="cell-input text" data-account-field="subject" value="${row.subject}"></td>
+                  <td><input class="cell-input text" data-account-field="kind" value="${row.kind}"></td>
+                  ${accountFields.map((field) => `
+                    <td><input class="cell-input" data-account-field="${field.key}" value="${row[field.key]}"></td>
+                  `).join("")}
+                ` : `
+                  <td>${row.date}</td>
+                  <td class="name-col">${row.subject}</td>
+                  <td>${row.kind}</td>
+                  ${accountFields.map((field) => tdNum(row[field.key])).join("")}
+                `}
               </tr>
             `).join("")}
           </tbody>
@@ -1245,7 +1392,53 @@
       });
       document.getElementById("accountSystem").classList.toggle("hidden", view !== "system");
       document.getElementById("accountManual").classList.toggle("hidden", view !== "manual");
-      document.getElementById("addAccountBtn").hidden = view !== "manual";
+      syncAccountEditActions();
+    }
+
+    function getAccountView() {
+      const active = document.querySelector("[data-account-view].active");
+      return active ? active.dataset.accountView : "system";
+    }
+
+    function syncAccountEditActions() {
+      const isManual = getAccountView() === "manual";
+      document.getElementById("editAccountBtn").hidden = !isManual || accountManualEditing;
+      document.getElementById("saveAccountBtn").hidden = !isManual || !accountManualEditing;
+      document.getElementById("cancelAccountEditBtn").hidden = !isManual || !accountManualEditing;
+      document.getElementById("addAccountBtn").hidden = !isManual || !accountManualEditing;
+    }
+
+    function startAccountManualEdit() {
+      accountManualEditing = true;
+      accountManualDraftRows = cloneAccountRows(manualAccountRows);
+      renderAccountManual();
+      syncAccountEditActions();
+    }
+
+    function cancelAccountManualEdit() {
+      accountManualEditing = false;
+      accountManualDraftRows = [];
+      renderAccountManual();
+      syncAccountEditActions();
+    }
+
+    function saveAccountManualEdit() {
+      manualAccountRows = cloneAccountRows(accountManualDraftRows);
+      manualAccountRows.forEach((row) => {
+        if (!getSystemAccountRow(row.subject)) {
+          accountRows.push({
+            subject: row.subject,
+            kind: row.kind,
+            ...Object.fromEntries(accountFields.map((field) => [field.key, 0]))
+          });
+        }
+      });
+      accountManualEditing = false;
+      accountManualDraftRows = [];
+      renderAccountSystem();
+      renderAccountManual();
+      renderAccountAlerts();
+      syncAccountEditActions();
     }
 
     function toNumber(value) {
@@ -1299,7 +1492,25 @@
 
       const accountViewButton = event.target.closest("[data-account-view]");
       if (accountViewButton) {
+        if (accountViewButton.dataset.accountView !== "manual" && accountManualEditing) {
+          cancelAccountManualEdit();
+        }
         setAccountView(accountViewButton.dataset.accountView);
+        return;
+      }
+
+      if (event.target.id === "editAccountBtn") {
+        startAccountManualEdit();
+        return;
+      }
+
+      if (event.target.id === "saveAccountBtn") {
+        saveAccountManualEdit();
+        return;
+      }
+
+      if (event.target.id === "cancelAccountEditBtn") {
+        cancelAccountManualEdit();
         return;
       }
 
@@ -1351,12 +1562,12 @@
       const accountInput = event.target.closest("#accountManual [data-account-field]");
       if (accountInput) {
         const tr = accountInput.closest("tr[data-account-id]");
-        const row = manualAccountRows.find((item) => item.id === Number(tr.dataset.accountId));
+        const row = accountManualDraftRows.find((item) => item.id === Number(tr.dataset.accountId));
+        if (!row) return;
         const field = accountInput.dataset.accountField;
         row[field] = accountFields.some((item) => item.key === field)
           ? toNumber(accountInput.value)
           : accountInput.value;
-        renderAccountAlerts();
       }
     });
 
@@ -1377,21 +1588,21 @@
       const accountSelect = event.target.closest("#accountManual select[data-account-field]");
       if (accountSelect) {
         const tr = accountSelect.closest("tr[data-account-id]");
-        const row = manualAccountRows.find((item) => item.id === Number(tr.dataset.accountId));
+        const row = accountManualDraftRows.find((item) => item.id === Number(tr.dataset.accountId));
+        if (!row) return;
         row[accountSelect.dataset.accountField] = accountSelect.value;
-        renderAccountAlerts();
         return;
       }
 
       const accountChangedInput = event.target.closest("#accountManual input[data-account-field]");
       if (accountChangedInput) {
         const tr = accountChangedInput.closest("tr[data-account-id]");
-        const row = manualAccountRows.find((item) => item.id === Number(tr.dataset.accountId));
+        const row = accountManualDraftRows.find((item) => item.id === Number(tr.dataset.accountId));
+        if (!row) return;
         const field = accountChangedInput.dataset.accountField;
         row[field] = accountFields.some((item) => item.key === field)
           ? toNumber(accountChangedInput.value)
           : accountChangedInput.value;
-        renderAccountAlerts();
       }
     });
 
@@ -1426,20 +1637,14 @@
     document.getElementById("accountForm").addEventListener("submit", (event) => {
       event.preventDefault();
       const form = new FormData(event.currentTarget);
-      const nextId = Math.max(0, ...manualAccountRows.map((row) => row.id)) + 1;
+      const rows = accountManualEditing ? accountManualDraftRows : manualAccountRows;
+      const nextId = Math.max(0, ...rows.map((row) => row.id)) + 1;
       const selectedSubject = form.get("subject");
       const customSubject = String(form.get("customSubject") || "").trim();
       const subject = selectedSubject === "__new_community__" ? customSubject : selectedSubject;
       const kind = form.get("kind");
       if (!subject) return;
-      if (!getSystemAccountRow(subject)) {
-        accountRows.push({
-          subject,
-          kind,
-          ...Object.fromEntries(accountFields.map((field) => [field.key, 0]))
-        });
-      }
-      manualAccountRows.unshift({
+      rows.unshift({
         id: nextId,
         date: form.get("date"),
         subject,
@@ -1447,9 +1652,7 @@
         ...Object.fromEntries(accountFields.map((field) => [field.key, toNumber(form.get(field.key))]))
       });
       closeModals();
-      renderAccountSystem();
       renderAccountManual();
-      renderAccountAlerts();
       setAccountView("manual");
     });
 

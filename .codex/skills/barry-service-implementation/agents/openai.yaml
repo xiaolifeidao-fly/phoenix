@@ -1,0 +1,4 @@
+interface:
+  display_name: "Barry 服务实现"
+  short_description: "实现 Phoenix 到 Barry 网关代理服务"
+  default_prompt: "Use $barry-service-implementation to implement a Phoenix proxy for a Barry gateway-inner or gateway-inlet API."

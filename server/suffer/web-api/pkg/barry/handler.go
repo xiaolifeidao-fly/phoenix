@@ -28,13 +28,26 @@ func (h *BarryHandler) RegisterHandler(engine *gin.RouterGroup) {
 }
 
 func normalizeBarryPage(q *barryDTO.PageQueryDTO) {
+	normalizeBarryPageWithDefault(q, 200)
+}
+
+func normalizeBarryPageWithDefault(q *barryDTO.PageQueryDTO, defaultPageSize int) {
 	if q == nil {
 		return
+	}
+	if defaultPageSize <= 0 {
+		defaultPageSize = 10
+	}
+	if q.PageIndex <= 0 {
+		q.PageIndex = q.Page
 	}
 	if q.PageIndex <= 0 {
 		q.PageIndex = 1
 	}
+	if q.Page <= 0 {
+		q.Page = q.PageIndex
+	}
 	if q.PageSize <= 0 {
-		q.PageSize = 200
+		q.PageSize = defaultPageSize
 	}
 }

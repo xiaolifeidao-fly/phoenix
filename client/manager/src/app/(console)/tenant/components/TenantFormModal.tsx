@@ -1,6 +1,8 @@
 "use client";
 
-import { Form, Input, Modal } from "antd";
+import { Form, Input } from "antd";
+import { useEffect } from "react";
+import { WorkspaceDrawer } from "@/components/manager-shell/WorkspaceDrawer";
 import type { TenantPayload, TenantRecord } from "../api/tenant.api";
 
 interface TenantFormModalProps {
@@ -26,20 +28,29 @@ export function TenantFormModal({
   const [form] = Form.useForm<TenantFormValues>();
   const isEdit = Boolean(tenant);
 
+  useEffect(() => {
+    if (!open) {
+      form.resetFields();
+      return;
+    }
+    form.setFieldsValue({
+      name: tenant?.name ?? "",
+      code: tenant?.code ?? "",
+    });
+  }, [form, open, tenant]);
+
   return (
-    <Modal
-      wrapClassName="manager-form-skin"
-      destroyOnClose
+    <WorkspaceDrawer
       open={open}
       title={isEdit ? "修改租户" : "添加租户"}
       okText="确定"
       cancelText="取消"
-      confirmLoading={submitting}
-      onCancel={() => {
+      submitting={submitting}
+      onClose={() => {
         form.resetFields();
         onCancel();
       }}
-      onOk={async () => {
+      onSubmit={async () => {
         const values = await form.validateFields();
         await onSubmit({
           name: values.name.trim(),
@@ -47,18 +58,13 @@ export function TenantFormModal({
         });
         form.resetFields();
       }}
-      afterOpenChange={(visible) => {
-        if (!visible) {
-          form.resetFields();
-          return;
-        }
-        form.setFieldsValue({
-          name: tenant?.name ?? "",
-          code: tenant?.code ?? "",
-        });
-      }}
     >
-      <Form<TenantFormValues> form={form} layout="vertical">
+      <Form<TenantFormValues>
+        className="manager-form-skin"
+        form={form}
+        layout="vertical"
+        preserve={false}
+      >
         <Form.Item
           label="名称"
           name="name"
@@ -74,6 +80,6 @@ export function TenantFormModal({
           <Input placeholder="请输入租户编码" />
         </Form.Item>
       </Form>
-    </Modal>
+    </WorkspaceDrawer>
   );
 }

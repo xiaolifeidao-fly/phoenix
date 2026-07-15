@@ -18,6 +18,7 @@ const USER_MANAGEMENT_CACHE_KEY = "phoenix_manager_user_management_cache_v1";
 
 const defaultStats: UserStats = {
   visibleUsers: 0,
+  accountCount: 0,
   privilegedUsers: 0,
   recentLoginUsers: 0,
   activeUsers: 0,

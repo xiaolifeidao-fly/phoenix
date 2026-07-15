@@ -1,6 +1,8 @@
 "use client";
 
-import { Form, Input, Modal } from "antd";
+import { Form, Input } from "antd";
+import { useEffect } from "react";
+import { WorkspaceDrawer } from "@/components/manager-shell/WorkspaceDrawer";
 import type { UserPayload, UserRecord } from "../api/user.api";
 
 interface UserFormModalProps {
@@ -27,20 +29,30 @@ export function UserFormModal({
   const [form] = Form.useForm<UserFormValues>();
   const isEdit = Boolean(user);
 
+  useEffect(() => {
+    if (!open) {
+      form.resetFields();
+      return;
+    }
+    form.setFieldsValue({
+      username: user?.username ?? "",
+      remark: user?.remark ?? "",
+      password: "",
+    });
+  }, [form, open, user]);
+
   return (
-    <Modal
-      wrapClassName="manager-form-skin"
-      destroyOnClose
+    <WorkspaceDrawer
       open={open}
       title={isEdit ? "编辑用户" : "新建用户"}
       okText={isEdit ? "保存编辑" : "创建用户"}
       cancelText="取消"
-      confirmLoading={submitting}
-      onCancel={() => {
+      submitting={submitting}
+      onClose={() => {
         form.resetFields();
         onCancel();
       }}
-      onOk={async () => {
+      onSubmit={async () => {
         const values = await form.validateFields();
         const payload: UserPayload = {
           username: values.username.trim(),
@@ -59,19 +71,8 @@ export function UserFormModal({
         });
         form.resetFields();
       }}
-      afterOpenChange={(visible) => {
-        if (!visible) {
-          form.resetFields();
-          return;
-        }
-        form.setFieldsValue({
-          username: user?.username ?? "",
-          remark: user?.remark ?? "",
-          password: "",
-        });
-      }}
     >
-      <Form<UserFormValues> form={form} layout="vertical">
+      <Form<UserFormValues> className="manager-form-skin" form={form} layout="vertical" preserve={false}>
         <Form.Item
           label="用户名"
           name="username"
@@ -92,6 +93,6 @@ export function UserFormModal({
           <Input.TextArea rows={3} placeholder="请输入备注" />
         </Form.Item>
       </Form>
-    </Modal>
+    </WorkspaceDrawer>
   );
 }

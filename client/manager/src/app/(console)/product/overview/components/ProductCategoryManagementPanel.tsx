@@ -13,10 +13,10 @@ import {
 } from "@ant-design/icons";
 import {
   Button,
+  Drawer,
   Form,
   Input,
   InputNumber,
-  Modal,
   Popconfirm,
   Select,
   Space,
@@ -27,6 +27,7 @@ import {
   message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { WorkspaceDrawer } from "@/components/manager-shell/WorkspaceDrawer";
 import {
   fetchBarryProductCategories,
   fetchProducts,
@@ -348,7 +349,7 @@ export function ProductCategoryManagementPanel() {
         ))}
       </section>
 
-      <section className="manager-data-card">
+      <section className="manager-data-card manager-toolbar-panel">
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "space-between" }}>
           <Space wrap size={12}>
             <Select
@@ -422,18 +423,19 @@ export function ProductCategoryManagementPanel() {
         />
       </section>
 
-      <Modal
+      <WorkspaceDrawer
         title={editingCategory ? "编辑商品类目" : "新建商品类目"}
         open={modalOpen}
-        onCancel={() => {
+        onClose={() => {
           setModalOpen(false);
           setEditingCategory(null);
         }}
-        onOk={() => void handleSubmit()}
-        confirmLoading={submitting}
-        destroyOnClose
+        onSubmit={handleSubmit}
+        okText={editingCategory ? "保存类目" : "创建类目"}
+        submitting={submitting}
+        width={600}
       >
-        <Form<CategoryFormValues> form={form} layout="vertical" preserve={false}>
+        <Form<CategoryFormValues> className="manager-form-skin" form={form} layout="vertical" preserve={false}>
           <Form.Item name="shopId" label="所属商品" rules={[{ required: true, message: "请选择商品" }]}>
             <Select
               placeholder="请选择商品"
@@ -471,14 +473,15 @@ export function ProductCategoryManagementPanel() {
             </Form.Item>
           </Space>
         </Form>
-      </Modal>
+      </WorkspaceDrawer>
 
-      <Modal
+      <Drawer
+        className="manager-workspace-drawer"
         title={`调价历史${activeHistoryCategory ? ` · ${activeHistoryCategory.name}` : ""}`}
         open={historyOpen}
-        footer={null}
         width={860}
-        onCancel={() => {
+        footer={null}
+        onClose={() => {
           setHistoryOpen(false);
           setActiveHistoryCategory(null);
           setChanges([]);
@@ -493,7 +496,7 @@ export function ProductCategoryManagementPanel() {
           locale={{ emptyText: "当前类目还没有价格变更记录" }}
           scroll={{ x: 700 }}
         />
-      </Modal>
+      </Drawer>
     </div>
   );
 }
