@@ -6,6 +6,7 @@ config/config.ini
 .vscode/
 !.env.dev
 .env
+!client/manager/configs/.env
 **/__pycache__
 **__pycache__
 /**/*.png

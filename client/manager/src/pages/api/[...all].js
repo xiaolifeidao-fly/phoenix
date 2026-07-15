@@ -7,7 +7,8 @@ import formidable from 'formidable';
 import FormData from 'form-data';
 import fs from 'fs';
 
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(process.cwd(), 'configs', '.env') });
 
 const prefix = process.env.APP_URL_PREFIX;
 const target = process.env.SERVER_TARGET;

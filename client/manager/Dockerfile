@@ -16,14 +16,8 @@ RUN pnpm install --frozen-lockfile --prefer-offline
 
 FROM dependencies AS builder
 
-ARG SERVER_TARGET
-ARG APP_URL_PREFIX=/api
 ARG APP_BASE_PATH=/suffer-web
-ARG JWT_SECRET=next-admin
-ENV SERVER_TARGET=${SERVER_TARGET} \
-    APP_URL_PREFIX=${APP_URL_PREFIX} \
-    APP_BASE_PATH=${APP_BASE_PATH} \
-    JWT_SECRET=${JWT_SECRET}
+ENV APP_BASE_PATH=${APP_BASE_PATH}
 
 COPY . ./
 RUN mkdir -p public && pnpm run build
@@ -36,13 +30,14 @@ ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs \
     && adduser --system --uid 1001 nextjs
 
-COPY package.json pnpm-lock.yaml ./
-COPY --from=dependencies /app/node_modules ./node_modules
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/next.config.mjs ./next.config.mjs
+RUN chown nextjs:nodejs /app
 
-RUN chown -R nextjs:nodejs /app
+COPY --chown=nextjs:nodejs package.json pnpm-lock.yaml ./
+COPY --from=dependencies --chown=nextjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/next.config.mjs ./next.config.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/configs ./configs
 
 USER nextjs
 EXPOSE 9901

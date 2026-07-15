@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
+import dotenv from 'dotenv';
 import withAntdLess from 'next-plugin-antd-less';
+
+dotenv.config({ path: 'configs/.env' });
 
 const CORS_HEADERS = [
     { 
@@ -30,9 +33,6 @@ const appBasePath = normalizeBasePath(process.env.APP_BASE_PATH ?? "/suffer-web"
 const nextConfig = {
     basePath: appBasePath,
     env: {
-      JWT_SECRET : process.env.JWT_SECRET,
-      SERVER_TARGET : process.env.SERVER_TARGET,
-      APP_URL_PREFIX : process.env.APP_URL_PREFIX,
       APP_BASE_PATH: appBasePath,
     },
     reactStrictMode: false,
