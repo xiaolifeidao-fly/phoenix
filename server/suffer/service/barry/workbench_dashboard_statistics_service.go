@@ -18,9 +18,19 @@ func NewWorkbenchDashboardStatisticsService(client *Client) *WorkbenchDashboardS
 	return &WorkbenchDashboardStatisticsService{client: client}
 }
 
-func (s *WorkbenchDashboardStatisticsService) UserOverview(ctx context.Context) (*barryDTO.WorkbenchUserOverviewDTO, error) {
+func (s *WorkbenchDashboardStatisticsService) UserOverview(ctx context.Context, query barryDTO.WorkbenchDashboardMetricQueryDTO) (*barryDTO.WorkbenchUserOverviewDTO, error) {
+	return s.userOverview(ctx, barryInnerWorkbenchDashboardUserOverviewPath, query)
+}
+
+func (s *WorkbenchDashboardStatisticsService) UserOnlineOverview(ctx context.Context, query barryDTO.WorkbenchDashboardMetricQueryDTO) (*barryDTO.WorkbenchUserOverviewDTO, error) {
+	return s.userOverview(ctx, barryInnerWorkbenchDashboardUserOnlineOverviewPath, query)
+}
+
+func (s *WorkbenchDashboardStatisticsService) userOverview(ctx context.Context, configPath string, query barryDTO.WorkbenchDashboardMetricQueryDTO) (*barryDTO.WorkbenchUserOverviewDTO, error) {
 	response := &barryDTO.DetailResponseDTO[barryDTO.WorkbenchUserOverviewDTO]{}
-	if err := s.client.GetAbsolute(ctx, innerServicePath(barryInnerWorkbenchDashboardUserOverviewPath), nil, response); err != nil {
+	if err := s.client.GetAbsolute(ctx, innerServicePath(configPath), buildValues(
+		"windowSeconds", query.WindowSeconds,
+	), response); err != nil {
 		return nil, err
 	}
 	if !response.Success || response.Data == nil {
@@ -37,12 +47,29 @@ func (s *WorkbenchDashboardStatisticsService) ManualSubmitted(ctx context.Contex
 	return s.metric(ctx, barryInnerWorkbenchDashboardManualSubmittedPath, query)
 }
 
+func (s *WorkbenchDashboardStatisticsService) ManualSpeed(ctx context.Context, query barryDTO.WorkbenchDashboardMetricQueryDTO) (*barryDTO.WorkbenchDashboardManualSpeedDTO, error) {
+	response := &barryDTO.DetailResponseDTO[barryDTO.WorkbenchDashboardManualSpeedDTO]{}
+	err := s.client.GetAbsolute(ctx, innerServicePath(barryInnerWorkbenchDashboardManualSpeedPath), buildValues(
+		"shopCategoryIds", query.ShopCategoryIDs,
+		"shopCategoryCodes", query.ShopCategoryCodes,
+		"windowSeconds", query.WindowSeconds,
+	), response)
+	if err != nil {
+		return nil, err
+	}
+	if !response.Success || response.Data == nil {
+		return nil, responseError(response.Message, "barry workbench manual speed response is empty")
+	}
+	return response.Data, nil
+}
+
 // ManualSubmittedComparison delegates the selected categories to Barry. Barry reads
 // today's order summary and yesterday's same-time data from order_minute_sum_record.
 func (s *WorkbenchDashboardStatisticsService) ManualSubmittedComparison(ctx context.Context, query barryDTO.WorkbenchDashboardMetricQueryDTO) (*barryDTO.WorkbenchDashboardManualSubmittedComparisonDTO, error) {
 	response := &barryDTO.DetailResponseDTO[barryDTO.WorkbenchDashboardManualSubmittedComparisonDTO]{}
 	err := s.client.GetAbsolute(ctx, innerServicePath(barryInnerWorkbenchDashboardManualSubmittedComparisonPath), buildValues(
 		"shopCategoryIds", query.ShopCategoryIDs,
+		"shopCategoryCodes", query.ShopCategoryCodes,
 	), response)
 	if err != nil {
 		return nil, err
@@ -63,6 +90,7 @@ func (s *WorkbenchDashboardStatisticsService) metric(ctx context.Context, config
 		"startDate", query.StartDate,
 		"endDate", query.EndDate,
 		"shopCategoryIds", query.ShopCategoryIDs,
+		"shopCategoryCodes", query.ShopCategoryCodes,
 	), response)
 	if err != nil {
 		return nil, err

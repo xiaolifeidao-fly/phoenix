@@ -39,6 +39,10 @@ export class OrderRecord {
 
   businessKey = "";
 
+  orderHash = "";
+
+  externalOrderId = "";
+
   tinyUrl = "";
 
   channel = "";
@@ -69,12 +73,17 @@ export class OrderAmountDetail {
 export interface OrderListQuery extends Record<string, string | number | undefined> {
   pageIndex?: number;
   pageSize?: number;
+  orderId?: number;
   tenantId?: number;
   shopId?: number;
+  shopCategoryId?: number;
+  userId?: number;
   userName?: string;
   orderStatus?: string;
+  orderHash?: string;
   businessId?: string;
   businessKey?: string;
+  externalOrderId?: string;
   channel?: string;
   startTime?: string;
   endTime?: string;

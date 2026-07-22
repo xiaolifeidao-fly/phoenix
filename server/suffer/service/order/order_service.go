@@ -254,11 +254,17 @@ func (s *OrderService) ListOrderRecords(query orderDTO.OrderRecordQueryDTO) (*ba
 	}
 	pageIndex, pageSize := normalizeOrderPage(query.Page, query.PageIndex, query.PageSize)
 	dbQuery := s.orderRecordRepository.Db.Model(&orderRepository.OrderRecord{}).Where("active = ?", 1)
+	if query.OrderID > 0 {
+		dbQuery = dbQuery.Where("id = ?", query.OrderID)
+	}
 	if query.TenantID > 0 {
 		dbQuery = dbQuery.Where("tenant_id = ?", query.TenantID)
 	}
 	if query.ShopID > 0 {
 		dbQuery = dbQuery.Where("shop_id = ?", query.ShopID)
+	}
+	if query.ShopCategoryID > 0 {
+		dbQuery = dbQuery.Where("shop_category_id = ?", query.ShopCategoryID)
 	}
 	if query.UserID > 0 {
 		dbQuery = dbQuery.Where("user_id = ?", query.UserID)

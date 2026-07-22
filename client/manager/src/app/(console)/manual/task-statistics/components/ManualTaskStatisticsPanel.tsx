@@ -5,7 +5,8 @@ import dayjs, { type Dayjs } from "dayjs";
 import localeData from "dayjs/plugin/localeData";
 import weekday from "dayjs/plugin/weekday";
 import { CheckCircleOutlined, ClockCircleOutlined, ReloadOutlined, SearchOutlined, TeamOutlined, WarningOutlined } from "@ant-design/icons";
-import { Button, DatePicker, Empty, Select, Space, Table, Tag, Typography, message } from "antd";
+import { Button, DatePicker, Empty, Select, Space, Table, Tag, Typography } from "antd";
+import { message } from "@/utils/notify";
 import type { ColumnsType } from "antd/es/table";
 import type { TablePaginationConfig } from "antd/es/table/interface";
 import {

@@ -117,8 +117,10 @@ type OrderRecordQueryDTO struct {
 	Page            int    `form:"page"`
 	PageIndex       int    `form:"pageIndex"`
 	PageSize        int    `form:"pageSize"`
+	OrderID         uint64 `form:"orderId"`
 	TenantID        uint64 `form:"tenantId"`
 	ShopID          uint64 `form:"shopId"`
+	ShopCategoryID  uint64 `form:"shopCategoryId"`
 	UserID          uint64 `form:"userId"`
 	OrderStatus     string `form:"orderStatus"`
 	OrderHash       string `form:"orderHash"`

@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { Empty, Segmented, Space, Tag, Typography } from "antd";
-import { ClockCircleOutlined } from "@ant-design/icons";
+import { Button, Drawer, Empty, Segmented, Space, Table, Tag, Tooltip, Typography } from "antd";
+import { ClockCircleOutlined, EditOutlined } from "@ant-design/icons";
 
 const { Text } = Typography;
 
@@ -12,11 +12,29 @@ export interface SpeedSeriesPoint {
   actualPerSecond: number;
 }
 
+export interface SpeedOverviewMetrics {
+  manualSubmittedPerSecond: number;
+  manualDistributedPerSecond: number;
+  realManualSubmittedPerSecond: number;
+  realManualDistributedPerSecond: number;
+  actualCompletedPerSecond: number;
+  realActualCompletedPerSecond: number;
+}
+
+export interface RealManualProductSpeed {
+  key: number;
+  productName: string;
+  submittedPerSecond: number;
+  distributedPerSecond: number;
+  accountCount: number;
+}
+
 interface SpeedTrendChartProps {
   series: SpeedSeriesPoint[];
-  /** Latest aggregate speed (per second) used for the headline stat tiles. */
-  currentManualPerSecond: number;
-  currentActualPerSecond: number;
+  speedMetrics: SpeedOverviewMetrics;
+  realManualProductSpeeds: RealManualProductSpeed[];
+  barryWindowSeconds: number;
+  onEdit: () => void;
 }
 
 type SpeedUnit = "second" | "minute" | "hour";
@@ -56,11 +74,14 @@ const PLOT_HEIGHT = VIEW_HEIGHT - MARGIN.top - MARGIN.bottom;
  */
 export function SpeedTrendChart({
   series,
-  currentManualPerSecond,
-  currentActualPerSecond,
+  speedMetrics,
+  realManualProductSpeeds,
+  barryWindowSeconds,
+  onEdit,
 }: SpeedTrendChartProps) {
-  const [unit, setUnit] = useState<SpeedUnit>("minute");
+  const [unit, setUnit] = useState<SpeedUnit>("second");
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const [realProductDrawerOpen, setRealProductDrawerOpen] = useState(false);
   const svgRef = useRef<SVGSVGElement | null>(null);
 
   const multiplier = UNIT_MULTIPLIER[unit];
@@ -152,28 +173,39 @@ export function SpeedTrendChart({
               速度概览
             </div>
             <Text style={{ color: "var(--manager-text-soft)", fontSize: 13 }}>
-              最近 1 天速度变化 · 每分钟采样一个点
+              速度每 10 秒采集；人工速度按 Barry 最近 {barryWindowSeconds} 秒数据统计，实际完成速度取相邻请求差值
             </Text>
           </div>
         </div>
-        <Segmented
-          options={UNIT_OPTIONS}
-          value={unit}
-          onChange={(value) => setUnit(value as SpeedUnit)}
-        />
+        <Space size={8}>
+          <Tooltip title="配置 Barry 统计时间窗口">
+            <Button type="text" icon={<EditOutlined />} onClick={onEdit} />
+          </Tooltip>
+          <Segmented
+            options={UNIT_OPTIONS}
+            value={unit}
+            onChange={(value) => setUnit(value as SpeedUnit)}
+          />
+        </Space>
       </div>
 
-      <div className="manager-speed-chart__stats">
-        <SpeedStatTile
-          label="人工提交速度"
-          color={MANUAL_COLOR}
-          perSecond={currentManualPerSecond}
-        />
-        <SpeedStatTile
-          label="实际完成速度"
-          color={ACTUAL_COLOR}
-          perSecond={currentActualPerSecond}
-        />
+      <div className="manager-speed-chart__groups">
+        <section className="manager-speed-chart__group">
+          <div className="manager-speed-chart__group-title">人工速度</div>
+          <div className="manager-speed-chart__stats manager-speed-chart__stats--manual">
+            <SpeedStatTile label="人工分发速度" color="#0891b2" perSecond={speedMetrics.manualDistributedPerSecond} />
+            <SpeedStatTile label="真人分发速度" color="#c2410c" perSecond={speedMetrics.realManualDistributedPerSecond} />
+            <SpeedStatTile label="人工提交速度" color={MANUAL_COLOR} perSecond={speedMetrics.manualSubmittedPerSecond} />
+            <SpeedStatTile label="真人提交速度" color="#7c3aed" perSecond={speedMetrics.realManualSubmittedPerSecond} />
+          </div>
+        </section>
+        <section className="manager-speed-chart__group">
+          <div className="manager-speed-chart__group-title">实际完成速度</div>
+          <div className="manager-speed-chart__stats manager-speed-chart__stats--actual">
+            <SpeedStatTile label="实际完成速度" color={ACTUAL_COLOR} perSecond={speedMetrics.actualCompletedPerSecond} />
+            <SpeedStatTile label="真人实际完成速度" color="#16a34a" perSecond={speedMetrics.realActualCompletedPerSecond} />
+          </div>
+        </section>
       </div>
 
       {geometry ? (
@@ -304,7 +336,30 @@ export function SpeedTrendChart({
         <Tag className="manager-dashboard-tag" style={{ borderColor: ACTUAL_COLOR, color: ACTUAL_COLOR }}>
           实际完成
         </Tag>
+        <Button type="link" onClick={() => setRealProductDrawerOpen(true)}>
+          真人商品明细
+        </Button>
       </div>
+
+      <Drawer
+        title="真人商品速度"
+        placement="right"
+        width={520}
+        open={realProductDrawerOpen}
+        onClose={() => setRealProductDrawerOpen(false)}
+      >
+        <Table<RealManualProductSpeed>
+          rowKey="key"
+          pagination={false}
+          dataSource={realManualProductSpeeds}
+          columns={[
+            { title: "人工商品", dataIndex: "productName" },
+            { title: "提交速度", dataIndex: "submittedPerSecond", render: (value: number) => `${formatSpeed(value)} /秒` },
+            { title: "分发速度", dataIndex: "distributedPerSecond", render: (value: number) => `${formatSpeed(value)} /秒` },
+            { title: "1小时上号量", dataIndex: "accountCount" },
+          ]}
+        />
+      </Drawer>
     </section>
   );
 }

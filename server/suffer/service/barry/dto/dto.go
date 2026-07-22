@@ -80,16 +80,24 @@ func normalizeBarrySuccess(success bool, code string) bool {
 	return success || code == "0"
 }
 
+func barryMessage(message, errorMessage string) string {
+	if message != "" {
+		return message
+	}
+	return errorMessage
+}
+
 func decodeBarryListResponse[T any](payload []byte) (success bool, code, message string, total int, data []*T, err error) {
 	var wrapped struct {
-		Success bool   `json:"success"`
-		Code    string `json:"code,omitempty"`
-		Message string `json:"message,omitempty"`
-		Data    []*T   `json:"data,omitempty"`
-		Total   int    `json:"total,omitempty"`
+		Success  bool   `json:"success"`
+		Code     string `json:"code,omitempty"`
+		Message  string `json:"message,omitempty"`
+		ErrorMsg string `json:"errorMsg,omitempty"`
+		Data     []*T   `json:"data,omitempty"`
+		Total    int    `json:"total,omitempty"`
 	}
 	if err = json.Unmarshal(payload, &wrapped); err == nil && wrapped.Data != nil {
-		return normalizeBarrySuccess(wrapped.Success, wrapped.Code), wrapped.Code, wrapped.Message, wrapped.Total, wrapped.Data, nil
+		return normalizeBarrySuccess(wrapped.Success, wrapped.Code), wrapped.Code, barryMessage(wrapped.Message, wrapped.ErrorMsg), wrapped.Total, wrapped.Data, nil
 	}
 
 	var list []*T
@@ -98,20 +106,21 @@ func decodeBarryListResponse[T any](payload []byte) (success bool, code, message
 	}
 
 	var wrappedPage struct {
-		Success bool             `json:"success"`
-		Code    string           `json:"code,omitempty"`
-		Message string           `json:"message,omitempty"`
-		Data    barryListData[T] `json:"data"`
-		Total   int              `json:"total,omitempty"`
+		Success  bool             `json:"success"`
+		Code     string           `json:"code,omitempty"`
+		Message  string           `json:"message,omitempty"`
+		ErrorMsg string           `json:"errorMsg,omitempty"`
+		Data     barryListData[T] `json:"data"`
+		Total    int              `json:"total,omitempty"`
 	}
 	if err = json.Unmarshal(payload, &wrappedPage); err == nil {
 		switch {
 		case wrappedPage.Data.List != nil:
-			return normalizeBarrySuccess(wrappedPage.Success, wrappedPage.Code), wrappedPage.Code, wrappedPage.Message, wrappedPage.Data.Total, wrappedPage.Data.List, nil
+			return normalizeBarrySuccess(wrappedPage.Success, wrappedPage.Code), wrappedPage.Code, barryMessage(wrappedPage.Message, wrappedPage.ErrorMsg), wrappedPage.Data.Total, wrappedPage.Data.List, nil
 		case wrappedPage.Data.Data != nil:
-			return normalizeBarrySuccess(wrappedPage.Success, wrappedPage.Code), wrappedPage.Code, wrappedPage.Message, wrappedPage.Data.Total, wrappedPage.Data.Data, nil
+			return normalizeBarrySuccess(wrappedPage.Success, wrappedPage.Code), wrappedPage.Code, barryMessage(wrappedPage.Message, wrappedPage.ErrorMsg), wrappedPage.Data.Total, wrappedPage.Data.Data, nil
 		case wrappedPage.Data.Rows != nil:
-			return normalizeBarrySuccess(wrappedPage.Success, wrappedPage.Code), wrappedPage.Code, wrappedPage.Message, wrappedPage.Data.Total, wrappedPage.Data.Rows, nil
+			return normalizeBarrySuccess(wrappedPage.Success, wrappedPage.Code), wrappedPage.Code, barryMessage(wrappedPage.Message, wrappedPage.ErrorMsg), wrappedPage.Data.Total, wrappedPage.Data.Rows, nil
 		}
 		if wrappedPage.Total > 0 {
 			total = wrappedPage.Total
@@ -119,25 +128,27 @@ func decodeBarryListResponse[T any](payload []byte) (success bool, code, message
 	}
 
 	var wrappedWithoutData struct {
-		Success bool   `json:"success"`
-		Code    string `json:"code,omitempty"`
-		Message string `json:"message,omitempty"`
+		Success  bool   `json:"success"`
+		Code     string `json:"code,omitempty"`
+		Message  string `json:"message,omitempty"`
+		ErrorMsg string `json:"errorMsg,omitempty"`
 	}
 	if err = json.Unmarshal(payload, &wrappedWithoutData); err != nil {
 		return false, "", "", 0, nil, err
 	}
-	return normalizeBarrySuccess(wrappedWithoutData.Success, wrappedWithoutData.Code), wrappedWithoutData.Code, wrappedWithoutData.Message, 0, nil, nil
+	return normalizeBarrySuccess(wrappedWithoutData.Success, wrappedWithoutData.Code), wrappedWithoutData.Code, barryMessage(wrappedWithoutData.Message, wrappedWithoutData.ErrorMsg), 0, nil, nil
 }
 
 func decodeBarryDetailResponse[T any](payload []byte) (success bool, code, message string, data *T, err error) {
 	var wrapped struct {
-		Success bool   `json:"success"`
-		Code    string `json:"code,omitempty"`
-		Message string `json:"message,omitempty"`
-		Data    *T     `json:"data,omitempty"`
+		Success  bool   `json:"success"`
+		Code     string `json:"code,omitempty"`
+		Message  string `json:"message,omitempty"`
+		ErrorMsg string `json:"errorMsg,omitempty"`
+		Data     *T     `json:"data,omitempty"`
 	}
-	if err = json.Unmarshal(payload, &wrapped); err == nil && (wrapped.Data != nil || wrapped.Success || wrapped.Code != "" || wrapped.Message != "") {
-		return normalizeBarrySuccess(wrapped.Success, wrapped.Code), wrapped.Code, wrapped.Message, wrapped.Data, nil
+	if err = json.Unmarshal(payload, &wrapped); err == nil && (wrapped.Data != nil || wrapped.Success || wrapped.Code != "" || wrapped.Message != "" || wrapped.ErrorMsg != "") {
+		return normalizeBarrySuccess(wrapped.Success, wrapped.Code), wrapped.Code, barryMessage(wrapped.Message, wrapped.ErrorMsg), wrapped.Data, nil
 	}
 
 	var detail T
@@ -151,25 +162,27 @@ func decodeBarryDetailResponse[T any](payload []byte) (success bool, code, messa
 	}
 
 	var wrappedWithoutData struct {
-		Success bool   `json:"success"`
-		Code    string `json:"code,omitempty"`
-		Message string `json:"message,omitempty"`
+		Success  bool   `json:"success"`
+		Code     string `json:"code,omitempty"`
+		Message  string `json:"message,omitempty"`
+		ErrorMsg string `json:"errorMsg,omitempty"`
 	}
 	if err = json.Unmarshal(payload, &wrappedWithoutData); err != nil {
 		return false, "", "", nil, err
 	}
-	return normalizeBarrySuccess(wrappedWithoutData.Success, wrappedWithoutData.Code), wrappedWithoutData.Code, wrappedWithoutData.Message, nil, nil
+	return normalizeBarrySuccess(wrappedWithoutData.Success, wrappedWithoutData.Code), wrappedWithoutData.Code, barryMessage(wrappedWithoutData.Message, wrappedWithoutData.ErrorMsg), nil, nil
 }
 
 func decodeBarryActionResponse(payload []byte) (success bool, code, message string, raw json.RawMessage, err error) {
 	var wrapped struct {
-		Success bool            `json:"success"`
-		Code    string          `json:"code,omitempty"`
-		Message string          `json:"message,omitempty"`
-		Data    json.RawMessage `json:"data,omitempty"`
+		Success  bool            `json:"success"`
+		Code     string          `json:"code,omitempty"`
+		Message  string          `json:"message,omitempty"`
+		ErrorMsg string          `json:"errorMsg,omitempty"`
+		Data     json.RawMessage `json:"data,omitempty"`
 	}
-	if err = json.Unmarshal(payload, &wrapped); err == nil && (wrapped.Success || wrapped.Code != "" || wrapped.Message != "" || wrapped.Data != nil) {
-		return normalizeBarrySuccess(wrapped.Success, wrapped.Code), wrapped.Code, wrapped.Message, wrapped.Data, nil
+	if err = json.Unmarshal(payload, &wrapped); err == nil && (wrapped.Success || wrapped.Code != "" || wrapped.Message != "" || wrapped.ErrorMsg != "" || wrapped.Data != nil) {
+		return normalizeBarrySuccess(wrapped.Success, wrapped.Code), wrapped.Code, barryMessage(wrapped.Message, wrapped.ErrorMsg), wrapped.Data, nil
 	}
 
 	var successOnly bool
@@ -302,13 +315,14 @@ func (dto *ProductCategoryListResponseDTO) UnmarshalJSON(data []byte) error {
 }
 
 type SaveProductCategoryDTO struct {
-	ID               int      `json:"id,omitempty"`
-	ShopGroupID      int64    `json:"shopGroupId"`
-	Name             string   `json:"name"`
-	Code             string   `json:"code"`
-	Score            int64    `json:"score"`
-	Status           string   `json:"status"`
-	ShopTypeCodeList []string `json:"shopTypeCodeList,omitempty"`
+	ID                int               `json:"id,omitempty"`
+	ShopGroupID       int64             `json:"shopGroupId"`
+	Name              string            `json:"name"`
+	Code              string            `json:"code"`
+	Score             int64             `json:"score"`
+	Status            string            `json:"status"`
+	ShopTypeCodeList  []string          `json:"shopTypeCodeList,omitempty"`
+	ShopTypeModelList []*ProductTypeDTO `json:"shopTypeModelList,omitempty"`
 }
 
 type ProductCategoryOperateDTO struct {
@@ -316,21 +330,21 @@ type ProductCategoryOperateDTO struct {
 }
 
 type ProductCategoryActionResultDTO struct {
-	Success bool                `json:"success"`
-	Code    string              `json:"code,omitempty"`
-	Message string              `json:"message,omitempty"`
-	Data    *ProductCategoryDTO `json:"data,omitempty"`
+	Success bool            `json:"success"`
+	Code    string          `json:"code,omitempty"`
+	Message string          `json:"message,omitempty"`
+	Data    json.RawMessage `json:"data,omitempty"`
 }
 
 func (dto *ProductCategoryActionResultDTO) UnmarshalJSON(data []byte) error {
-	success, code, message, detail, err := decodeBarryDetailResponse[ProductCategoryDTO](data)
+	success, code, message, raw, err := decodeBarryActionResponse(data)
 	if err != nil {
 		return err
 	}
 	dto.Success = success
 	dto.Code = code
 	dto.Message = message
-	dto.Data = detail
+	dto.Data = raw
 	return nil
 }
 
@@ -706,9 +720,15 @@ type UpdateUserWhitelistStatusDTO struct {
 	Active *bool `json:"active" binding:"required"`
 }
 
+type UpdateUserWhitelistGroupDTO struct {
+	ID    int64  `json:"id"`
+	Group string `json:"group" binding:"required"`
+}
+
 type SaveUserWhitelistDTO struct {
-	UserID         int64 `json:"userId" binding:"required"`
-	ShopCategoryID int64 `json:"shopCategoryId" binding:"required"`
+	UserID         int64  `json:"userId" binding:"required"`
+	ShopCategoryID int64  `json:"shopCategoryId" binding:"required"`
+	Group          string `json:"group,omitempty"`
 }
 
 type PaymentMethodDTO struct {
@@ -720,15 +740,13 @@ type PaymentMethodDTO struct {
 
 type UserDetailDTO struct {
 	BarryBaseDTO
-	Username         string              `json:"username"`
-	Password         string              `json:"password,omitempty"`
-	OriginalPassword string              `json:"originalPassword,omitempty"`
-	Channel          string              `json:"channel,omitempty"`
-	InventCode       string              `json:"inventCode,omitempty"`
-	AlipayName       string              `json:"alipayName,omitempty"`
-	AlipayAccount    string              `json:"alipayAccount,omitempty"`
-	Role             string              `json:"role,omitempty"`
-	PaymentMethods   []*PaymentMethodDTO `json:"paymentMethods,omitempty"`
+	Username       string              `json:"username"`
+	Channel        string              `json:"channel,omitempty"`
+	InventCode     string              `json:"inventCode,omitempty"`
+	AlipayName     string              `json:"alipayName,omitempty"`
+	AlipayAccount  string              `json:"alipayAccount,omitempty"`
+	Role           string              `json:"role,omitempty"`
+	PaymentMethods []*PaymentMethodDTO `json:"paymentMethods,omitempty"`
 }
 
 type UserDetailQueryDTO struct {
@@ -750,14 +768,17 @@ type SaveUserDetailDTO struct {
 }
 
 type UpdateUserDetailDTO struct {
-	Username         string `json:"username" binding:"required"`
-	Password         string `json:"password,omitempty"`
-	OriginalPassword string `json:"originalPassword,omitempty"`
-	Channel          string `json:"channel,omitempty"`
-	InventCode       string `json:"inventCode,omitempty"`
-	AlipayName       string `json:"alipayName,omitempty"`
-	AlipayAccount    string `json:"alipayAccount,omitempty"`
-	Role             string `json:"role,omitempty"`
+	Username      string `json:"username" binding:"required"`
+	Channel       string `json:"channel,omitempty"`
+	InventCode    string `json:"inventCode,omitempty"`
+	AlipayName    string `json:"alipayName,omitempty"`
+	AlipayAccount string `json:"alipayAccount,omitempty"`
+	Role          string `json:"role,omitempty"`
+}
+
+type ChangeUserDetailPasswordDTO struct {
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
 }
 
 type UserWithdrawRecordDTO struct {
@@ -958,9 +979,11 @@ type ManualTaskStatisticsDTO struct {
 }
 
 type WorkbenchDashboardMetricQueryDTO struct {
-	StartDate       string `json:"startDate,omitempty" form:"startDate"`
-	EndDate         string `json:"endDate,omitempty" form:"endDate"`
-	ShopCategoryIDs string `json:"shopCategoryIds,omitempty" form:"shopCategoryIds"`
+	StartDate         string `json:"startDate,omitempty" form:"startDate"`
+	EndDate           string `json:"endDate,omitempty" form:"endDate"`
+	ShopCategoryIDs   string `json:"shopCategoryIds,omitempty" form:"shopCategoryIds"`
+	ShopCategoryCodes string `json:"shopCategoryCodes,omitempty" form:"shopCategoryCodes"`
+	WindowSeconds     int    `json:"windowSeconds,omitempty" form:"windowSeconds"`
 }
 
 type WorkbenchDashboardCategoryMetricDTO struct {
@@ -977,6 +1000,26 @@ type WorkbenchDashboardMetricDTO struct {
 	CategoryList []*WorkbenchDashboardCategoryMetricDTO `json:"categoryList"`
 }
 
+type WorkbenchDashboardManualSpeedCategoryDTO struct {
+	ShopCategoryID       int64   `json:"shopCategoryId"`
+	CategoryName         string  `json:"categoryName"`
+	CategoryCode         string  `json:"categoryCode"`
+	SubmittedCount       int64   `json:"submittedCount"`
+	SubmittedPerSecond   float64 `json:"submittedPerSecond"`
+	DistributedCount     int64   `json:"distributedCount"`
+	DistributedPerSecond float64 `json:"distributedPerSecond"`
+	AccountCount         int64   `json:"accountCount"`
+}
+
+type WorkbenchDashboardManualSpeedDTO struct {
+	SubmittedCount       int64                                       `json:"submittedCount"`
+	SubmittedPerSecond   float64                                     `json:"submittedPerSecond"`
+	DistributedCount     int64                                       `json:"distributedCount"`
+	DistributedPerSecond float64                                     `json:"distributedPerSecond"`
+	AccountCount         int64                                       `json:"accountCount"`
+	CategoryList         []*WorkbenchDashboardManualSpeedCategoryDTO `json:"categoryList"`
+}
+
 type OrderStatusStatisticDTO struct {
 	OrderStatus string `json:"order_status"`
 	Count       int64  `json:"count"`
@@ -990,8 +1033,16 @@ type WorkbenchDashboardManualSubmittedComparisonDTO struct {
 }
 
 type WorkbenchUserOverviewDTO struct {
-	UserCount          int64 `json:"userCount"`
-	AccountCount       int64 `json:"accountCount"`
-	OnlineUserCount    int64 `json:"onlineUserCount"`
-	OnlineAccountCount int64 `json:"onlineAccountCount"`
+	UserCount          int64                           `json:"userCount"`
+	AccountCount       int64                           `json:"accountCount"`
+	OnlineUserCount    int64                           `json:"onlineUserCount"`
+	OnlineAccountCount int64                           `json:"onlineAccountCount"`
+	DetailList         []*WorkbenchUserOnlineDetailDTO `json:"detailList"`
+}
+
+type WorkbenchUserOnlineDetailDTO struct {
+	UserID       int64  `json:"userId"`
+	Username     string `json:"username"`
+	Channel      string `json:"channel"`
+	AccountCount int64  `json:"accountCount"`
 }

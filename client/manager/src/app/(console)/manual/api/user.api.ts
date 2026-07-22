@@ -17,10 +17,6 @@ export class ManualUserRecord {
 
   username = "";
 
-  password = "";
-
-  originalPassword = "";
-
   channel = "";
 
   inventCode = "";
@@ -112,17 +108,31 @@ export interface BarryUserWhitelistQuery {
 export interface BarryUserWhitelistPayload {
   userId: number;
   shopCategoryId: number;
+  group?: string;
 }
 
-export interface ManualUserPayload {
+export interface CreateManualUserPayload {
   username: string;
-  password?: string;
-  originalPassword?: string;
+  password: string;
   channel?: string;
   inventCode?: string;
   alipayName?: string;
   alipayAccount?: string;
   role?: string;
+}
+
+export interface UpdateManualUserPayload {
+  username: string;
+  channel?: string;
+  inventCode?: string;
+  alipayName?: string;
+  alipayAccount?: string;
+  role?: string;
+}
+
+export interface ChangeManualUserPasswordPayload {
+  username: string;
+  password: string;
 }
 
 export async function fetchManualUsers(query?: ManualUserListQuery) {
@@ -174,16 +184,26 @@ export async function updateBarryUserWhitelistStatus(id: number, active: boolean
   return unwrapApiResponse(response.data);
 }
 
+export async function updateBarryUserWhitelistGroup(id: number, group: string) {
+  const response = await instance.put<ApiResponse<BarryUserWhitelistRecord | null>>(`/barry/user-whitelists/${id}/group`, { group });
+  return unwrapApiResponse(response.data);
+}
+
 export async function fetchManualUserDetail(username: string) {
   return getData(ManualUserRecord, "/barry/user-details/detail", { username });
 }
 
-export async function createManualUser(payload: ManualUserPayload) {
+export async function createManualUser(payload: CreateManualUserPayload) {
   const response = await instance.post<ApiResponse<string | null>>("/barry/user-details", payload);
   return unwrapApiResponse(response.data);
 }
 
-export async function updateManualUser(payload: ManualUserPayload) {
+export async function updateManualUser(payload: UpdateManualUserPayload) {
   const response = await instance.put<ApiResponse<string | null>>("/barry/user-details", payload);
+  return unwrapApiResponse(response.data);
+}
+
+export async function changeManualUserPassword(payload: ChangeManualUserPasswordPayload) {
+  const response = await instance.put<ApiResponse<string | null>>("/barry/user-details/password", payload);
   return unwrapApiResponse(response.data);
 }

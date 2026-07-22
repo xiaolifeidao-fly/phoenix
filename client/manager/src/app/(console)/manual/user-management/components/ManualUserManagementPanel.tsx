@@ -4,30 +4,23 @@ import { useEffect, useMemo, useState } from "react";
 import {
   CreditCardOutlined,
   EditOutlined,
+  KeyOutlined,
   PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
 } from "@ant-design/icons";
-import {
-  Button,
-  Form,
-  Input,
-  Select,
-  Space,
-  Table,
-  Typography,
-  message,
-} from "antd";
+import { Button, Form, Input, Select, Space, Table, Typography } from "antd";
+import { message } from "@/utils/notify";
 import type { ColumnsType } from "antd/es/table";
 import { WorkspaceDrawer } from "@/components/manager-shell/WorkspaceDrawer";
 import { fetchManualChannels, type ManualChannelRecord } from "../../api/channel.api";
 import {
+  changeManualUserPassword,
   createManualUser,
   fetchManualUserDetail,
   fetchManualUserPaymentMethods,
   fetchManualUsers,
   type ManualPaymentMethodRecord,
-  type ManualUserPayload,
   type ManualUserRecord,
   updateManualUser,
 } from "../../api/user.api";
@@ -37,7 +30,6 @@ const { Text } = Typography;
 interface UserFormValues {
   username: string;
   password?: string;
-  originalPassword?: string;
   channel?: string;
   inventCode?: string;
   alipayName?: string;
@@ -45,8 +37,14 @@ interface UserFormValues {
   role?: string;
 }
 
+interface PasswordFormValues {
+  password: string;
+  confirmPassword: string;
+}
+
 export function ManualUserManagementPanel() {
   const [form] = Form.useForm<UserFormValues>();
+  const [passwordForm] = Form.useForm<PasswordFormValues>();
   const [users, setUsers] = useState<ManualUserRecord[]>([]);
   const [channels, setChannels] = useState<ManualChannelRecord[]>([]);
   const [loading, setLoading] = useState(false);
@@ -54,6 +52,9 @@ export function ManualUserManagementPanel() {
   const [submitting, setSubmitting] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<ManualUserRecord | null>(null);
+  const [passwordDrawerOpen, setPasswordDrawerOpen] = useState(false);
+  const [passwordUser, setPasswordUser] = useState<ManualUserRecord | null>(null);
+  const [passwordSubmitting, setPasswordSubmitting] = useState(false);
   const [paymentDrawerOpen, setPaymentDrawerOpen] = useState(false);
   const [paymentUser, setPaymentUser] = useState<ManualUserRecord | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<ManualPaymentMethodRecord[]>([]);
@@ -135,7 +136,6 @@ export function ManualUserManagementPanel() {
     form.setFieldsValue({
       username: "",
       password: "",
-      originalPassword: "",
       channel: "",
       inventCode: "",
       alipayName: "",
@@ -161,10 +161,8 @@ export function ManualUserManagementPanel() {
 
   const handleSubmit = async () => {
     const values = await form.validateFields();
-    const payload: ManualUserPayload = {
+    const payload = {
       username: values.username.trim(),
-      password: values.password?.trim() || undefined,
-      originalPassword: values.originalPassword?.trim() || undefined,
       channel: values.channel?.trim() || undefined,
       inventCode: values.inventCode?.trim() || undefined,
       alipayName: values.alipayName?.trim() || undefined,
@@ -177,7 +175,7 @@ export function ManualUserManagementPanel() {
       if (editingUser) {
         await updateManualUser(payload);
       } else {
-        await createManualUser(payload);
+        await createManualUser({ ...payload, password: values.password!.trim() });
       }
       message.success(editingUser ? "人工用户已更新" : "人工用户已创建");
       setModalOpen(false);
@@ -187,6 +185,34 @@ export function ManualUserManagementPanel() {
       message.error(error instanceof Error ? error.message : "保存人工用户失败");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const openChangePasswordDrawer = (record: ManualUserRecord) => {
+    setPasswordUser(record);
+    passwordForm.resetFields();
+    setPasswordDrawerOpen(true);
+  };
+
+  const handlePasswordSubmit = async () => {
+    if (!passwordUser) {
+      return;
+    }
+    const values = await passwordForm.validateFields();
+    setPasswordSubmitting(true);
+    try {
+      await changeManualUserPassword({
+        username: passwordUser.username,
+        password: values.password.trim(),
+      });
+      message.success("密码已修改");
+      setPasswordDrawerOpen(false);
+      setPasswordUser(null);
+      passwordForm.resetFields();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "修改密码失败");
+    } finally {
+      setPasswordSubmitting(false);
     }
   };
 
@@ -267,11 +293,14 @@ export function ManualUserManagementPanel() {
       title: "操作",
       key: "actions",
       fixed: "right",
-      width: 180,
+      width: 260,
       render: (_, record) => (
         <Space size={4}>
           <Button type="text" icon={<EditOutlined />} onClick={() => void openEditModal(record)}>
             编辑
+          </Button>
+          <Button type="text" icon={<KeyOutlined />} onClick={() => openChangePasswordDrawer(record)}>
+            修改密码
           </Button>
           <Button type="text" icon={<CreditCardOutlined />} onClick={() => void openPaymentDrawer(record)}>
             支付信息
@@ -363,12 +392,11 @@ export function ManualUserManagementPanel() {
           <Form.Item name="username" label="用户名" rules={[{ required: true, message: "请输入用户名" }]}>
             <Input placeholder="请输入 Barry 用户名" disabled={Boolean(editingUser)} />
           </Form.Item>
-          <Form.Item name="password" label="密码">
-            <Input.Password placeholder="请输入密码" />
-          </Form.Item>
-          <Form.Item name="originalPassword" label="原始密码">
-            <Input.Password placeholder="请输入原始密码" />
-          </Form.Item>
+          {!editingUser && (
+            <Form.Item name="password" label="密码" rules={[{ required: true, message: "请输入密码" }]}>
+              <Input.Password placeholder="请输入密码" />
+            </Form.Item>
+          )}
           <Form.Item name="channel" label="渠道">
             <Select
               allowClear
@@ -390,6 +418,43 @@ export function ManualUserManagementPanel() {
           </Form.Item>
           <Form.Item name="role" label="角色">
             <Input placeholder="请输入角色标识" />
+          </Form.Item>
+        </Form>
+      </WorkspaceDrawer>
+
+      <WorkspaceDrawer
+        title={passwordUser ? `修改密码 · ${passwordUser.username}` : "修改密码"}
+        open={passwordDrawerOpen}
+        onClose={() => {
+          setPasswordDrawerOpen(false);
+          setPasswordUser(null);
+          passwordForm.resetFields();
+        }}
+        okText="确认修改"
+        submitting={passwordSubmitting}
+        width={480}
+        onSubmit={handlePasswordSubmit}
+      >
+        <Form className="manager-form-skin" form={passwordForm} layout="vertical" preserve={false}>
+          <Form.Item name="password" label="新密码" rules={[{ required: true, message: "请输入新密码" }]}>
+            <Input.Password placeholder="请输入新密码" autoComplete="new-password" />
+          </Form.Item>
+          <Form.Item
+            name="confirmPassword"
+            label="确认新密码"
+            dependencies={["password"]}
+            rules={[
+              { required: true, message: "请再次输入新密码" },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  return !value || getFieldValue("password") === value
+                    ? Promise.resolve()
+                    : Promise.reject(new Error("两次输入的密码不一致"));
+                },
+              }),
+            ]}
+          >
+            <Input.Password placeholder="请再次输入新密码" autoComplete="new-password" />
           </Form.Item>
         </Form>
       </WorkspaceDrawer>
@@ -420,8 +485,6 @@ export function ManualUserManagementPanel() {
 function toFormValues(record: ManualUserRecord): UserFormValues {
   return {
     username: record.username,
-    password: record.password || "",
-    originalPassword: record.originalPassword || "",
     channel: record.channel || "",
     inventCode: record.inventCode || "",
     alipayName: record.alipayName || "",

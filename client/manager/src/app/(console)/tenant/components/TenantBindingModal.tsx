@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Modal, Select, Space, Tag, Typography, message } from "antd";
+import { Modal, Select, Space, Tag, Typography } from "antd";
+import { message } from "@/utils/notify";
 import {
   fetchShopCategoryOptions,
   fetchTenantCategoryBindings,

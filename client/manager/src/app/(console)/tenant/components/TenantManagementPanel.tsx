@@ -9,17 +9,8 @@ import {
   SearchOutlined,
   TagsOutlined,
 } from "@ant-design/icons";
-import {
-  Button,
-  Input,
-  Popconfirm,
-  Space,
-  Table,
-  Tag,
-  Tooltip,
-  Typography,
-  message,
-} from "antd";
+import { Button, Input, Popconfirm, Space, Table, Tag, Tooltip, Typography } from "antd";
+import { message } from "@/utils/notify";
 import type { ColumnsType } from "antd/es/table";
 import { type TenantPayload, type TenantRecord } from "../api/tenant.api";
 import { TenantBindingModal } from "./TenantBindingModal";

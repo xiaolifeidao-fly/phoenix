@@ -137,3 +137,15 @@ func (s *UserDetailService) Update(ctx context.Context, req *barryDTO.UpdateUser
 	}
 	return response, nil
 }
+
+func (s *UserDetailService) ChangePassword(ctx context.Context, req *barryDTO.ChangeUserDetailPasswordDTO) (*barryDTO.ActionResponseDTO, error) {
+	if req == nil {
+		return nil, fmt.Errorf("request is nil")
+	}
+	response := &barryDTO.ActionResponseDTO{Success: true}
+	err := s.client.PostAbsolute(ctx, innerServicePath(barryInnerUserDetailPasswordUpdatePath), req, response)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}

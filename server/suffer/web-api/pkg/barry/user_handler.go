@@ -14,11 +14,13 @@ func (h *BarryHandler) registerUserRoutes(engine *gin.RouterGroup) {
 	engine.GET("/barry/user-whitelists", h.listUserWhitelists)
 	engine.POST("/barry/user-whitelists", h.saveUserWhitelist)
 	engine.PUT("/barry/user-whitelists/:id/status", h.updateUserWhitelistStatus)
+	engine.PUT("/barry/user-whitelists/:id/group", h.updateUserWhitelistGroup)
 	engine.GET("/barry/user-details", h.listUserDetails)
 	engine.GET("/barry/user-details/payment-methods", h.listUserPaymentMethods)
 	engine.GET("/barry/user-details/detail", h.getUserDetail)
 	engine.POST("/barry/user-details", h.createUserDetail)
 	engine.PUT("/barry/user-details", h.updateUserDetail)
+	engine.PUT("/barry/user-details/password", h.changeUserDetailPassword)
 	engine.GET("/barry/user-points", h.listUserPoints)
 	engine.GET("/barry/point-withdraws", h.listPointWithdraws)
 	engine.GET("/barry/user-withdraw-records", h.listUserWithdrawRecords)
@@ -107,6 +109,30 @@ func (h *BarryHandler) updateUserWhitelistStatus(c *gin.Context) {
 	commonRouter.ToJson(c, response.Data, nil)
 }
 
+func (h *BarryHandler) updateUserWhitelistGroup(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	var req barryDTO.UpdateUserWhitelistGroupDTO
+	if c.ShouldBindJSON(&req) != nil || req.Group == "" {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	req.ID = id
+	response, err := h.barryService.UserWhitelist.UpdateGroup(c.Request.Context(), &req)
+	if err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	if !response.Success && response.Code != "0" {
+		commonRouter.ToError(c, "更新白名单分组失败")
+		return
+	}
+	commonRouter.ToJson(c, response.Data, nil)
+}
+
 func (h *BarryHandler) listUserPoints(c *gin.Context) {
 	var q barryDTO.UserPointQueryDTO
 	if c.ShouldBindQuery(&q) != nil {
@@ -186,6 +212,20 @@ func (h *BarryHandler) updateUserDetail(c *gin.Context) {
 		return
 	}
 	response, err := h.barryService.UserDetail.Update(c.Request.Context(), &req)
+	if err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	commonRouter.ToJson(c, response.Data, nil)
+}
+
+func (h *BarryHandler) changeUserDetailPassword(c *gin.Context) {
+	var req barryDTO.ChangeUserDetailPasswordDTO
+	if c.ShouldBindJSON(&req) != nil {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := h.barryService.UserDetail.ChangePassword(c.Request.Context(), &req)
 	if err != nil {
 		commonRouter.ToJson(c, nil, err)
 		return

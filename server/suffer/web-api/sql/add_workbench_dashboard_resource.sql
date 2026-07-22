@@ -10,10 +10,14 @@ SELECT 1, NOW(), NOW(), source.name, source.code, 0,
 FROM (
   SELECT '工作台人工用户概览' AS name, 'workbenchUserOverview' AS code,
          '/barry/workbench-dashboard/user-overview' AS resource_url
+  UNION ALL SELECT '工作台实时上号情况', 'workbenchUserOnlineOverview',
+         '/barry/workbench-dashboard/user-online-overview'
   UNION ALL SELECT '工作台任务余量', 'workbenchTaskRemaining',
          '/barry/workbench-dashboard/task-remaining'
   UNION ALL SELECT '工作台人工提交数量', 'workbenchManualSubmitted',
          '/barry/workbench-dashboard/manual-submitted'
+  UNION ALL SELECT '工作台人工速度', 'workbenchManualSpeed',
+         '/barry/workbench-dashboard/manual-speed'
   UNION ALL SELECT '工作台实际完成数量', 'workbenchActualCompleted',
          '/dashboard/actual-completed'
   UNION ALL SELECT '工作台今日消费', 'workbenchTodayConsume',
@@ -35,8 +39,10 @@ SELECT 1, NOW(), NOW(), 1, r.id
 FROM resource_new r
 WHERE r.resource_url IN (
   '/barry/workbench-dashboard/user-overview',
+  '/barry/workbench-dashboard/user-online-overview',
   '/barry/workbench-dashboard/task-remaining',
   '/barry/workbench-dashboard/manual-submitted',
+  '/barry/workbench-dashboard/manual-speed',
   '/dashboard/actual-completed',
   '/dashboard/today-consume',
   '/dashboard/today-recharge',

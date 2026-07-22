@@ -14,8 +14,10 @@ func (h *BarryHandler) registerTransactionRoutes(engine *gin.RouterGroup) {
 	engine.GET("/barry/order-summaries", h.listOrderSummaries)
 	engine.GET("/barry/manual-task-statistics", h.getManualTaskStatistics)
 	engine.GET("/barry/workbench-dashboard/user-overview", h.getWorkbenchUserOverview)
+	engine.GET("/barry/workbench-dashboard/user-online-overview", h.getWorkbenchUserOnlineOverview)
 	engine.GET("/barry/workbench-dashboard/task-remaining", h.getWorkbenchTaskRemaining)
 	engine.GET("/barry/workbench-dashboard/manual-submitted", h.getWorkbenchManualSubmitted)
+	engine.GET("/barry/workbench-dashboard/manual-speed", h.getWorkbenchManualSpeed)
 	engine.GET("/barry/workbench-dashboard/manual-submitted-comparison", h.getWorkbenchManualSubmittedComparison)
 	engine.GET("/barry/workbench-dashboard/actual-completed", h.getWorkbenchActualCompleted)
 	engine.GET("/barry/manual-task-statistics/users", h.listManualTaskStatisticUsers)
@@ -81,7 +83,22 @@ func (h *BarryHandler) getManualTaskStatistics(c *gin.Context) {
 }
 
 func (h *BarryHandler) getWorkbenchUserOverview(c *gin.Context) {
-	response, err := h.barryService.WorkbenchDashboardStats.UserOverview(c.Request.Context())
+	var q barryDTO.WorkbenchDashboardMetricQueryDTO
+	if c.ShouldBindQuery(&q) != nil {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := h.barryService.WorkbenchDashboardStats.UserOverview(c.Request.Context(), q)
+	commonRouter.ToJson(c, response, err)
+}
+
+func (h *BarryHandler) getWorkbenchUserOnlineOverview(c *gin.Context) {
+	var q barryDTO.WorkbenchDashboardMetricQueryDTO
+	if c.ShouldBindQuery(&q) != nil {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := h.barryService.WorkbenchDashboardStats.UserOnlineOverview(c.Request.Context(), q)
 	commonRouter.ToJson(c, response, err)
 }
 
@@ -91,6 +108,16 @@ func (h *BarryHandler) getWorkbenchTaskRemaining(c *gin.Context) {
 
 func (h *BarryHandler) getWorkbenchManualSubmitted(c *gin.Context) {
 	h.getWorkbenchMetric(c, h.barryService.WorkbenchDashboardStats.ManualSubmitted)
+}
+
+func (h *BarryHandler) getWorkbenchManualSpeed(c *gin.Context) {
+	var q barryDTO.WorkbenchDashboardMetricQueryDTO
+	if c.ShouldBindQuery(&q) != nil {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := h.barryService.WorkbenchDashboardStats.ManualSpeed(c.Request.Context(), q)
+	commonRouter.ToJson(c, response, err)
 }
 
 func (h *BarryHandler) getWorkbenchManualSubmittedComparison(c *gin.Context) {

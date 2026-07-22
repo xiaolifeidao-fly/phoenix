@@ -11,21 +11,8 @@ import {
   ReloadOutlined,
   SearchOutlined,
 } from "@ant-design/icons";
-import {
-  Button,
-  Drawer,
-  Form,
-  Input,
-  InputNumber,
-  Popconfirm,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Tooltip,
-  Typography,
-  message,
-} from "antd";
+import { Button, Drawer, Form, Input, InputNumber, Popconfirm, Select, Space, Table, Tag, Tooltip, Typography } from "antd";
+import { message } from "@/utils/notify";
 import type { ColumnsType } from "antd/es/table";
 import { WorkspaceDrawer } from "@/components/manager-shell/WorkspaceDrawer";
 import {

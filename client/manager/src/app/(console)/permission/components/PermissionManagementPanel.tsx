@@ -15,24 +15,8 @@ import {
   SearchOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
-import {
-  Button,
-  Empty,
-  Form,
-  Input,
-  List,
-  Modal,
-  Popconfirm,
-  Select,
-  Space,
-  Spin,
-  Statistic,
-  Tag,
-  Tooltip,
-  Tree,
-  Typography,
-  message,
-} from "antd";
+import { Button, Empty, Form, Input, List, Modal, Popconfirm, Select, Space, Spin, Statistic, Tag, Tooltip, Tree, Typography } from "antd";
+import { message } from "@/utils/notify";
 import type { DataNode } from "antd/es/tree";
 import {
   fetchAllResources,

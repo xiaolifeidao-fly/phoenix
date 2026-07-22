@@ -6,6 +6,28 @@ export interface WorkbenchDashboardStatisticsQuery {
   startDate?: string;
   endDate?: string;
   shopCategoryIds?: string;
+  shopCategoryCodes?: string;
+  windowSeconds?: number;
+}
+
+export interface ManualSpeedCategory {
+  shopCategoryId: number;
+  categoryName: string;
+  categoryCode: string;
+  submittedCount: number;
+  submittedPerSecond: number;
+  distributedCount: number;
+  distributedPerSecond: number;
+  accountCount: number;
+}
+
+export interface ManualSpeedSummary {
+  submittedCount: number;
+  submittedPerSecond: number;
+  distributedCount: number;
+  distributedPerSecond: number;
+  accountCount: number;
+  categoryList: ManualSpeedCategory[];
 }
 
 export interface WorkbenchDashboardCategoryStatistics {
@@ -36,6 +58,12 @@ export interface WorkbenchUserOverview {
   accountCount: number;
   onlineUserCount: number;
   onlineAccountCount: number;
+  detailList: Array<{
+    userId: number;
+    username: string;
+    channel: string;
+    accountCount: number;
+  }>;
 }
 
 export interface WorkbenchDashboardStatistics {
@@ -193,9 +221,21 @@ export async function fetchWorkbenchDashboardStatisticsWithComparison(query?: Wo
   } satisfies WorkbenchDashboardStatistics;
 }
 
-export async function fetchManualSubmittedComparison(query?: Pick<WorkbenchDashboardStatisticsQuery, "shopCategoryIds">) {
+export async function fetchManualSubmittedComparison(
+  query?: Pick<WorkbenchDashboardStatisticsQuery, "shopCategoryIds" | "shopCategoryCodes">,
+) {
   const response = await instance.get<ApiResponse<ManualSubmittedComparison>>(
     "/barry/workbench-dashboard/manual-submitted-comparison",
+    { params: query },
+  );
+  return unwrapApiResponse(response.data);
+}
+
+export async function fetchManualSpeed(
+  query?: Pick<WorkbenchDashboardStatisticsQuery, "shopCategoryIds" | "shopCategoryCodes" | "windowSeconds">,
+) {
+  const response = await instance.get<ApiResponse<ManualSpeedSummary>>(
+    "/barry/workbench-dashboard/manual-speed",
     { params: query },
   );
   return unwrapApiResponse(response.data);
@@ -224,7 +264,10 @@ export async function fetchActualCompleted(query?: Pick<WorkbenchDashboardStatis
   return unwrapApiResponse(response.data);
 }
 
-export async function fetchWorkbenchUserOverview() {
-  const response = await instance.get<ApiResponse<WorkbenchUserOverview>>("/barry/workbench-dashboard/user-overview");
+export async function fetchWorkbenchUserOverview(query?: Pick<WorkbenchDashboardStatisticsQuery, "windowSeconds">) {
+  const response = await instance.get<ApiResponse<WorkbenchUserOverview>>(
+    "/barry/workbench-dashboard/user-online-overview",
+    { params: query },
+  );
   return unwrapApiResponse(response.data);
 }

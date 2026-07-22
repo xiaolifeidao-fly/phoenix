@@ -14,7 +14,7 @@ const defaultQuery: Required<Pick<OrderListQuery, "pageIndex" | "pageSize">> & O
   pageSize: 10,
 };
 
-export function useOrderManagement() {
+export function useOrderManagement(loadOnMount = true) {
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -54,9 +54,17 @@ export function useOrderManagement() {
     }
   };
 
+  const clear = () => {
+    setOrders([]);
+    setTotal(0);
+    setQuery(defaultQuery);
+  };
+
   useEffect(() => {
-    void refresh();
-  }, []);
+    if (loadOnMount) {
+      void refresh();
+    }
+  }, [loadOnMount]);
 
   return {
     orders,
@@ -65,6 +73,7 @@ export function useOrderManagement() {
     loading,
     submitting,
     refresh,
+    clear,
     doRefund,
     doBk,
   };

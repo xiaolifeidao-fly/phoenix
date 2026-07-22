@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Descriptions, Table, Typography, message } from "antd";
+import { Descriptions, Table, Typography } from "antd";
+import { message } from "@/utils/notify";
 import type { ColumnsType } from "antd/es/table";
 import { WorkspaceDrawer } from "@/components/manager-shell/WorkspaceDrawer";
 import { fetchOrderAmountDetails, type OrderAmountDetail, type OrderRecord } from "../api/order.api";

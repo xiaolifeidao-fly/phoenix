@@ -257,9 +257,10 @@ func (r *DashboardRepository) ActualCompletedPeriodsByCategory(todayStart, tomor
 			WHEN order_status IN ('PENDING', 'REFUND') THEN IFNULL(end_num, 0) - IFNULL(init_num, 0)
 			ELSE 0 END ELSE 0 END), 0) AS yesterday_same_count,
 		COALESCE(SUM(CASE WHEN created_time >= ? AND created_time < ? AND order_status = 'PENDING' THEN 1 ELSE 0 END), 0) AS pending_order_count,
-		COALESCE(SUM(CASE WHEN created_time >= ? AND created_time < ? AND order_status = 'PENDING' THEN IFNULL(order_num, 0) ELSE 0 END), 0) AS pending_count,
-		COALESCE(SUM(CASE WHEN created_time >= ? AND created_time < ? THEN 1 ELSE 0 END), 0) AS total_order_count,
-		COALESCE(SUM(CASE WHEN created_time >= ? AND created_time < ? THEN IFNULL(order_num, 0) ELSE 0 END), 0) AS total_count,
+		COALESCE(SUM(CASE WHEN created_time >= ? AND created_time < ? AND order_status = 'PENDING'
+			THEN IFNULL(order_num, 0) - (IFNULL(end_num, 0) - IFNULL(init_num, 0)) ELSE 0 END), 0) AS pending_count,
+		COALESCE(SUM(CASE WHEN created_time >= ? AND created_time < ? AND order_status IN ('PENDING', 'DONE', 'INIT') THEN 1 ELSE 0 END), 0) AS total_order_count,
+		COALESCE(SUM(CASE WHEN created_time >= ? AND created_time < ? AND order_status IN ('PENDING', 'DONE', 'INIT') THEN IFNULL(order_num, 0) ELSE 0 END), 0) AS total_count,
 		COALESCE(SUM(CASE WHEN created_time >= ? AND created_time < ? AND order_status = 'DONE' THEN 1 ELSE 0 END), 0) AS completed_order_count
 	FROM order_record
 	WHERE created_time >= ? AND created_time < ?`

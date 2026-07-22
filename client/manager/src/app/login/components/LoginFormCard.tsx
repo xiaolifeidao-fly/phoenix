@@ -1,13 +1,11 @@
 "use client";
 
 import { LockOutlined, UserOutlined } from "@ant-design/icons";
-import { Button, Form, Input, Typography, message } from "antd";
+import { App, Button, Form, Input } from "antd";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { login } from "@/app/login/api/login.api";
 import { isAuthenticated, setAuthSession } from "@/utils/auth";
-
-const { Title } = Typography;
 
 interface LoginValues {
   account: string;
@@ -16,7 +14,7 @@ interface LoginValues {
 
 export function LoginFormCard() {
   const router = useRouter();
-  const [messageApi, contextHolder] = message.useMessage();
+  const { message } = App.useApp();
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -42,79 +40,60 @@ export function LoginFormCard() {
         },
         true,
       );
-      messageApi.success("登录成功，正在进入后台");
+      message.success("登录成功，正在进入后台");
       router.replace("/manager-dashboard");
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "请输入登录密码";
-      messageApi.error(errorMessage);
+      const errorMessage = error instanceof Error ? error.message : "账号或密码有误";
+      message.error(errorMessage);
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <>
-      {contextHolder}
-      <div
-        className="manager-shell-card manager-form-skin manager-login-card"
-      >
-        <Title
-          level={2}
-          className="manager-display-title"
-          style={{ marginTop: 0, marginBottom: 28, color: "var(--manager-text)", textAlign: "center" }}
-        >
-          管理端登录
-        </Title>
-
-        <Form<LoginValues>
-          layout="vertical"
-          onFinish={handleFinish}
-          requiredMark={false}
-        >
-          <Form.Item
-            label="账号"
-            name="account"
-            rules={[{ required: true, message: "请输入登录账号" }]}
-          >
-            <Input
-              prefix={<UserOutlined style={{ color: "rgba(16,40,64,0.42)" }} />}
-              placeholder="请输入账号"
-              size="large"
-            />
-          </Form.Item>
-
-          <Form.Item
-            label="密码"
-            name="password"
-            rules={[{ required: true, message: "请输入登录密码" }]}
-          >
-            <Input.Password
-              prefix={<LockOutlined style={{ color: "rgba(16,40,64,0.42)" }} />}
-              placeholder="请输入密码"
-              size="large"
-            />
-          </Form.Item>
-
-          <Button
-            type="primary"
-            htmlType="submit"
-            block
-            size="large"
-            loading={submitting}
-            style={{
-              marginTop: 8,
-              height: 46,
-              color: "#ffffff",
-              background: "var(--manager-primary)",
-              border: "none",
-              borderRadius: 8,
-              fontWeight: 700,
-            }}
-          >
-            登录后台
-          </Button>
-        </Form>
+    <div className="manager-login-card manager-form-skin">
+      <div className="manager-login-card__brand">
+        <span className="manager-login-card__crest" aria-hidden="true">
+          P
+        </span>
+        <span className="manager-login-card__wordmark">PHOENIX</span>
       </div>
-    </>
+
+      <h1 className="manager-login-card__title">登录管理端</h1>
+      <p className="manager-login-card__subtitle">使用运营账号继续</p>
+
+      <Form<LoginValues> layout="vertical" onFinish={handleFinish} requiredMark={false} size="large">
+        <Form.Item
+          label="账号"
+          name="account"
+          rules={[{ required: true, message: "请输入登录账号" }]}
+        >
+          <Input prefix={<UserOutlined />} placeholder="请输入账号" autoComplete="username" />
+        </Form.Item>
+
+        <Form.Item
+          label="密码"
+          name="password"
+          rules={[{ required: true, message: "请输入登录密码" }]}
+        >
+          <Input.Password
+            prefix={<LockOutlined />}
+            placeholder="请输入密码"
+            autoComplete="current-password"
+          />
+        </Form.Item>
+
+        <Button
+          type="primary"
+          htmlType="submit"
+          block
+          size="large"
+          loading={submitting}
+          className="manager-login-card__submit"
+        >
+          登录后台
+        </Button>
+      </Form>
+    </div>
   );
 }

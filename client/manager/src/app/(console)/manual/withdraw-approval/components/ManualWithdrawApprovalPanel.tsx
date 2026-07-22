@@ -11,18 +11,8 @@ import {
   SearchOutlined,
   WalletOutlined,
 } from "@ant-design/icons";
-import {
-  Button,
-  DatePicker,
-  Input,
-  Modal,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Typography,
-  message,
-} from "antd";
+import { Button, DatePicker, Input, Modal, Select, Space, Table, Tag, Typography } from "antd";
+import { message } from "@/utils/notify";
 import type { ColumnsType } from "antd/es/table";
 import { fetchManualChannels, type ManualChannelRecord } from "../../api/channel.api";
 import {

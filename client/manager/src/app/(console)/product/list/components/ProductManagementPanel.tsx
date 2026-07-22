@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
-import { Button, Form, Input, InputNumber, Popconfirm, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
+import { Button, Form, Input, InputNumber, Popconfirm, Select, Space, Table, Tag, Tooltip, Typography } from "antd";
+import { message } from "@/utils/notify";
 import type { ColumnsType } from "antd/es/table";
 import { WorkspaceDrawer } from "@/components/manager-shell/WorkspaceDrawer";
 import { type ShopPayload, type ShopRecord } from "../../api/product.api";

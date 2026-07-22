@@ -56,3 +56,15 @@ func (s *UserWhitelistService) UpdateStatus(ctx context.Context, req *barryDTO.U
 	}
 	return response, nil
 }
+
+func (s *UserWhitelistService) UpdateGroup(ctx context.Context, req *barryDTO.UpdateUserWhitelistGroupDTO) (*barryDTO.DetailResponseDTO[barryDTO.UserWhitelistDTO], error) {
+	if req == nil {
+		return nil, fmt.Errorf("request is nil")
+	}
+	response := &barryDTO.DetailResponseDTO[barryDTO.UserWhitelistDTO]{}
+	err := s.client.PostAbsolute(ctx, innerServicePath(barryInnerUserWhitelistGroupPath), req, response)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}

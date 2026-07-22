@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AppstoreOutlined,
   ClockCircleOutlined,
@@ -11,25 +11,11 @@ import {
   TeamOutlined,
   WalletOutlined,
 } from "@ant-design/icons";
-import {
-  Button,
-  Drawer,
-  Empty,
-  Form,
-  Select,
-  Space,
-  Spin,
-  Switch,
-  Table,
-  Tag,
-  Tooltip,
-  Typography,
-  message,
-} from "antd";
+import { App, Button, Drawer, Empty, Form, InputNumber, Select, Space, Spin, Switch, Table, Tag, Tooltip, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { ReactNode } from "react";
 import { AnimatedNumber } from "./AnimatedNumber";
-import { SpeedTrendChart, type SpeedSeriesPoint } from "./SpeedTrendChart";
+import { SpeedTrendChart, type SpeedOverviewMetrics, type SpeedSeriesPoint } from "./SpeedTrendChart";
 import {
   fetchProductCategories,
   fetchProducts,
@@ -40,12 +26,14 @@ import { fetchManualProducts, type ManualProductRecord } from "../../manual/api/
 import { fetchUserStats, fetchUsers, UserStats, type UserRecord } from "../../user/api/user.api";
 import {
   fetchActualCompleted,
+  fetchManualSpeed,
   fetchSystemBalance,
   fetchTodayConsume,
   fetchTodayRecharge,
   fetchWorkbenchDashboardStatisticsWithComparison,
   fetchWorkbenchUserOverview,
   type DashboardStatistics,
+  type ManualSpeedSummary,
   type WorkbenchDashboardStatistics,
   type WorkbenchUserOverview,
 } from "../api/workbench-dashboard.api";
@@ -81,6 +69,8 @@ const DASHBOARD_METRIC_IDS = Object.keys(DASHBOARD_METRIC_FETCHERS) as Dashboard
 interface DashboardCardConfig {
   visible: boolean;
   categoryIds: number[];
+  barryWindowSeconds?: number;
+  userOverviewWindowSeconds?: number;
 }
 
 interface DashboardConfigStore {
@@ -154,7 +144,7 @@ interface DashboardComparison {
 }
 
 const DASHBOARD_STORAGE_KEY = "phoenix_manager_dashboard_config_v1";
-const DASHBOARD_CONFIG_VERSION = 3;
+const DASHBOARD_CONFIG_VERSION = 8;
 const DASHBOARD_SPEED_STORAGE_KEY = "phoenix_manager_dashboard_speed_history_v1";
 const DASHBOARD_DATA_CACHE_KEY = "phoenix_manager_dashboard_data_cache_v1";
 const DASHBOARD_SPEED_WINDOW_MS = 48 * 60 * 60 * 1000;
@@ -162,6 +152,8 @@ const DASHBOARD_SPEED_WINDOW_MS = 48 * 60 * 60 * 1000;
 const DASHBOARD_SPEED_CHART_WINDOW_MS = 24 * 60 * 60 * 1000;
 const DASHBOARD_SPEED_REPLACE_THRESHOLD_MS = 60 * 1000;
 const DASHBOARD_REFRESH_INTERVAL_MS = 10 * 1000;
+const MIN_BARRY_WINDOW_SECONDS = 1;
+const MAX_BARRY_WINDOW_SECONDS = 3600;
 
 interface DashboardDataCache {
   products: ShopRecord[];
@@ -179,7 +171,7 @@ interface DashboardDataCache {
 const DASHBOARD_LEFT_CARD_ID: DashboardCardId = "realActualCompleted";
 const DASHBOARD_LAYOUT: DashboardCardId[][] = [
   ["productCount", "todayConsume", "todayRecharge", "systemBalance"],
-  ["taskRemaining", "manualSubmitted", "actualCompleted", "realManualSubmitted"],
+  ["actualCompleted", "realManualSubmitted", "manualSubmitted", "taskRemaining"],
 ];
 
 const DASHBOARD_TITLES: Record<DashboardCardId, string> = {
@@ -196,7 +188,7 @@ const DASHBOARD_TITLES: Record<DashboardCardId, string> = {
 };
 
 const DASHBOARD_DEFAULT_CONFIG: Record<DashboardCardId, DashboardCardConfig> = {
-  productCount: { visible: true, categoryIds: [] },
+  productCount: { visible: true, categoryIds: [], userOverviewWindowSeconds: 120 },
   todayConsume: { visible: true, categoryIds: [] },
   todayRecharge: { visible: true, categoryIds: [] },
   systemBalance: { visible: true, categoryIds: [] },
@@ -205,7 +197,7 @@ const DASHBOARD_DEFAULT_CONFIG: Record<DashboardCardId, DashboardCardConfig> = {
   actualCompleted: { visible: true, categoryIds: [] },
   realManualSubmitted: { visible: true, categoryIds: [2, 18] },
   realActualCompleted: { visible: true, categoryIds: [7, 12] },
-  averageSpeed: { visible: true, categoryIds: [] },
+  averageSpeed: { visible: true, categoryIds: [], barryWindowSeconds: 30 },
 };
 
 const currencyFormatter = new Intl.NumberFormat("zh-CN", {
@@ -223,7 +215,7 @@ const rateFormatter = new Intl.NumberFormat("zh-CN", {
 });
 
 export function ManagerDashboardPanel() {
-  const [messageApi, contextHolder] = message.useMessage();
+  const { message: messageApi } = App.useApp();
   const [form] = Form.useForm<DashboardCardConfig>();
   const [products, setProducts] = useState<ShopRecord[]>([]);
   const [categories, setCategories] = useState<ShopCategoryRecord[]>([]);
@@ -232,9 +224,14 @@ export function ManagerDashboardPanel() {
   const [userStats, setUserStats] = useState<UserStats>(new UserStats());
   const [workbenchStatistics, setWorkbenchStatistics] = useState<WorkbenchDashboardStatistics | null>(null);
   const [realManualSubmittedStatistics, setRealManualSubmittedStatistics] = useState<WorkbenchDashboardStatistics | null>(null);
+  const [manualSpeed, setManualSpeed] = useState<ManualSpeedSummary | null>(null);
+  const [realManualSpeed, setRealManualSpeed] = useState<ManualSpeedSummary | null>(null);
+  const [actualSpeedPerSecond, setActualSpeedPerSecond] = useState(0);
+  const [realActualSpeedPerSecond, setRealActualSpeedPerSecond] = useState(0);
   const [workbenchUserOverview, setWorkbenchUserOverview] = useState<WorkbenchUserOverview | null>(null);
   const [dashboardStatistics, setDashboardStatistics] = useState<DashboardStatistics | null>(null);
   const [dashboardMetricLoading, setDashboardMetricLoading] = useState<Partial<Record<DashboardMetricId, boolean>>>({});
+  const [dashboardMetricFailed, setDashboardMetricFailed] = useState<Partial<Record<DashboardMetricId, boolean>>>({});
   const [configMap, setConfigMap] =
     useState<Record<DashboardCardId, DashboardCardConfig>>(DASHBOARD_DEFAULT_CONFIG);
   const [speedHistory, setSpeedHistory] = useState<DashboardSpeedSnapshot[]>([]);
@@ -243,6 +240,10 @@ export function ManagerDashboardPanel() {
   const [skipInitialFetch, setSkipInitialFetch] = useState(false);
   const [detailCardId, setDetailCardId] = useState<DashboardCardId | null>(null);
   const [editingCardId, setEditingCardId] = useState<DashboardCardId | null>(null);
+  const actualSpeedSampleRef = useRef<Record<"total" | "real", { count: number; timestamp: number } | undefined>>({
+    total: undefined,
+    real: undefined,
+  });
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -298,13 +299,36 @@ export function ManagerDashboardPanel() {
     setReady(true);
   }, []);
 
+  const recordActualSpeed = useCallback((scope: "total" | "real", count: number) => {
+    const timestamp = Date.now();
+    const previous = actualSpeedSampleRef.current[scope];
+    actualSpeedSampleRef.current[scope] = { count, timestamp };
+    if (!previous) {
+      return;
+    }
+    const speed = Math.max(count - previous.count, 0) / Math.max((timestamp - previous.timestamp) / 1000, 1);
+    if (scope === "total") {
+      setActualSpeedPerSecond(speed);
+    } else {
+      setRealActualSpeedPerSecond(speed);
+    }
+  }, []);
+
+  const userOverviewWindowSeconds = clampBarryWindowSeconds(
+    configMap.productCount?.userOverviewWindowSeconds,
+  );
+
   // Each dashboard metric loads on its own request and updates just its
   // slice of state, so a slow endpoint never holds up the other cards.
   const loadDashboardMetric = useCallback(
     (metricId: DashboardMetricId) => {
       setDashboardMetricLoading((current) => ({ ...current, [metricId]: true }));
+      setDashboardMetricFailed((current) => ({ ...current, [metricId]: false }));
       DASHBOARD_METRIC_FETCHERS[metricId]()
         .then((value) => {
+          if (metricId === "actualCompleted") {
+            recordActualSpeed("total", (value as NonNullable<DashboardStatistics["actualCompleted"]>).count);
+          }
           setDashboardStatistics((current) => {
             const next = { ...(current ?? {}), [metricId]: value } as DashboardStatistics;
             mergeDashboardCache({ dashboardStatistics: next });
@@ -312,13 +336,15 @@ export function ManagerDashboardPanel() {
           });
         })
         .catch(() => {
-          messageApi.warning(`${DASHBOARD_TITLES[metricId]}加载失败`);
+          // 单个指标失败不再各弹一条提示（六七个接口同时挂会糊满屏幕），
+          // 统一由下方 loadDashboardData 汇总成一条，卡片自身展示失败态。
+          setDashboardMetricFailed((current) => ({ ...current, [metricId]: true }));
         })
         .finally(() => {
           setDashboardMetricLoading((current) => ({ ...current, [metricId]: false }));
         });
     },
-    [messageApi],
+    [recordActualSpeed],
   );
 
   const loadDashboardData = useCallback(
@@ -330,14 +356,13 @@ export function ManagerDashboardPanel() {
       // Fire the four dashboard metrics independently — not awaited together.
       DASHBOARD_METRIC_IDS.forEach((metricId) => loadDashboardMetric(metricId));
 
-      const [categoryResult, productResult, manualProductResult, userResult, statsResult, workbenchResult, workbenchUserResult] = await Promise.allSettled([
+      const [categoryResult, productResult, manualProductResult, userResult, statsResult, workbenchResult] = await Promise.allSettled([
         fetchProductCategories({ pageIndex: 1, pageSize: 200 }),
         fetchProducts({ pageIndex: 1, pageSize: 200 }),
         fetchManualProducts(),
         fetchUsers({ pageIndex: 1, pageSize: 200 }),
         fetchUserStats(),
         fetchWorkbenchDashboardStatisticsWithComparison(),
-        fetchWorkbenchUserOverview(),
       ]);
 
       if (categoryResult.status === "fulfilled") {
@@ -376,8 +401,6 @@ export function ManagerDashboardPanel() {
         setWorkbenchStatistics(null);
       }
 
-      setWorkbenchUserOverview(workbenchUserResult.status === "fulfilled" ? workbenchUserResult.value : null);
-
       // Merge (not overwrite) so the independently-loaded dashboard metrics already
       // written into the cache are preserved.
       mergeDashboardCache({
@@ -387,7 +410,6 @@ export function ManagerDashboardPanel() {
         users: userResult.status === "fulfilled" ? userResult.value.data : [],
         userStats: statsResult.status === "fulfilled" ? statsResult.value : new UserStats(),
         workbenchStatistics: workbenchResult.status === "fulfilled" ? workbenchResult.value : undefined,
-        workbenchUserOverview: workbenchUserResult.status === "fulfilled" ? workbenchUserResult.value : undefined,
       });
 
       if (
@@ -396,8 +418,7 @@ export function ManagerDashboardPanel() {
         manualProductResult.status === "rejected" ||
         userResult.status === "rejected" ||
         statsResult.status === "rejected" ||
-        workbenchResult.status === "rejected" ||
-        workbenchUserResult.status === "rejected"
+        workbenchResult.status === "rejected"
       ) {
         messageApi.warning("部分工作台数据加载失败，已回退为可用数据");
       }
@@ -426,6 +447,28 @@ export function ManagerDashboardPanel() {
     return () => window.clearInterval(timer);
   }, [loadDashboardData]);
 
+  useEffect(() => {
+    if (!ready) {
+      return;
+    }
+    const loadUserOverview = () => {
+      void fetchWorkbenchUserOverview({ windowSeconds: userOverviewWindowSeconds })
+        .then((value) => {
+          setWorkbenchUserOverview(value);
+          mergeDashboardCache({ workbenchUserOverview: value });
+        })
+        .catch(() => {
+          // Preserve the last valid online snapshot when Barry is temporarily unavailable.
+        });
+    };
+    loadUserOverview();
+    const refreshInterval = userOverviewWindowSeconds < 10 * 60
+      ? DASHBOARD_REFRESH_INTERVAL_MS
+      : 60 * 1000;
+    const timer = window.setInterval(loadUserOverview, refreshInterval);
+    return () => window.clearInterval(timer);
+  }, [ready, userOverviewWindowSeconds]);
+
   const realActualCategoryIds = configMap.realActualCompleted?.categoryIds ?? [];
   const realActualCategoryIdsKey = realActualCategoryIds.join(",");
 
@@ -434,19 +477,30 @@ export function ManagerDashboardPanel() {
       return;
     }
 
-    void fetchActualCompleted(
-      realActualCategoryIds.length > 0 ? { shopCategoryIds: realActualCategoryIdsKey } : undefined,
-    )
-      .then((value) => {
-        setDashboardStatistics((current) => ({ ...(current ?? {}), realActualCompleted: value }));
-      })
-      .catch(() => {
-        messageApi.warning("真人实际完成加载失败");
-      });
-  }, [messageApi, ready, realActualCategoryIds.length, realActualCategoryIdsKey]);
+    const loadRealActualCompleted = () => {
+      void fetchActualCompleted(
+        realActualCategoryIds.length > 0 ? { shopCategoryIds: realActualCategoryIdsKey } : undefined,
+      )
+        .then((value) => {
+          recordActualSpeed("real", value.count);
+          setDashboardStatistics((current) => ({ ...(current ?? {}), realActualCompleted: value }));
+        })
+        .catch(() => {
+          // Keep the previous snapshot so a temporary polling failure does not reset the speed.
+        });
+    };
+
+    loadRealActualCompleted();
+    const timer = window.setInterval(loadRealActualCompleted, DASHBOARD_REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [ready, realActualCategoryIds.length, realActualCategoryIdsKey, recordActualSpeed]);
 
   const realManualCategoryIds = configMap.realManualSubmitted?.categoryIds ?? [];
-  const realManualCategoryIdsKey = realManualCategoryIds.join(",");
+  const realManualCategoryCodesKey = manualProducts
+    .filter((item) => realManualCategoryIds.length === 0 || realManualCategoryIds.includes(item.id))
+    .map((item) => item.code.trim())
+    .filter(Boolean)
+    .join(",");
 
   useEffect(() => {
     if (!ready) {
@@ -454,13 +508,34 @@ export function ManagerDashboardPanel() {
     }
 
     void fetchWorkbenchDashboardStatisticsWithComparison(
-      realManualCategoryIds.length > 0 ? { shopCategoryIds: realManualCategoryIdsKey } : undefined,
+      realManualCategoryCodesKey ? { shopCategoryCodes: realManualCategoryCodesKey } : undefined,
     )
       .then(setRealManualSubmittedStatistics)
       .catch(() => {
         messageApi.warning("真人人工提交加载失败");
       });
-  }, [messageApi, ready, realManualCategoryIds.length, realManualCategoryIdsKey]);
+  }, [messageApi, ready, realManualCategoryCodesKey]);
+
+  const barryWindowSeconds = clampBarryWindowSeconds(
+    configMap.averageSpeed?.barryWindowSeconds,
+  );
+
+  useEffect(() => {
+    if (!ready) {
+      return;
+    }
+    const loadManualSpeed = () => {
+      void fetchManualSpeed({ windowSeconds: barryWindowSeconds }).then(setManualSpeed).catch(() => setManualSpeed(null));
+      void fetchManualSpeed(
+        realManualCategoryCodesKey
+          ? { shopCategoryCodes: realManualCategoryCodesKey, windowSeconds: barryWindowSeconds }
+          : { windowSeconds: barryWindowSeconds },
+      ).then(setRealManualSpeed).catch(() => setRealManualSpeed(null));
+    };
+    loadManualSpeed();
+    const timer = window.setInterval(loadManualSpeed, DASHBOARD_REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [barryWindowSeconds, ready, realManualCategoryCodesKey]);
 
   useEffect(() => {
     if (!ready || typeof window === "undefined") {
@@ -535,16 +610,29 @@ export function ManagerDashboardPanel() {
     [derivedCategoryDetails, speedHistory],
   );
 
-  // 速度概览 chart data: per-minute instantaneous speed derived from the cached
-  // snapshot history, plus the current aggregate speed for the headline stat tiles.
+  // The trend remains useful for context, while its headline figures always come
+  // from the dedicated recent-hour/manual and 10-second actual-completion samples.
   const speedSeries = useMemo(() => buildSpeedSeries(speedHistory), [speedHistory]);
-  const currentManualSpeedPerSecond = useMemo(
-    () => categoryDetailsWithSpeed.reduce((sum, item) => sum + item.manualSpeedPerSecond, 0),
-    [categoryDetailsWithSpeed],
-  );
-  const currentActualSpeedPerSecond = useMemo(
-    () => categoryDetailsWithSpeed.reduce((sum, item) => sum + item.actualSpeedPerSecond, 0),
-    [categoryDetailsWithSpeed],
+  const speedMetrics = useMemo<SpeedOverviewMetrics>(() => ({
+    manualSubmittedPerSecond: manualSpeed?.submittedPerSecond ?? 0,
+    manualDistributedPerSecond: manualSpeed?.distributedPerSecond ?? 0,
+    realManualSubmittedPerSecond: realManualSpeed?.submittedPerSecond ?? 0,
+    realManualDistributedPerSecond: realManualSpeed?.distributedPerSecond ?? 0,
+    actualCompletedPerSecond: actualSpeedPerSecond,
+    realActualCompletedPerSecond: realActualSpeedPerSecond,
+  }), [actualSpeedPerSecond, manualSpeed, realActualSpeedPerSecond, realManualSpeed]);
+  const realManualProductSpeeds = useMemo(
+    () => manualProducts.map((product) => {
+      const categorySpeed = realManualSpeed?.categoryList.find((item) => item.categoryCode === product.code);
+      return {
+        key: product.id,
+        productName: product.name || product.code || `人工商品#${product.id}`,
+        submittedPerSecond: categorySpeed?.submittedPerSecond ?? 0,
+        distributedPerSecond: categorySpeed?.distributedPerSecond ?? 0,
+        accountCount: categorySpeed?.accountCount ?? 0,
+      };
+    }).filter((item) => realManualCategoryIds.length === 0 || realManualCategoryIds.includes(item.key)),
+    [manualProducts, realManualCategoryIds, realManualSpeed],
   );
 
   const cardViews = useMemo(
@@ -612,6 +700,8 @@ export function ManagerDashboardPanel() {
     form.setFieldsValue({
       visible: nextConfig.visible,
       categoryIds: nextConfig.categoryIds,
+      barryWindowSeconds: clampBarryWindowSeconds(nextConfig.barryWindowSeconds),
+      userOverviewWindowSeconds: clampBarryWindowSeconds(nextConfig.userOverviewWindowSeconds),
     });
   };
 
@@ -626,6 +716,12 @@ export function ManagerDashboardPanel() {
       [editingCardId]: {
         visible: Boolean(values.visible),
         categoryIds: values.categoryIds ?? [],
+        barryWindowSeconds: editingCardId === "averageSpeed"
+          ? clampBarryWindowSeconds(values.barryWindowSeconds)
+          : current[editingCardId].barryWindowSeconds,
+        userOverviewWindowSeconds: editingCardId === "productCount"
+          ? clampBarryWindowSeconds(values.userOverviewWindowSeconds)
+          : current[editingCardId].userOverviewWindowSeconds,
       },
     }));
     setEditingCardId(null);
@@ -634,7 +730,6 @@ export function ManagerDashboardPanel() {
   const detailCard = detailCardId ? cardViews[detailCardId] : null;
   return (
     <>
-      {contextHolder}
       <div className="manager-page-stack">
         {loading && !ready ? (
           <section className="manager-data-card" style={{ minHeight: 260, display: "grid", placeItems: "center" }}>
@@ -687,8 +782,10 @@ export function ManagerDashboardPanel() {
 
             <SpeedTrendChart
               series={speedSeries}
-              currentManualPerSecond={currentManualSpeedPerSecond}
-              currentActualPerSecond={currentActualSpeedPerSecond}
+              speedMetrics={speedMetrics}
+              realManualProductSpeeds={realManualProductSpeeds}
+              barryWindowSeconds={barryWindowSeconds}
+              onEdit={() => openEditModal("averageSpeed")}
             />
           </>
         )}
@@ -745,7 +842,8 @@ export function ManagerDashboardPanel() {
               <Table<DerivedCategoryDetail>
                 rowKey="key"
                 pagination={false}
-                scroll={{ x: 760 }}
+                scroll={detailCardId === "productCount" ? undefined : { x: 760 }}
+                tableLayout={detailCardId === "productCount" ? "fixed" : undefined}
                 dataSource={detailCard.detailRows}
                 columns={buildDetailColumns(detailCardId)}
               />
@@ -775,7 +873,7 @@ export function ManagerDashboardPanel() {
             <Switch checkedChildren="显示" unCheckedChildren="隐藏" />
           </Form.Item>
 
-          {editingCardId && !isUpstreamUserMetric(editingCardId) && editingCardId !== "actualCompleted" ? (
+          {editingCardId && !isUpstreamUserMetric(editingCardId) && editingCardId !== "actualCompleted" && editingCardId !== "averageSpeed" && editingCardId !== "productCount" ? (
             <Form.Item
               label={getEditSelectorConfig(editingCardId).label}
               name="categoryIds"
@@ -788,6 +886,26 @@ export function ManagerDashboardPanel() {
                 placeholder={getEditSelectorConfig(editingCardId).placeholder}
                 options={isManualProductMetric(editingCardId) ? manualProductOptions : categoryOptions}
               />
+            </Form.Item>
+          ) : null}
+
+          {editingCardId === "averageSpeed" ? (
+            <Form.Item
+              label="Barry 统计时间窗口（秒）"
+              name="barryWindowSeconds"
+              extra="人工速度每 10 秒采集一次；此参数决定 Barry 统计最近多少秒的数据。"
+            >
+              <InputNumber min={MIN_BARRY_WINDOW_SECONDS} max={MAX_BARRY_WINDOW_SECONDS} precision={0} style={{ width: "100%" }} />
+            </Form.Item>
+          ) : null}
+
+          {editingCardId === "productCount" ? (
+            <Form.Item
+              label="实时上号统计时间窗口（秒）"
+              name="userOverviewWindowSeconds"
+              extra="默认 120 秒，最大 1 小时；小于 10 分钟每 10 秒刷新，否则每分钟刷新。"
+            >
+              <InputNumber min={MIN_BARRY_WINDOW_SECONDS} max={MAX_BARRY_WINDOW_SECONDS} precision={0} style={{ width: "100%" }} />
             </Form.Item>
           ) : null}
 
@@ -840,6 +958,12 @@ function mergeDashboardConfig(
       accumulator[cardId] = {
         visible: config?.visible ?? current[cardId].visible,
         categoryIds: Array.isArray(config?.categoryIds) ? config?.categoryIds : current[cardId].categoryIds,
+        barryWindowSeconds: clampBarryWindowSeconds(
+          config?.barryWindowSeconds ?? current[cardId].barryWindowSeconds,
+        ),
+        userOverviewWindowSeconds: clampBarryWindowSeconds(
+          config?.userOverviewWindowSeconds ?? current[cardId].userOverviewWindowSeconds,
+        ),
       };
       return accumulator;
     },
@@ -856,6 +980,9 @@ function applyDashboardConfigPresets(
 
   return {
     ...cards,
+    productCount: cards.productCount
+      ? { ...cards.productCount, userOverviewWindowSeconds: 120 }
+      : undefined,
     realManualSubmitted: cards.realManualSubmitted
       ? { ...cards.realManualSubmitted, categoryIds: [2, 18] }
       : undefined,
@@ -937,6 +1064,41 @@ function renderDashboardCard({
               ) : null}
             </Space>
           ) : null}
+        </div>
+      </article>
+    );
+  }
+
+  if (cardId === "productCount") {
+    return (
+      <article
+        key={cardId}
+        className="manager-dashboard-card manager-dashboard-card--compact manager-dashboard-card--account-status"
+        onClick={() => onOpenDetail(cardId)}
+      >
+        <div className="manager-dashboard-card__backdrop" style={{ background: view.background }} />
+        <div className="manager-dashboard-card__content manager-dashboard-card__content--account-status">
+          <div className="manager-dashboard-card__account-status-header">
+            <div className="manager-section-label">{view.title}</div>
+            <Tooltip title="编辑当前 dashboard">
+              <Button
+                type="text"
+                icon={<EditOutlined />}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onEdit(cardId);
+                }}
+              />
+            </Tooltip>
+          </div>
+          <div className="manager-dashboard-card__metrics">
+            {view.detailMetrics.map((metric) => (
+              <div key={`${metric.label}-${metric.value}`} className="manager-dashboard-card__metric">
+                <div className="manager-dashboard-card__metric-label">{metric.label}</div>
+                <div className="manager-dashboard-card__metric-value">{metric.value}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </article>
     );
@@ -1212,6 +1374,13 @@ function toBalanceDetailRows(details: NonNullable<DashboardStatistics["systemBal
   }));
 }
 
+function toOnlineUserDetailRows(details: WorkbenchUserOverview["detailList"]): DerivedCategoryDetail[] {
+  return details.map((detail) => ({
+    ...toBaseDashboardDetail(detail.userId, detail.username, detail.channel),
+    userCoverage: detail.accountCount,
+  }));
+}
+
 function buildDashboardCardView(
   cardId: DashboardCardId,
   detailRows: DerivedCategoryDetail[],
@@ -1237,22 +1406,22 @@ function buildDashboardCardView(
       return {
         title: DASHBOARD_TITLES[cardId],
         scopeLabel: "",
-        unitLabel: "用户与上号情况",
+        unitLabel: "实时上号情况",
         icon: <TeamOutlined style={{ fontSize: 22 }} />,
         accent: "#2563eb",
         background: "linear-gradient(135deg, rgba(37,99,235,0.1), rgba(255,255,255,0))",
         value: null,
         detailMetrics: [
           {
-            label: "用户个数",
+            label: "累计用户数",
             value: `${formatCount(workbenchUserOverview?.userCount ?? (userStats.visibleUsers || users.length))} 人`,
           },
           {
-            label: "当天累计上号",
+            label: "累计上号数量",
             value: `${formatCount(workbenchUserOverview?.accountCount ?? userStats.accountCount)} 个`,
           },
           {
-            label: "实时用户在线",
+            label: "实时用户数量",
             value: `${formatCount(workbenchUserOverview?.onlineUserCount ?? 0)} 人`,
           },
           {
@@ -1260,10 +1429,8 @@ function buildDashboardCardView(
             value: `${formatCount(workbenchUserOverview?.onlineAccountCount ?? 0)} 个`,
           },
         ],
-        detailRows: [],
-        editable: false,
+        detailRows: toOnlineUserDetailRows(workbenchUserOverview?.detailList ?? []),
         compact: true,
-        disableDetail: true,
         hideIcon: true,
       };
     case "todayConsume":
@@ -1425,10 +1592,10 @@ function buildDashboardCardView(
           formatCount,
         ),
         detailMetrics: [
-          { label: "进行中单量", value: formatCount(realActualCompleted?.pendingOrderCount ?? 0) },
-          { label: "进行中总量", value: formatCount(realActualCompleted?.pendingCount ?? 0) },
-          { label: "总单量", value: formatCount(realActualCompleted?.totalOrderCount ?? 0) },
-          { label: "总量", value: formatCount(realActualCompleted?.totalCount ?? 0) },
+          { label: "剩余单量", value: formatCount(realActualCompleted?.pendingOrderCount ?? 0) },
+          { label: "剩余总量", value: formatCount(realActualCompleted?.pendingCount ?? 0) },
+          { label: "今日新增总单量", value: formatCount(realActualCompleted?.totalOrderCount ?? 0) },
+          { label: "今日新增总量", value: formatCount(realActualCompleted?.totalCount ?? 0) },
           { label: "完成单量", value: formatCount(realActualCompleted?.completedOrderCount ?? 0) },
           { label: "完成总量", value: formatCount(realActualCompleted?.count ?? 0) },
         ],
@@ -1484,6 +1651,35 @@ function buildDashboardCardView(
 }
 
 function buildDetailColumns(cardId: DashboardCardId | null): ColumnsType<DerivedCategoryDetail> {
+  if (cardId === "productCount") {
+    return [
+      {
+        title: "人工用户",
+        dataIndex: "productName",
+        width: 220,
+        render: (value: string) => <span className="manager-value">{value || "-"}</span>,
+      },
+      {
+        title: "渠道",
+        dataIndex: "categoryName",
+        width: 90,
+        sorter: (left, right) => String(left.categoryName ?? "").localeCompare(
+          String(right.categoryName ?? ""),
+          "zh-CN",
+        ),
+        sortDirections: ["ascend", "descend"],
+        render: (value: string) => value || "-",
+      },
+      {
+        title: "实时上号数量",
+        dataIndex: "userCoverage",
+        width: 120,
+        sorter: (left, right) => left.userCoverage - right.userCoverage,
+        sortDirections: ["ascend", "descend"],
+        render: (value: number) => formatCount(value),
+      },
+    ];
+  }
   if (isUpstreamUserMetric(cardId)) {
     return buildUpstreamUserDetailColumns(cardId);
   }
@@ -1668,6 +1864,9 @@ function isDashboardMetricId(cardId: DashboardCardId): cardId is DashboardMetric
 }
 
 function getDetailListDescription(cardId: DashboardCardId | null) {
+  if (cardId === "productCount") {
+    return "按人工用户查看当前统计时间窗口内的实时上号情况";
+  }
   if (isUpstreamUserMetric(cardId)) {
     return "按上游用户账户查看当前指标明细";
   }
@@ -1681,6 +1880,9 @@ function getDetailListDescription(cardId: DashboardCardId | null) {
 }
 
 function getDetailListUnitLabel(cardId: DashboardCardId | null) {
+  if (cardId === "productCount") {
+    return "人工用户";
+  }
   if (isUpstreamUserMetric(cardId)) {
     return "账户";
   }
@@ -1789,6 +1991,14 @@ function safeDivide(a: number, b: number) {
     return 0;
   }
   return a / b;
+}
+
+function clampBarryWindowSeconds(value?: number) {
+  const normalized = Math.round(Number(value));
+  if (!Number.isFinite(normalized)) {
+    return 30;
+  }
+  return Math.min(Math.max(normalized, MIN_BARRY_WINDOW_SECONDS), MAX_BARRY_WINDOW_SECONDS);
 }
 
 function attachSpeedMetrics(

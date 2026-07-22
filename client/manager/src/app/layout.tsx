@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { AntdRegistry } from "@ant-design/nextjs-registry";
 import { ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
+import { NotifyProvider } from "@/components/providers/NotifyProvider";
 import { modernTheme } from "@/styles/theme";
 import "./globals.css";
 
@@ -21,7 +22,7 @@ export default function RootLayout({
       <body>
         <AntdRegistry>
           <ConfigProvider theme={modernTheme} locale={zhCN}>
-            {children}
+            <NotifyProvider>{children}</NotifyProvider>
           </ConfigProvider>
         </AntdRegistry>
       </body>
