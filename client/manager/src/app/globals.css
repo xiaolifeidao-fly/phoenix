@@ -319,6 +319,10 @@ select {
   align-items: start;
 }
 
+.order-list-workbench--category-collapsed {
+  grid-template-columns: 48px minmax(0, 1fr);
+}
+
 .order-list-content {
   display: flex;
   min-width: 0;
@@ -365,6 +369,20 @@ select {
 .order-category-panel.manager-data-card {
   background: #ffffff;
   border-color: var(--manager-border);
+}
+
+.order-category-panel--collapsed.manager-data-card {
+  display: flex;
+  min-height: 48px;
+  padding: 6px;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.order-category-panel__collapse-button.ant-btn {
+  width: 34px;
+  height: 34px;
+  padding: 0;
 }
 
 .order-category-panel.manager-data-card::before {
@@ -1829,6 +1847,25 @@ select {
   background: #f8fafc;
   padding: 9px 11px;
   min-width: 0;
+}
+
+.manager-speed-chart__stat--action {
+  width: 100%;
+  color: inherit;
+  cursor: pointer;
+  text-align: start;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.manager-speed-chart__stat--action:hover {
+  border-color: var(--manager-primary);
+  box-shadow: var(--manager-shadow-soft);
+  transform: translateY(-1px);
+}
+
+.manager-speed-chart__stat--action:focus-visible {
+  outline: 2px solid var(--manager-primary);
+  outline-offset: 2px;
 }
 
 .manager-speed-chart__stat-label {

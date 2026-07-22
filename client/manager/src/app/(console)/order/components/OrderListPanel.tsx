@@ -5,6 +5,8 @@ import dayjs, { type Dayjs } from "dayjs";
 import {
   AppstoreOutlined,
   DownOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
   ReloadOutlined,
   SearchOutlined,
   UpOutlined,
@@ -79,6 +81,7 @@ export function OrderListPanel() {
   const [pageIndex, setPageIndex] = useState(1);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [categoryPanelCollapsed, setCategoryPanelCollapsed] = useState(false);
 
   const visibleCategories = useMemo(
     () => {
@@ -323,15 +326,37 @@ export function OrderListPanel() {
 
   return (
     <div className="manager-page-stack">
-      <div className="order-list-workbench">
-        <aside className="manager-data-card order-category-panel">
-          <Space direction="vertical" size={14} style={{ width: "100%" }}>
+      <div className={`order-list-workbench${categoryPanelCollapsed ? " order-list-workbench--category-collapsed" : ""}`}>
+        <aside className={`manager-data-card order-category-panel${categoryPanelCollapsed ? " order-category-panel--collapsed" : ""}`}>
+          {categoryPanelCollapsed ? (
+            <Tooltip title="展开商品类目" placement="right">
+              <Button
+                type="text"
+                className="order-category-panel__collapse-button"
+                icon={<MenuUnfoldOutlined />}
+                aria-label="展开商品类目"
+                onClick={() => setCategoryPanelCollapsed(false)}
+              />
+            </Tooltip>
+          ) : (
+            <Space direction="vertical" size={14} style={{ width: "100%" }}>
             <div className="order-category-panel__header">
               <Space size={8}>
                 <span className="order-category-icon"><AppstoreOutlined /></span>
                 <Text strong style={{ color: "var(--manager-text)" }}>商品类目</Text>
               </Space>
-              <Button type="text" size="small" icon={<ReloadOutlined />} onClick={() => void loadCategories()} />
+              <Space size={2}>
+                <Button type="text" size="small" icon={<ReloadOutlined />} onClick={() => void loadCategories()} />
+                <Tooltip title="收起商品类目">
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<MenuFoldOutlined />}
+                    aria-label="收起商品类目"
+                    onClick={() => setCategoryPanelCollapsed(true)}
+                  />
+                </Tooltip>
+              </Space>
             </div>
             <Input
               className="manager-filter-input"
@@ -353,7 +378,8 @@ export function OrderListPanel() {
               onRow={(record) => ({ onClick: () => handleCategorySelect(record), style: { cursor: "pointer" } })}
               scroll={{ y: "calc(100vh - 310px)" }}
             />
-          </Space>
+            </Space>
+          )}
         </aside>
 
         <div className="order-list-content">

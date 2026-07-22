@@ -194,9 +194,19 @@ export function SpeedTrendChart({
           <div className="manager-speed-chart__group-title">人工速度</div>
           <div className="manager-speed-chart__stats manager-speed-chart__stats--manual">
             <SpeedStatTile label="人工分发速度" color="#0891b2" perSecond={speedMetrics.manualDistributedPerSecond} />
-            <SpeedStatTile label="真人分发速度" color="#c2410c" perSecond={speedMetrics.realManualDistributedPerSecond} />
+            <SpeedStatTile
+              label="真人分发速度"
+              color="#c2410c"
+              perSecond={speedMetrics.realManualDistributedPerSecond}
+              onClick={() => setRealProductDrawerOpen(true)}
+            />
             <SpeedStatTile label="人工提交速度" color={MANUAL_COLOR} perSecond={speedMetrics.manualSubmittedPerSecond} />
-            <SpeedStatTile label="真人提交速度" color="#7c3aed" perSecond={speedMetrics.realManualSubmittedPerSecond} />
+            <SpeedStatTile
+              label="真人提交速度"
+              color="#7c3aed"
+              perSecond={speedMetrics.realManualSubmittedPerSecond}
+              onClick={() => setRealProductDrawerOpen(true)}
+            />
           </div>
         </section>
         <section className="manager-speed-chart__group">
@@ -336,13 +346,10 @@ export function SpeedTrendChart({
         <Tag className="manager-dashboard-tag" style={{ borderColor: ACTUAL_COLOR, color: ACTUAL_COLOR }}>
           实际完成
         </Tag>
-        <Button type="link" onClick={() => setRealProductDrawerOpen(true)}>
-          真人商品明细
-        </Button>
       </div>
 
       <Drawer
-        title="真人商品速度"
+        title="真人人工商品速度"
         placement="right"
         width={520}
         open={realProductDrawerOpen}
@@ -368,13 +375,15 @@ function SpeedStatTile({
   label,
   color,
   perSecond,
+  onClick,
 }: {
   label: string;
   color: string;
   perSecond: number;
+  onClick?: () => void;
 }) {
-  return (
-    <div className="manager-speed-chart__stat">
+  const content = (
+    <>
       <div className="manager-speed-chart__stat-label">
         <span className="manager-speed-chart__dot" style={{ background: color }} />
         {label}
@@ -393,8 +402,20 @@ function SpeedStatTile({
           <span>/时</span>
         </div>
       </div>
-    </div>
+    </>
   );
+
+  if (onClick) {
+    return (
+      <Tooltip title="查看不同真人人工商品的速度情况">
+        <button type="button" className="manager-speed-chart__stat manager-speed-chart__stat--action" onClick={onClick}>
+          {content}
+        </button>
+      </Tooltip>
+    );
+  }
+
+  return <div className="manager-speed-chart__stat">{content}</div>;
 }
 
 function niceCeil(value: number) {
