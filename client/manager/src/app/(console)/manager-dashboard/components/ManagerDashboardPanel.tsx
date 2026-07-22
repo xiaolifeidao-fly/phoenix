@@ -496,25 +496,27 @@ export function ManagerDashboardPanel() {
   }, [ready, realActualCategoryIds.length, realActualCategoryIdsKey, recordActualSpeed]);
 
   const realManualCategoryIds = configMap.realManualSubmitted?.categoryIds ?? [];
-  const realManualCategoryCodesKey = manualProducts
-    .filter((item) => realManualCategoryIds.length === 0 || realManualCategoryIds.includes(item.id))
-    .map((item) => item.code.trim())
-    .filter(Boolean)
-    .join(",");
+  const realManualCategoryIdsKey = realManualCategoryIds.join(",");
 
   useEffect(() => {
     if (!ready) {
       return;
     }
 
-    void fetchWorkbenchDashboardStatisticsWithComparison(
-      realManualCategoryCodesKey ? { shopCategoryCodes: realManualCategoryCodesKey } : undefined,
-    )
-      .then(setRealManualSubmittedStatistics)
-      .catch(() => {
-        messageApi.warning("真人人工提交加载失败");
-      });
-  }, [messageApi, ready, realManualCategoryCodesKey]);
+    const loadRealManualSubmitted = () => {
+      void fetchWorkbenchDashboardStatisticsWithComparison(
+        realManualCategoryIdsKey ? { shopCategoryIds: realManualCategoryIdsKey } : undefined,
+      )
+        .then(setRealManualSubmittedStatistics)
+        .catch(() => {
+          // Retain the last valid selected-product result during a temporary refresh failure.
+        });
+    };
+
+    loadRealManualSubmitted();
+    const timer = window.setInterval(loadRealManualSubmitted, DASHBOARD_REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [ready, realManualCategoryIdsKey]);
 
   const barryWindowSeconds = clampBarryWindowSeconds(
     configMap.averageSpeed?.barryWindowSeconds,
@@ -527,15 +529,15 @@ export function ManagerDashboardPanel() {
     const loadManualSpeed = () => {
       void fetchManualSpeed({ windowSeconds: barryWindowSeconds }).then(setManualSpeed).catch(() => setManualSpeed(null));
       void fetchManualSpeed(
-        realManualCategoryCodesKey
-          ? { shopCategoryCodes: realManualCategoryCodesKey, windowSeconds: barryWindowSeconds }
+        realManualCategoryIdsKey
+          ? { shopCategoryIds: realManualCategoryIdsKey, windowSeconds: barryWindowSeconds }
           : { windowSeconds: barryWindowSeconds },
       ).then(setRealManualSpeed).catch(() => setRealManualSpeed(null));
     };
     loadManualSpeed();
     const timer = window.setInterval(loadManualSpeed, DASHBOARD_REFRESH_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [barryWindowSeconds, ready, realManualCategoryCodesKey]);
+  }, [barryWindowSeconds, ready, realManualCategoryIdsKey]);
 
   useEffect(() => {
     if (!ready || typeof window === "undefined") {
@@ -623,7 +625,7 @@ export function ManagerDashboardPanel() {
   }), [actualSpeedPerSecond, manualSpeed, realActualSpeedPerSecond, realManualSpeed]);
   const realManualProductSpeeds = useMemo(
     () => manualProducts.map((product) => {
-      const categorySpeed = realManualSpeed?.categoryList.find((item) => item.categoryCode === product.code);
+      const categorySpeed = realManualSpeed?.categoryList.find((item) => item.shopCategoryId === product.id);
       return {
         key: product.id,
         productName: product.name || product.code || `人工商品#${product.id}`,
