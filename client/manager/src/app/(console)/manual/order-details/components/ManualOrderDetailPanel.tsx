@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import dayjs, { type Dayjs } from "dayjs";
 import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { Button, DatePicker, Empty, Input, InputNumber, Select, Space, Table, Tag, Typography } from "antd";
@@ -18,6 +18,7 @@ const defaultDateRange: [Dayjs, Dayjs] = [dayjs().startOf("day"), dayjs().startO
 export function ManualOrderDetailPanel() {
   const [loading, setLoading] = useState(false);
   const [details, setDetails] = useState<ManualOrderDetailPage | null>(null);
+  const [approvalRateOrder, setApprovalRateOrder] = useState<"ascend" | "descend" | null>(null);
   const [userOptions, setUserOptions] = useState<ManualUserOption[]>([]);
   const userOptionCacheRef = useRef(new Map<number, ManualUserOption>());
   const [selectingStartDate, setSelectingStartDate] = useState<Dayjs | null>(null);
@@ -84,6 +85,12 @@ export function ManualOrderDetailPanel() {
 
   const selectedUser = filters.userId ? userOptionCacheRef.current.get(filters.userId) : undefined;
   const resolvedUserOptions = selectedUser && !userOptions.some((user) => user.id === selectedUser.id) ? [selectedUser, ...userOptions] : userOptions;
+  const displayedRecords = useMemo(() => {
+    const records = details?.records ?? [];
+    if (!approvalRateOrder) return records;
+    const direction = approvalRateOrder === "ascend" ? 1 : -1;
+    return [...records].sort((left, right) => direction * (Number(left.approvalRate || 0) - Number(right.approvalRate || 0)));
+  }, [details, approvalRateOrder]);
 
   const openDouyinProfile = async (record: ManualOrderDetail) => {
     const profileWindow = window.open("", "_blank");
@@ -122,7 +129,7 @@ export function ManualOrderDetailPanel() {
       width: 110,
       sorter: true,
       sortDirections: ["descend", "ascend"],
-      sortOrder: filters.fansNumOrder === "ASC" ? "ascend" : filters.fansNumOrder === "DESC" ? "descend" : null,
+      sortOrder: approvalRateOrder ? null : filters.fansNumOrder === "ASC" ? "ascend" : filters.fansNumOrder === "DESC" ? "descend" : null,
       render: formatCount,
     },
     { title: "总提交数量", dataIndex: "totalSubmitNum", width: 120, render: formatCount },
@@ -132,8 +139,11 @@ export function ManualOrderDetailPanel() {
     {
       title: "审核成功率",
       dataIndex: "approvalRate",
+      key: "approvalRate",
       width: 120,
-      sorter: (left, right) => Number(left.approvalRate || 0) - Number(right.approvalRate || 0),
+      sorter: true,
+      sortDirections: ["descend", "ascend"],
+      sortOrder: approvalRateOrder,
       render: formatPercent,
     },
   ];
@@ -147,8 +157,13 @@ export function ManualOrderDetailPanel() {
   };
 
   const handleTableChange: TableProps<ManualOrderDetail>["onChange"] = (pagination, _, sorter, extra) => {
-    if (extra.action === "sort" && (Array.isArray(sorter) || sorter.field !== "fansNum")) {
-      return;
+    if (extra.action === "sort") {
+      if (Array.isArray(sorter)) return;
+      if (sorter.field === "approvalRate") {
+        setApprovalRateOrder(sorter.order === "ascend" || sorter.order === "descend" ? sorter.order : null);
+        return;
+      }
+      if (sorter.field !== "fansNum") return;
     }
     const fansNumOrder = !Array.isArray(sorter) && sorter.field === "fansNum"
       ? sorter.order === "ascend" ? "ASC" : sorter.order === "descend" ? "DESC" : undefined
@@ -156,6 +171,7 @@ export function ManualOrderDetailPanel() {
     const page = extra.action === "sort" ? 1 : pagination.current ?? filters.page;
     const pageSize = pagination.pageSize ?? filters.pageSize;
     const next = { ...filters, fansNumOrder, page, pageSize };
+    setApprovalRateOrder(null);
     setFilters(next);
     void loadDetails(next);
   };
@@ -225,7 +241,7 @@ export function ManualOrderDetailPanel() {
       <section className="manager-shell-card" style={{ borderRadius: 28, padding: 24 }}>
         <Space direction="vertical" size={18} style={{ width: "100%" }}>
           <div><div className="manager-section-label">做单数据</div><Title level={4} style={{ margin: "10px 0 4px" }}>按用户与 UID 汇总</Title><Text type="secondary">UID 可打开最新做单记录对应的抖音主页</Text></div>
-          <Table<ManualOrderDetail> rowKey={(record) => `${record.userId}-${record.uid}`} loading={loading} columns={columns} dataSource={details?.records ?? []} pagination={pagination} onChange={handleTableChange} scroll={{ x: 1240 }} locale={{ emptyText: <Empty description="当前筛选条件下暂无做单数据" /> }} />
+          <Table<ManualOrderDetail> rowKey={(record) => `${record.userId}-${record.uid}`} loading={loading} columns={columns} dataSource={displayedRecords} pagination={pagination} onChange={handleTableChange} scroll={{ x: 1240 }} locale={{ emptyText: <Empty description="当前筛选条件下暂无做单数据" /> }} />
         </Space>
       </section>
     </div>
