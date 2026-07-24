@@ -740,13 +740,14 @@ type PaymentMethodDTO struct {
 
 type UserDetailDTO struct {
 	BarryBaseDTO
-	Username       string              `json:"username"`
-	Channel        string              `json:"channel,omitempty"`
-	InventCode     string              `json:"inventCode,omitempty"`
-	AlipayName     string              `json:"alipayName,omitempty"`
-	AlipayAccount  string              `json:"alipayAccount,omitempty"`
-	Role           string              `json:"role,omitempty"`
-	PaymentMethods []*PaymentMethodDTO `json:"paymentMethods,omitempty"`
+	Username         string              `json:"username"`
+	OriginalPassword string              `json:"originalPassword,omitempty"`
+	Channel          string              `json:"channel,omitempty"`
+	InventCode       string              `json:"inventCode,omitempty"`
+	AlipayName       string              `json:"alipayName,omitempty"`
+	AlipayAccount    string              `json:"alipayAccount,omitempty"`
+	Role             string              `json:"role,omitempty"`
+	PaymentMethods   []*PaymentMethodDTO `json:"paymentMethods,omitempty"`
 }
 
 type UserDetailQueryDTO struct {
@@ -922,6 +923,42 @@ type ManualTaskStatisticsQueryDTO struct {
 	UserID          int64  `json:"userId,omitempty" form:"userId"`
 	Page            int    `json:"page,omitempty" form:"page"`
 	PageSize        int    `json:"pageSize,omitempty" form:"pageSize"`
+}
+
+type ManualOrderDetailQueryDTO struct {
+	StartDate       string `json:"startDate,omitempty" form:"startDate"`
+	EndDate         string `json:"endDate,omitempty" form:"endDate"`
+	UserID          int64  `json:"userId,omitempty" form:"userId"`
+	UID             string `json:"uid,omitempty" form:"uid"`
+	FansNumOrder    string `json:"fansNumOrder,omitempty" form:"fansNumOrder"`
+	FansNumMin      string `json:"fansNumMin,omitempty" form:"fansNumMin"`
+	FansNumMax      string `json:"fansNumMax,omitempty" form:"fansNumMax"`
+	ApprovalRateMin string `json:"approvalRateMin,omitempty" form:"approvalRateMin"`
+	ApprovalRateMax string `json:"approvalRateMax,omitempty" form:"approvalRateMax"`
+	Page            int    `json:"page,omitempty" form:"page"`
+	PageSize        int    `json:"pageSize,omitempty" form:"pageSize"`
+}
+
+type ManualOrderDetailDTO struct {
+	UserID         int64   `json:"userId"`
+	Username       string  `json:"username"`
+	Channel        string  `json:"channel"`
+	UID            string  `json:"uid"`
+	FansNum        int64   `json:"fansNum"`
+	TotalSubmitNum int64   `json:"totalSubmitNum"`
+	UnSubmitNum    int64   `json:"unSubmitNum"`
+	CheckedNum     int64   `json:"checkedNum"`
+	CheckErrorNum  int64   `json:"checkErrorNum"`
+	ApprovalRate   float64 `json:"approvalRate"`
+}
+
+type ManualOrderDetailPageDTO struct {
+	StartDate string                  `json:"startDate"`
+	EndDate   string                  `json:"endDate"`
+	Total     int64                   `json:"total"`
+	Page      int                     `json:"page"`
+	PageSize  int                     `json:"pageSize"`
+	Records   []*ManualOrderDetailDTO `json:"records"`
 }
 
 type ManualShopCategoryOptionDTO struct {

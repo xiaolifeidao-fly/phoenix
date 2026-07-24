@@ -13,6 +13,8 @@ func (h *BarryHandler) registerTransactionRoutes(engine *gin.RouterGroup) {
 	engine.GET("/barry/returns", h.listReturns)
 	engine.GET("/barry/order-summaries", h.listOrderSummaries)
 	engine.GET("/barry/manual-task-statistics", h.getManualTaskStatistics)
+	engine.GET("/barry/manual-order-details", h.getManualOrderDetails)
+	engine.GET("/barry/manual-order-details/sec-uid", h.getManualOrderDetailSecUid)
 	engine.GET("/barry/workbench-dashboard/user-overview", h.getWorkbenchUserOverview)
 	engine.GET("/barry/workbench-dashboard/user-online-overview", h.getWorkbenchUserOnlineOverview)
 	engine.GET("/barry/workbench-dashboard/task-remaining", h.getWorkbenchTaskRemaining)
@@ -80,6 +82,37 @@ func (h *BarryHandler) getManualTaskStatistics(c *gin.Context) {
 		return
 	}
 	commonRouter.ToJson(c, response, nil)
+}
+
+func (h *BarryHandler) getManualOrderDetails(c *gin.Context) {
+	var q barryDTO.ManualOrderDetailQueryDTO
+	if c.ShouldBindQuery(&q) != nil {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := h.barryService.ManualOrderDetails.List(c.Request.Context(), q)
+	if err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	commonRouter.ToJson(c, response, nil)
+}
+
+func (h *BarryHandler) getManualOrderDetailSecUid(c *gin.Context) {
+	var q struct {
+		UserID int64  `form:"userId" binding:"required"`
+		UID    string `form:"uid" binding:"required"`
+	}
+	if c.ShouldBindQuery(&q) != nil {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	secUID, err := h.barryService.ManualOrderDetails.FindLatestSecUID(c.Request.Context(), q.UserID, q.UID)
+	if err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	commonRouter.ToJson(c, secUID, nil)
 }
 
 func (h *BarryHandler) getWorkbenchUserOverview(c *gin.Context) {

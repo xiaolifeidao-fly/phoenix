@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   CreditCardOutlined,
   EditOutlined,
+  EyeOutlined,
   KeyOutlined,
   PlusOutlined,
   ReloadOutlined,
@@ -55,6 +56,9 @@ export function ManualUserManagementPanel() {
   const [passwordDrawerOpen, setPasswordDrawerOpen] = useState(false);
   const [passwordUser, setPasswordUser] = useState<ManualUserRecord | null>(null);
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
+  const [passwordViewDrawerOpen, setPasswordViewDrawerOpen] = useState(false);
+  const [passwordViewUser, setPasswordViewUser] = useState<ManualUserRecord | null>(null);
+  const [passwordViewLoading, setPasswordViewLoading] = useState(false);
   const [paymentDrawerOpen, setPaymentDrawerOpen] = useState(false);
   const [paymentUser, setPaymentUser] = useState<ManualUserRecord | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<ManualPaymentMethodRecord[]>([]);
@@ -194,6 +198,20 @@ export function ManualUserManagementPanel() {
     setPasswordDrawerOpen(true);
   };
 
+  const openPasswordViewDrawer = async (record: ManualUserRecord) => {
+    setPasswordViewUser(null);
+    setPasswordViewDrawerOpen(true);
+    setPasswordViewLoading(true);
+    try {
+      setPasswordViewUser(await fetchManualUserDetail(record.username));
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "加载用户密码失败");
+      setPasswordViewDrawerOpen(false);
+    } finally {
+      setPasswordViewLoading(false);
+    }
+  };
+
   const handlePasswordSubmit = async () => {
     if (!passwordUser) {
       return;
@@ -293,11 +311,14 @@ export function ManualUserManagementPanel() {
       title: "操作",
       key: "actions",
       fixed: "right",
-      width: 260,
+      width: 340,
       render: (_, record) => (
         <Space size={4}>
           <Button type="text" icon={<EditOutlined />} onClick={() => void openEditModal(record)}>
             编辑
+          </Button>
+          <Button type="text" icon={<EyeOutlined />} onClick={() => void openPasswordViewDrawer(record)}>
+            查看密码
           </Button>
           <Button type="text" icon={<KeyOutlined />} onClick={() => openChangePasswordDrawer(record)}>
             修改密码
@@ -371,7 +392,7 @@ export function ManualUserManagementPanel() {
             showSizeChanger: false,
             onChange: (page, pageSize) => void loadUsers(page, pageSize),
           }}
-          scroll={{ x: 920 }}
+          scroll={{ x: 1000 }}
           style={{ marginTop: 20 }}
         />
       </section>
@@ -457,6 +478,27 @@ export function ManualUserManagementPanel() {
             <Input.Password placeholder="请再次输入新密码" autoComplete="new-password" />
           </Form.Item>
         </Form>
+      </WorkspaceDrawer>
+
+      <WorkspaceDrawer
+        title={passwordViewUser ? `用户密码 · ${passwordViewUser.username}` : "用户密码"}
+        open={passwordViewDrawerOpen}
+        cancelText="关闭"
+        width={480}
+        onClose={() => {
+          setPasswordViewDrawerOpen(false);
+          setPasswordViewUser(null);
+        }}
+      >
+        {passwordViewLoading ? (
+          <Text type="secondary">正在加载...</Text>
+        ) : (
+          <Form className="manager-form-skin" layout="vertical">
+            <Form.Item label="密码">
+              <Input.Password value={passwordViewUser?.originalPassword || ""} readOnly visibilityToggle />
+            </Form.Item>
+          </Form>
+        )}
       </WorkspaceDrawer>
 
       <WorkspaceDrawer

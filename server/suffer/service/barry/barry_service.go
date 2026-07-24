@@ -24,6 +24,7 @@ type BarryService struct {
 	Return                  *ReturnService
 	OrderSummary            *OrderSummaryService
 	ManualTaskStats         *ManualTaskStatisticsService
+	ManualOrderDetails      *ManualOrderDetailService
 	WorkbenchDashboardStats *WorkbenchDashboardStatisticsService
 }
 
@@ -53,6 +54,7 @@ func NewBarryService() *BarryService {
 		Return:                  NewReturnService(client),
 		OrderSummary:            orderSummaryService,
 		ManualTaskStats:         NewManualTaskStatisticsService(client),
+		ManualOrderDetails:      NewManualOrderDetailService(client),
 		WorkbenchDashboardStats: NewWorkbenchDashboardStatisticsService(client),
 	}
 }

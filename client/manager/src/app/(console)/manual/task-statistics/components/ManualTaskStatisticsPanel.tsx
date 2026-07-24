@@ -91,7 +91,7 @@ export function ManualTaskStatisticsPanel() {
     { title: "处理用户", dataIndex: "distinctUserCount", width: 100, render: formatCount },
     { title: "上号数量", dataIndex: "distinctExtUserCount", width: 110, render: formatCount },
     { title: "总任务", dataIndex: "totalNum", width: 100, render: formatCount },
-    { title: "处理中", dataIndex: "pendingNum", width: 100, render: (value) => <Tag color="processing">{formatCount(value)}</Tag> },
+    { title: "未提交", dataIndex: "pendingNum", width: 100, render: (value) => <Tag color="processing">{formatCount(value)}</Tag> },
     { title: "待审核", dataIndex: "unCheckNum", width: 100, render: (value) => <Tag color="gold">{formatCount(value)}</Tag> },
     { title: "审核通过", dataIndex: "checkedNum", width: 110, render: (value) => <Tag color="success">{formatCount(value)}</Tag> },
     { title: "审核异常", dataIndex: "checkErrorNum", width: 110, render: (value) => <Tag color="error">{formatCount(value)}</Tag> },
@@ -103,7 +103,7 @@ export function ManualTaskStatisticsPanel() {
     { title: "人工商品", dataIndex: "shopCategoryName", width: 180 },
     { title: "上号数量", dataIndex: "upAccountNum", width: 110, render: formatCount },
     { title: "总任务", dataIndex: "totalNum", width: 100, render: formatCount },
-    { title: "处理中", dataIndex: "pendingNum", width: 100, render: (value) => <Tag color="processing">{formatCount(value)}</Tag> },
+    { title: "未提交", dataIndex: "pendingNum", width: 100, render: (value) => <Tag color="processing">{formatCount(value)}</Tag> },
     { title: "待审核", dataIndex: "unCheckNum", width: 100, render: (value) => <Tag color="gold">{formatCount(value)}</Tag> },
     { title: "审核通过", dataIndex: "checkedNum", width: 110, render: (value) => <Tag color="success">{formatCount(value)}</Tag> },
     { title: "审核异常", dataIndex: "checkErrorNum", width: 110, render: (value) => <Tag color="error">{formatCount(value)}</Tag> },
@@ -143,7 +143,7 @@ export function ManualTaskStatisticsPanel() {
 }
 
 function StatisticTable<T extends object>({ title, description, loading, columns, data, rowKey, pagination = false }: { title: string; description: string; loading: boolean; columns: ColumnsType<T>; data: T[]; rowKey: (record: T) => string | number; pagination?: false | TablePaginationConfig }) {
-  return <section className="manager-shell-card" style={{ borderRadius: 28, padding: 24 }}><Space direction="vertical" size={18} style={{ width: "100%" }}><div><div className="manager-section-label">统计明细</div><Title level={4} style={{ margin: "10px 0 4px" }}>{title}</Title><Text type="secondary">{description}</Text></div><Table<T> rowKey={rowKey} loading={loading} columns={columns} dataSource={data} pagination={pagination} scroll={{ x: 1080 }} locale={{ emptyText: <Empty description="当前筛选条件下暂无任务数据" /> }} /></Space></section>;
+  return <section className="manager-shell-card" style={{ borderRadius: 28, padding: 24 }}><Space direction="vertical" size={18} style={{ width: "100%" }}><div><div className="manager-section-label">统计明细</div><Title level={4} style={{ margin: "10px 0 4px" }}>{title}</Title><Text type="secondary">{description}</Text></div><Table<T> rowKey={rowKey} loading={loading} columns={columns} dataSource={data} pagination={pagination} scroll={{ x: 1180 }} locale={{ emptyText: <Empty description="当前筛选条件下暂无任务数据" /> }} /></Space></section>;
 }
 
 function formatCount(value?: number) { return Number(value || 0).toLocaleString("zh-CN"); }

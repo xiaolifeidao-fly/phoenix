@@ -17,6 +17,8 @@ export class ManualUserRecord {
 
   username = "";
 
+  originalPassword = "";
+
   channel = "";
 
   inventCode = "";

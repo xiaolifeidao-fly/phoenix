@@ -51,6 +51,8 @@ const (
 	barryInnerUserPaymentMethodListPath                       = "barry.url.inner.user.payment.method.list.suffix"
 	barryInnerRecordSummaryPath                               = "barry.url.inner.record.summary.suffix"
 	barryInnerManualTaskStatisticsPath                        = "barry.url.inner.manual.task.statistics.suffix"
+	barryInnerManualOrderDetailsPath                          = "barry.url.inner.manual.order.details.suffix"
+	barryInnerManualOrderDetailSecUidPath                     = "barry.url.inner.manual.order.details.sec.uid.suffix"
 	barryInnerOrderStatisticsPath                             = "barry.url.inner.statistics.suffix"
 	barryWorkbenchManualSubmittedGroupCodePath                = "barry.workbench.dashboard.manual.submitted.group.code"
 	barryInnerWorkbenchDashboardUserOverviewPath              = "barry.url.inner.workbench.dashboard.user.overview.suffix"

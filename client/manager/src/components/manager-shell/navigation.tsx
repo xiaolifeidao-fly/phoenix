@@ -77,6 +77,11 @@ export const navTree: NavNode[] = [
         icon: <BarChartOutlined />,
         label: "任务统计",
       },
+      {
+        key: "/manual/order-details",
+        icon: <UnorderedListOutlined />,
+        label: "做单明细",
+      },
       // 暂时隐藏：提现审批
       // { key: "/manual/withdraw-approval", icon: <AuditOutlined />, label: "提现审批" },
     ],
