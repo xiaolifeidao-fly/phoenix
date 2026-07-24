@@ -10,6 +10,7 @@ type BarryService struct {
 	AssignUidRule           *AssignUidRuleService
 	AssignVideoRule         *AssignVideoRuleService
 	AssignRefundRule        *AssignRefundRuleService
+	AssignApprovalRateRule  *AssignApprovalRateRuleService
 	AssignVideoUserRule     *AssignVideoUserRuleService
 	AssignWhitelistSwitch   *AssignWhitelistSwitchService
 	AssignUidSwitch         *AssignUidSwitchService
@@ -40,6 +41,7 @@ func NewBarryService() *BarryService {
 		AssignUidRule:           NewAssignUidRuleService(client),
 		AssignVideoRule:         NewAssignVideoRuleService(client),
 		AssignRefundRule:        NewAssignRefundRuleService(client),
+		AssignApprovalRateRule:  NewAssignApprovalRateRuleService(client),
 		AssignVideoUserRule:     NewAssignVideoUserRuleService(client),
 		AssignWhitelistSwitch:   NewAssignWhitelistSwitchService(client),
 		AssignUidSwitch:         NewAssignUidSwitchService(client),

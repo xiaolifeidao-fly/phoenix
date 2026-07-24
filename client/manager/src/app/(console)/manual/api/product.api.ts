@@ -201,6 +201,11 @@ export class AssignUidRuleRecord {
 
   minFansNum = 0;
 
+  recentApprovalRateDays = 3;
+
+  minRecentApprovalRate = 0;
+
+
   minItemNum = 0;
 
   minInteractRate?: number;
@@ -234,6 +239,20 @@ export class AssignRefundRuleRecord {
   refundRoundThreshold = 0;
 
   exceptionRoundThreshold = 0;
+}
+
+export class AssignApprovalRateRuleRecord {
+  id = 0;
+
+  shopCategoryId = 0;
+
+  enabled = false;
+
+  minFansNum = 0;
+
+  recentApprovalRateDays = 3;
+
+  minRecentApprovalRate = 0;
 }
 
 export class AssignSwitchRecord {
@@ -277,6 +296,15 @@ export interface AssignRefundRulePayload {
   enabled: boolean;
   refundRoundThreshold: number;
   exceptionRoundThreshold: number;
+}
+
+export interface AssignApprovalRateRulePayload {
+  id?: number;
+  shopCategoryId: number;
+  enabled: boolean;
+  minFansNum: number;
+  recentApprovalRateDays: number;
+  minRecentApprovalRate: number;
 }
 
 export interface AssignSwitchPayload {
@@ -335,6 +363,22 @@ export async function fetchAssignRefundRule(shopCategoryId: number) {
 export async function saveAssignRefundRule(payload: AssignRefundRulePayload) {
   const response = await instance.post<ApiResponse<AssignRefundRuleRecord | null>>(
     "/barry/assign-refund-rules",
+    payload,
+  );
+  return unwrapApiResponse(response.data);
+}
+
+export async function fetchAssignApprovalRateRule(shopCategoryId: number) {
+  const response = await instance.get<ApiResponse<AssignApprovalRateRuleRecord | null>>(
+    "/barry/assign-approval-rate-rules",
+    { params: { shopCategoryId } },
+  );
+  return unwrapApiResponse(response.data);
+}
+
+export async function saveAssignApprovalRateRule(payload: AssignApprovalRateRulePayload) {
+  const response = await instance.post<ApiResponse<AssignApprovalRateRuleRecord | null>>(
+    "/barry/assign-approval-rate-rules",
     payload,
   );
   return unwrapApiResponse(response.data);

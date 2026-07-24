@@ -8,7 +8,7 @@ import type { TableProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { TablePaginationConfig } from "antd/es/table/interface";
 import { message } from "@/utils/notify";
-import { fetchManualTaskStatisticUsers, type ManualUserOption } from "../../api/task-statistics.api";
+import { fetchManualTaskStatisticUsers, fetchManualTaskStatistics, type ManualShopCategoryOption, type ManualUserOption } from "../../api/task-statistics.api";
 import { fetchManualOrderDetailSecUid, fetchManualOrderDetails, type ManualOrderDetail, type ManualOrderDetailPage } from "../../api/order-details.api";
 
 const { RangePicker } = DatePicker;
@@ -20,12 +20,14 @@ export function ManualOrderDetailPanel() {
   const [details, setDetails] = useState<ManualOrderDetailPage | null>(null);
   const [approvalRateOrder, setApprovalRateOrder] = useState<"ascend" | "descend" | null>(null);
   const [userOptions, setUserOptions] = useState<ManualUserOption[]>([]);
+  const [shopCategoryOptions, setShopCategoryOptions] = useState<ManualShopCategoryOption[]>([]);
   const userOptionCacheRef = useRef(new Map<number, ManualUserOption>());
   const [selectingStartDate, setSelectingStartDate] = useState<Dayjs | null>(null);
   const [filters, setFilters] = useState({
     dateRange: defaultDateRange,
     userId: undefined as number | undefined,
     uid: "",
+    shopCategoryIds: [] as number[],
     fansNumOrder: undefined as "ASC" | "DESC" | undefined,
     fansNumMin: undefined as number | undefined,
     fansNumMax: undefined as number | undefined,
@@ -44,6 +46,7 @@ export function ManualOrderDetailPanel() {
         endDate: endDate.format("YYYY-MM-DD"),
         userId: nextFilters.userId,
         uid: nextFilters.uid.trim() || undefined,
+        shopCategoryIds: nextFilters.shopCategoryIds.length ? nextFilters.shopCategoryIds.join(",") : undefined,
         fansNumOrder: nextFilters.fansNumOrder,
         fansNumMin: nextFilters.fansNumMin,
         fansNumMax: nextFilters.fansNumMax,
@@ -78,9 +81,19 @@ export function ManualOrderDetailPanel() {
     }
   };
 
+  const loadShopCategories = async () => {
+    try {
+      const overview = await fetchManualTaskStatistics({ pageSize: 1 });
+      setShopCategoryOptions(overview.shopCategoryOptions);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "加载人工商品列表失败");
+    }
+  };
+
   useEffect(() => {
     void loadDetails();
     void searchUsers();
+    void loadShopCategories();
   }, []);
 
   const selectedUser = filters.userId ? userOptionCacheRef.current.get(filters.userId) : undefined;
@@ -217,6 +230,9 @@ export function ManualOrderDetailPanel() {
               />
             </div>
             <div><Text type="secondary">UID</Text><Input allowClear placeholder="输入 UID" value={filters.uid} onChange={(event) => setFilters((current) => ({ ...current, uid: event.target.value }))} onPressEnter={() => { const next = { ...filters, page: 1 }; setFilters(next); void loadDetails(next); }} style={{ marginTop: 8 }} /></div>
+            <div><Text type="secondary">人工商品</Text><Select mode="multiple" allowClear maxTagCount="responsive" placeholder="全部人工商品" style={{ width: "100%", marginTop: 8 }} options={shopCategoryOptions.map((item) => ({ value: item.id, label: item.code ? `${item.name} (${item.code})` : item.name }))} value={filters.shopCategoryIds} onChange={(value) => setFilters((current) => ({ ...current, shopCategoryIds: value }))} /></div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, alignItems: "end" }}>
             <div>
               <Text type="secondary">粉丝量区间</Text>
               <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 8, marginTop: 8 }}>
@@ -233,7 +249,7 @@ export function ManualOrderDetailPanel() {
                 <InputNumber min={0} max={100} precision={2} placeholder="最大值" addonAfter="%" style={{ width: "100%" }} value={filters.approvalRateMax} onChange={(value) => setFilters((current) => ({ ...current, approvalRateMax: typeof value === "number" ? value : undefined }))} />
               </div>
             </div>
-            <Space><Button type="primary" icon={<SearchOutlined />} loading={loading} onClick={() => { const next = { ...filters, page: 1 }; setFilters(next); void loadDetails(next); }}>查询</Button><Button icon={<ReloadOutlined />} onClick={() => { const reset = { dateRange: defaultDateRange, userId: undefined, uid: "", fansNumOrder: undefined, fansNumMin: undefined, fansNumMax: undefined, approvalRateMin: undefined, approvalRateMax: undefined, page: 1, pageSize: 20 }; setFilters(reset); void loadDetails(reset); }}>重置</Button></Space>
+            <Space><Button type="primary" icon={<SearchOutlined />} loading={loading} onClick={() => { const next = { ...filters, page: 1 }; setFilters(next); void loadDetails(next); }}>查询</Button><Button icon={<ReloadOutlined />} onClick={() => { const reset = { dateRange: defaultDateRange, userId: undefined, uid: "", shopCategoryIds: [] as number[], fansNumOrder: undefined, fansNumMin: undefined, fansNumMax: undefined, approvalRateMin: undefined, approvalRateMax: undefined, page: 1, pageSize: 20 }; setFilters(reset); void loadDetails(reset); }}>重置</Button></Space>
           </div>
         </Space>
       </section>

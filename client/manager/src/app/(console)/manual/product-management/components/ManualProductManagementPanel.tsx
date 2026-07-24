@@ -23,6 +23,7 @@ import {
   deleteVideoUserRule,
   expireManualProduct,
   fetchAssignConfigsByShopTypeId,
+  fetchAssignApprovalRateRule,
   fetchAssignRefundRule,
   fetchAssignUidRule,
   fetchAssignUidSwitch,
@@ -33,6 +34,7 @@ import {
   fetchManualProductTypes,
   fetchVideoUserRules,
   saveAssignConfig,
+  saveAssignApprovalRateRule,
   saveAssignRefundRule,
   saveAssignUidRule,
   saveAssignUidSwitch,
@@ -101,7 +103,7 @@ interface JudgeConfigPreviewRecord {
 }
 
 type AssignConfigModalMode = "view" | "edit";
-type DimensionSwitchKey = "user" | "uid" | "video" | "refund";
+type DimensionSwitchKey = "user" | "uid" | "approvalRate" | "video" | "refund";
 type WhitelistStatusSortOrder = "ascend" | "descend" | null;
 type WhitelistGroup = "BIG_CUSTOMER" | "SMALL_CUSTOMER" | "RETAILER";
 type BatchWhitelistGroup = WhitelistGroup | "UNGROUPED";
@@ -176,6 +178,13 @@ interface RefundRuleState {
   exceptionRoundThreshold: number;
 }
 
+interface ApprovalRateRuleState {
+  id?: number;
+  minFansNum: number;
+  recentApprovalRateDays: number;
+  minRecentApprovalRate: number;
+}
+
 const defaultInteractRate = 0.02;
 
 const emptyUidRule: UidRuleState = {
@@ -199,6 +208,12 @@ const emptyVideoRule: VideoRuleState = {
 const emptyRefundRule: RefundRuleState = {
   refundRoundThreshold: 0,
   exceptionRoundThreshold: 0,
+};
+
+const emptyApprovalRateRule: ApprovalRateRuleState = {
+  minFansNum: 0,
+  recentApprovalRateDays: 3,
+  minRecentApprovalRate: 0,
 };
 
 const videoUrlKeywordOptions = [
@@ -234,9 +249,13 @@ export function ManualProductManagementPanel() {
   const [editingJudgeConfig, setEditingJudgeConfig] = useState<JudgeConfigPreviewRecord | null>(null);
   const [strategyDrawerOpen, setStrategyDrawerOpen] = useState(false);
   const [strategyProduct, setStrategyProduct] = useState<ManualProductRecord | null>(null);
-  const [strategyTab, setStrategyTab] = useState<"user" | "uid" | "video" | "refund">("user");
+  const [strategyTab, setStrategyTab] = useState<"user" | "uid" | "approvalRate" | "video" | "refund">("user");
   const [strategyDirty, setStrategyDirty] = useState(false);
   const [userWhitelistEnabled, setUserWhitelistEnabled] = useState(false);
+  const [approvalRateRuleEnabled, setApprovalRateRuleEnabled] = useState(false);
+  const [approvalRateRule, setApprovalRateRule] = useState<ApprovalRateRuleState>(emptyApprovalRateRule);
+  const [approvalRateRuleSaving, setApprovalRateRuleSaving] = useState(false);
+  const [approvalRateRuleDirty, setApprovalRateRuleDirty] = useState(false);
   const [userWhitelistLoading, setUserWhitelistLoading] = useState(false);
   const [whitelistSaving, setWhitelistSaving] = useState(false);
   const [updatingDimensionSwitches, setUpdatingDimensionSwitches] = useState<Set<DimensionSwitchKey>>(() => new Set());
@@ -424,6 +443,9 @@ export function ManualProductManagementPanel() {
     setRefundRuleEnabled(false);
     setRefundRule(emptyRefundRule);
     setRefundRuleDirty(false);
+    setApprovalRateRuleEnabled(false);
+    setApprovalRateRule(emptyApprovalRateRule);
+    setApprovalRateRuleDirty(false);
     setUpdatingDimensionSwitches(new Set());
     setEditingJudgeConfig(null);
     judgeConfigForm.resetFields();
@@ -448,13 +470,17 @@ export function ManualProductManagementPanel() {
       setRefundRuleEnabled(false);
       setRefundRule(emptyRefundRule);
       setRefundRuleDirty(false);
+      setApprovalRateRuleEnabled(false);
+      setApprovalRateRule(emptyApprovalRateRule);
+      setApprovalRateRuleDirty(false);
       return;
     }
     try {
-      const [loadedUidRule, loadedVideoRule, loadedRefundRule, loadedWhitelistSwitch, loadedUidSwitch] = await Promise.all([
+      const [loadedUidRule, loadedVideoRule, loadedRefundRule, loadedApprovalRateRule, loadedWhitelistSwitch, loadedUidSwitch] = await Promise.all([
         fetchAssignUidRule(shopCategoryId),
         fetchAssignVideoRule(shopCategoryId),
         fetchAssignRefundRule(shopCategoryId),
+        fetchAssignApprovalRateRule(shopCategoryId),
         fetchAssignWhitelistSwitch(shopCategoryId),
         fetchAssignUidSwitch(shopCategoryId),
       ]);
@@ -498,6 +524,19 @@ export function ManualProductManagementPanel() {
         setRefundRule(emptyRefundRule);
       }
       setRefundRuleDirty(false);
+      if (loadedApprovalRateRule) {
+        setApprovalRateRuleEnabled(Boolean(loadedApprovalRateRule.enabled));
+        setApprovalRateRule({
+          id: Number(loadedApprovalRateRule.id || 0) || undefined,
+          minFansNum: Number(loadedApprovalRateRule.minFansNum || 0),
+          recentApprovalRateDays: Number(loadedApprovalRateRule.recentApprovalRateDays || 3),
+          minRecentApprovalRate: Number(loadedApprovalRateRule.minRecentApprovalRate || 0),
+        });
+      } else {
+        setApprovalRateRuleEnabled(false);
+        setApprovalRateRule(emptyApprovalRateRule);
+      }
+      setApprovalRateRuleDirty(false);
     } catch (error) {
       message.error(error instanceof Error ? error.message : "加载维度策略失败");
       setUserWhitelistEnabled(false);
@@ -510,6 +549,9 @@ export function ManualProductManagementPanel() {
       setRefundRuleEnabled(false);
       setRefundRule(emptyRefundRule);
       setRefundRuleDirty(false);
+      setApprovalRateRuleEnabled(false);
+      setApprovalRateRule(emptyApprovalRateRule);
+      setApprovalRateRuleDirty(false);
     }
   };
 
@@ -665,6 +707,47 @@ export function ManualProductManagementPanel() {
     setRefundRule((current) => ({ ...current, ...patch }));
     setRefundRuleDirty(true);
     setStrategyDirty(true);
+  };
+
+  const updateApprovalRateRule = (patch: Partial<ApprovalRateRuleState>) => {
+    setApprovalRateRule((current) => ({ ...current, ...patch }));
+    setApprovalRateRuleDirty(true);
+    setStrategyDirty(true);
+  };
+
+  const saveApprovalRateGlobalRule = async (enabled = approvalRateRuleEnabled) => {
+    const shopCategoryId = strategyProduct?.id;
+    if (!shopCategoryId) {
+      message.error("缺少品类信息，无法保存");
+      return;
+    }
+    setApprovalRateRuleSaving(true);
+    try {
+      const saved = await saveAssignApprovalRateRule({
+        id: approvalRateRule.id,
+        shopCategoryId: Number(shopCategoryId),
+        enabled,
+        minFansNum: Number(approvalRateRule.minFansNum || 0),
+        recentApprovalRateDays: Number(approvalRateRule.recentApprovalRateDays || 3),
+        minRecentApprovalRate: Number(approvalRateRule.minRecentApprovalRate || 0),
+      });
+      if (saved) {
+        setApprovalRateRuleEnabled(Boolean(saved.enabled));
+        setApprovalRateRule({
+          id: Number(saved.id || 0) || approvalRateRule.id,
+          minFansNum: Number(saved.minFansNum || 0),
+          recentApprovalRateDays: Number(saved.recentApprovalRateDays || 3),
+          minRecentApprovalRate: Number(saved.minRecentApprovalRate || 0),
+        });
+      }
+      setApprovalRateRuleDirty(false);
+      setStrategyDirty(uidRuleDirty || videoRuleDirty || refundRuleDirty);
+      message.success("审核通过率策略已保存");
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "保存审核通过率策略失败");
+    } finally {
+      setApprovalRateRuleSaving(false);
+    }
   };
 
   const saveUidGlobalRule = async () => {
@@ -890,6 +973,10 @@ export function ManualProductManagementPanel() {
       setVideoRuleEnabled(enabled);
       return;
     }
+    if (dimension === "approvalRate") {
+      setApprovalRateRuleEnabled(enabled);
+      return;
+    }
     setRefundRuleEnabled(enabled);
   };
 
@@ -916,7 +1003,9 @@ export function ManualProductManagementPanel() {
         ? userWhitelistEnabled
         : dimension === "uid"
           ? uidRuleEnabled
-          : dimension === "video"
+            : dimension === "approvalRate"
+              ? approvalRateRuleEnabled
+              : dimension === "video"
             ? videoRuleEnabled
             : refundRuleEnabled;
 
@@ -927,6 +1016,26 @@ export function ManualProductManagementPanel() {
         await saveAssignWhitelistSwitch({ shopCategoryId: Number(shopCategoryId), enabled });
       } else if (dimension === "uid") {
         await saveAssignUidSwitch({ shopCategoryId: Number(shopCategoryId), enabled });
+      } else if (dimension === "approvalRate") {
+        const saved = await saveAssignApprovalRateRule({
+          id: approvalRateRule.id,
+          shopCategoryId: Number(shopCategoryId),
+          enabled,
+          minFansNum: Number(approvalRateRule.minFansNum || 0),
+          recentApprovalRateDays: Number(approvalRateRule.recentApprovalRateDays || 3),
+          minRecentApprovalRate: Number(approvalRateRule.minRecentApprovalRate || 0),
+        });
+        if (saved) {
+          setApprovalRateRuleEnabled(Boolean(saved.enabled));
+          setApprovalRateRule({
+            id: Number(saved.id || 0) || approvalRateRule.id,
+            minFansNum: Number(saved.minFansNum || 0),
+            recentApprovalRateDays: Number(saved.recentApprovalRateDays || 3),
+            minRecentApprovalRate: Number(saved.minRecentApprovalRate || 0),
+          });
+        }
+        setApprovalRateRuleDirty(false);
+        setStrategyDirty(uidRuleDirty || videoRuleDirty || refundRuleDirty);
       } else if (dimension === "video") {
         const saved = await saveAssignVideoRule({
           id: videoRule.id,
@@ -2193,8 +2302,9 @@ export function ManualProductManagementPanel() {
               {[
                 { key: "user" as const, index: 1, label: "用户ID维度", on: userWhitelistEnabled },
                 { key: "uid" as const, index: 2, label: "uid 维度", on: uidRuleEnabled },
-                { key: "video" as const, index: 3, label: "视频维度", on: videoRuleEnabled },
-                { key: "refund" as const, index: 4, label: "退单维度", on: refundRuleEnabled },
+                { key: "approvalRate" as const, index: 3, label: "审核通过率维度", on: approvalRateRuleEnabled },
+                { key: "video" as const, index: 4, label: "视频维度", on: videoRuleEnabled },
+                { key: "refund" as const, index: 5, label: "退单维度", on: refundRuleEnabled },
               ].map((item) => (
                 <button
                   key={item.key}
@@ -2491,6 +2601,81 @@ export function ManualProductManagementPanel() {
 	                    </div>
 	                  ))}
 	                </div>
+              </section>
+            ) : null}
+
+            {strategyTab === "approvalRate" ? (
+              <section style={strategyStyles.card}>
+                <div style={strategyStyles.cardHead}>
+                  <div style={{ flex: 1 }}>
+                    <div style={strategyStyles.cardTitle}>审核通过率维度 · 接单门槛</div>
+                    <div style={strategyStyles.cardDesc}>
+                      按用户近 N 日内的审核结果决定是否允许接单；未产生审核结果时通过率按 0% 计算。
+                    </div>
+                  </div>
+                  <span style={strategyStyles.phase}>前置 · 最多 5 分钟后生效</span>
+                  <Switch
+                    checked={approvalRateRuleEnabled}
+                    loading={updatingDimensionSwitches.has("approvalRate") || approvalRateRuleSaving}
+                    onChange={(checked) => void updateDimensionSwitch("approvalRate", checked)}
+                  />
+                </div>
+                <div style={strategyStyles.cardBody}>
+                  <div style={strategyStyles.subhead}>
+                    商品全局默认策略 <span style={strategyStyles.subTag}>对本品类所有接单用户生效</span>
+                    <Button
+                      type={approvalRateRuleDirty ? "primary" : "default"}
+                      icon={<SaveOutlined />}
+                      loading={approvalRateRuleSaving}
+                      onClick={() => void saveApprovalRateGlobalRule()}
+                      style={strategyStyles.subheadAction}
+                    >
+                      保存
+                    </Button>
+                  </div>
+                  <div style={strategyStyles.criteriaRow}>
+                    <div style={{ flex: 1 }}>
+                      <div style={strategyStyles.criteriaName}>
+                        近 N 日平均审核成功率 <code style={strategyStyles.operator}>成功率 ≥</code>
+                      </div>
+                      <div style={strategyStyles.criteriaDesc}>按最近配置天数（含当天）的审核结果计算；门槛填 0% 表示不限制。</div>
+                    </div>
+                    <Space size={8}>
+                      <InputNumber
+                        value={approvalRateRule.recentApprovalRateDays}
+                        min={1}
+                        precision={0}
+                        addonAfter="日"
+                        style={{ width: 110 }}
+                        onChange={(value) => updateApprovalRateRule({ recentApprovalRateDays: Number(value || 3) })}
+                      />
+                      <InputNumber
+                        value={approvalRateRule.minRecentApprovalRate * 100}
+                        min={0}
+                        max={100}
+                        precision={2}
+                        addonAfter="%"
+                        style={{ width: 150 }}
+                        onChange={(value) => updateApprovalRateRule({ minRecentApprovalRate: Number(value || 0) / 100 })}
+                      />
+                    </Space>
+                  </div>
+                  <div style={strategyStyles.criteriaRow}>
+                    <div style={{ flex: 1 }}>
+                      <div style={strategyStyles.criteriaName}>
+                        最低粉丝数量 <code style={strategyStyles.operator}>粉丝数 ≥</code>
+                      </div>
+                      <div style={strategyStyles.criteriaDesc}>用户当前投稿账号的粉丝数达到该门槛，才允许接本品类的单；填 0 表示不限制。</div>
+                    </div>
+                    <InputNumber
+                      value={approvalRateRule.minFansNum}
+                      min={0}
+                      precision={0}
+                      style={{ width: 150 }}
+                      onChange={(value) => updateApprovalRateRule({ minFansNum: Number(value || 0) })}
+                    />
+                  </div>
+                </div>
               </section>
             ) : null}
 

@@ -570,6 +570,30 @@ type SaveAssignRefundRuleDTO struct {
 	ExceptionRoundThreshold int64 `json:"exceptionRoundThreshold"`
 }
 
+// AssignApprovalRateRuleDTO 分配策略-审核通过率维度规则，按品类维护。
+type AssignApprovalRateRuleDTO struct {
+	BarryBaseDTO
+	ShopCategoryID         int64   `json:"shopCategoryId"`
+	Enabled                bool    `json:"enabled"`
+	MinFansNum             int64   `json:"minFansNum"`
+	RecentApprovalRateDays int     `json:"recentApprovalRateDays"`
+	MinRecentApprovalRate  float64 `json:"minRecentApprovalRate"`
+}
+
+type AssignApprovalRateRuleQueryDTO struct {
+	RequestDTO
+	ShopCategoryID int64 `json:"shopCategoryId,omitempty" form:"shopCategoryId"`
+}
+
+type SaveAssignApprovalRateRuleDTO struct {
+	ID                     int     `json:"id,omitempty"`
+	ShopCategoryID         int64   `json:"shopCategoryId"`
+	Enabled                bool    `json:"enabled"`
+	MinFansNum             int64   `json:"minFansNum"`
+	RecentApprovalRateDays int     `json:"recentApprovalRateDays"`
+	MinRecentApprovalRate  float64 `json:"minRecentApprovalRate"`
+}
+
 // AssignVideoUserRuleDTO 分配策略-指定用户的视频维度过滤规则(覆盖品类全局视频规则), 按(shopCategoryId,userId)维护, user 域.
 type AssignVideoUserRuleDTO struct {
 	BarryBaseDTO
@@ -930,6 +954,7 @@ type ManualOrderDetailQueryDTO struct {
 	EndDate         string `json:"endDate,omitempty" form:"endDate"`
 	UserID          int64  `json:"userId,omitempty" form:"userId"`
 	UID             string `json:"uid,omitempty" form:"uid"`
+	ShopCategoryIDs string `json:"shopCategoryIds,omitempty" form:"shopCategoryIds"`
 	FansNumOrder    string `json:"fansNumOrder,omitempty" form:"fansNumOrder"`
 	FansNumMin      string `json:"fansNumMin,omitempty" form:"fansNumMin"`
 	FansNumMax      string `json:"fansNumMax,omitempty" form:"fansNumMax"`

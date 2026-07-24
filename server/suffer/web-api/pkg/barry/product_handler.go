@@ -26,6 +26,8 @@ func (h *BarryHandler) registerProductRoutes(engine *gin.RouterGroup) {
 	engine.POST("/barry/assign-video-rules", h.saveAssignVideoRule)
 	engine.GET("/barry/assign-refund-rules", h.getAssignRefundRule)
 	engine.POST("/barry/assign-refund-rules", h.saveAssignRefundRule)
+	engine.GET("/barry/assign-approval-rate-rules", h.getAssignApprovalRateRule)
+	engine.POST("/barry/assign-approval-rate-rules", h.saveAssignApprovalRateRule)
 	engine.GET("/barry/assign-video-user-rules", h.listAssignVideoUserRules)
 	engine.POST("/barry/assign-video-user-rules", h.saveAssignVideoUserRule)
 	engine.DELETE("/barry/assign-video-user-rules", h.deleteAssignVideoUserRule)
@@ -322,6 +324,42 @@ func (h *BarryHandler) saveAssignRefundRule(c *gin.Context) {
 		return
 	}
 	response, err := h.barryService.AssignRefundRule.Save(c.Request.Context(), &req)
+	if err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	if !response.Success {
+		if response.Message == "" {
+			commonRouter.ToError(c, "保存失败")
+			return
+		}
+		commonRouter.ToError(c, response.Message)
+		return
+	}
+	commonRouter.ToJson(c, response.Data, nil)
+}
+
+func (h *BarryHandler) getAssignApprovalRateRule(c *gin.Context) {
+	var q barryDTO.AssignApprovalRateRuleQueryDTO
+	if c.ShouldBindQuery(&q) != nil || q.ShopCategoryID <= 0 {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := h.barryService.AssignApprovalRateRule.Get(c.Request.Context(), q)
+	if err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	commonRouter.ToJson(c, response.Data, nil)
+}
+
+func (h *BarryHandler) saveAssignApprovalRateRule(c *gin.Context) {
+	var req barryDTO.SaveAssignApprovalRateRuleDTO
+	if c.ShouldBindJSON(&req) != nil || req.ShopCategoryID <= 0 || req.MinFansNum < 0 || req.RecentApprovalRateDays <= 0 || req.MinRecentApprovalRate < 0 || req.MinRecentApprovalRate > 1 {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := h.barryService.AssignApprovalRateRule.Save(c.Request.Context(), &req)
 	if err != nil {
 		commonRouter.ToJson(c, nil, err)
 		return

@@ -7,6 +7,7 @@ export interface ManualOrderDetailQuery {
   endDate?: string;
   userId?: number;
   uid?: string;
+  shopCategoryIds?: string;
   fansNumOrder?: "ASC" | "DESC";
   fansNumMin?: number;
   fansNumMax?: number;
@@ -39,7 +40,10 @@ export interface ManualOrderDetailPage {
 }
 
 export async function fetchManualOrderDetails(query?: ManualOrderDetailQuery) {
-  const response = await instance.get<ApiResponse<ManualOrderDetailPage>>("/barry/manual-order-details", { params: query });
+  const response = await instance.get<ApiResponse<ManualOrderDetailPage>>("/barry/manual-order-details", {
+    params: query,
+    timeout: 30_000,
+  });
   return unwrapApiResponse(response.data);
 }
 

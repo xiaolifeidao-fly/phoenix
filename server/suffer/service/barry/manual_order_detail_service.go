@@ -23,6 +23,7 @@ func (s *ManualOrderDetailService) List(ctx context.Context, query barryDTO.Manu
 		"endDate", query.EndDate,
 		"userId", query.UserID,
 		"uid", query.UID,
+		"shopCategoryIds", query.ShopCategoryIDs,
 		"fansNumOrder", query.FansNumOrder,
 		"fansNumMin", query.FansNumMin,
 		"fansNumMax", query.FansNumMax,
