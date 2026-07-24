@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dayjs, { type Dayjs } from "dayjs";
 import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
-import { Button, DatePicker, Empty, Input, InputNumber, Select, Space, Table, Tag, Typography } from "antd";
+import { Button, DatePicker, Empty, Input, InputNumber, Select, Space, Switch, Table, Tag, Typography } from "antd";
 import type { TableProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { TablePaginationConfig } from "antd/es/table/interface";
@@ -28,6 +28,7 @@ export function ManualOrderDetailPanel() {
     userId: undefined as number | undefined,
     uid: "",
     shopCategoryIds: [] as number[],
+    excludeWhitelistUsers: false,
     fansNumOrder: undefined as "ASC" | "DESC" | undefined,
     fansNumMin: undefined as number | undefined,
     fansNumMax: undefined as number | undefined,
@@ -47,6 +48,7 @@ export function ManualOrderDetailPanel() {
         userId: nextFilters.userId,
         uid: nextFilters.uid.trim() || undefined,
         shopCategoryIds: nextFilters.shopCategoryIds.length ? nextFilters.shopCategoryIds.join(",") : undefined,
+        excludeWhitelistUsers: nextFilters.excludeWhitelistUsers && nextFilters.shopCategoryIds.length > 0 ? true : undefined,
         fansNumOrder: nextFilters.fansNumOrder,
         fansNumMin: nextFilters.fansNumMin,
         fansNumMax: nextFilters.fansNumMax,
@@ -230,7 +232,7 @@ export function ManualOrderDetailPanel() {
               />
             </div>
             <div><Text type="secondary">UID</Text><Input allowClear placeholder="输入 UID" value={filters.uid} onChange={(event) => setFilters((current) => ({ ...current, uid: event.target.value }))} onPressEnter={() => { const next = { ...filters, page: 1 }; setFilters(next); void loadDetails(next); }} style={{ marginTop: 8 }} /></div>
-            <div><Text type="secondary">人工商品</Text><Select mode="multiple" allowClear maxTagCount="responsive" placeholder="全部人工商品" style={{ width: "100%", marginTop: 8 }} options={shopCategoryOptions.map((item) => ({ value: item.id, label: item.code ? `${item.name} (${item.code})` : item.name }))} value={filters.shopCategoryIds} onChange={(value) => setFilters((current) => ({ ...current, shopCategoryIds: value }))} /></div>
+            <div><Text type="secondary">人工商品</Text><Select mode="multiple" allowClear maxTagCount="responsive" placeholder="全部人工商品" style={{ width: "100%", marginTop: 8 }} options={shopCategoryOptions.map((item) => ({ value: item.id, label: item.code ? `${item.name} (${item.code})` : item.name }))} value={filters.shopCategoryIds} onChange={(value) => setFilters((current) => ({ ...current, shopCategoryIds: value, excludeWhitelistUsers: value.length > 0 ? current.excludeWhitelistUsers : false }))} /></div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, alignItems: "end" }}>
             <div>
@@ -249,7 +251,19 @@ export function ManualOrderDetailPanel() {
                 <InputNumber min={0} max={100} precision={2} placeholder="最大值" addonAfter="%" style={{ width: "100%" }} value={filters.approvalRateMax} onChange={(value) => setFilters((current) => ({ ...current, approvalRateMax: typeof value === "number" ? value : undefined }))} />
               </div>
             </div>
-            <Space><Button type="primary" icon={<SearchOutlined />} loading={loading} onClick={() => { const next = { ...filters, page: 1 }; setFilters(next); void loadDetails(next); }}>查询</Button><Button icon={<ReloadOutlined />} onClick={() => { const reset = { dateRange: defaultDateRange, userId: undefined, uid: "", shopCategoryIds: [] as number[], fansNumOrder: undefined, fansNumMin: undefined, fansNumMax: undefined, approvalRateMin: undefined, approvalRateMax: undefined, page: 1, pageSize: 20 }; setFilters(reset); void loadDetails(reset); }}>重置</Button></Space>
+            <div>
+              <Text type="secondary">是否过滤人工商品白名单用户</Text>
+              <div style={{ marginTop: 12 }}>
+                <Switch
+                  checked={filters.excludeWhitelistUsers}
+                  disabled={filters.shopCategoryIds.length === 0}
+                  checkedChildren="过滤"
+                  unCheckedChildren="不过滤"
+                  onChange={(value) => setFilters((current) => ({ ...current, excludeWhitelistUsers: value }))}
+                />
+              </div>
+            </div>
+            <Space><Button type="primary" icon={<SearchOutlined />} loading={loading} onClick={() => { const next = { ...filters, page: 1 }; setFilters(next); void loadDetails(next); }}>查询</Button><Button icon={<ReloadOutlined />} onClick={() => { const reset = { dateRange: defaultDateRange, userId: undefined, uid: "", shopCategoryIds: [] as number[], excludeWhitelistUsers: false, fansNumOrder: undefined, fansNumMin: undefined, fansNumMax: undefined, approvalRateMin: undefined, approvalRateMax: undefined, page: 1, pageSize: 20 }; setFilters(reset); void loadDetails(reset); }}>重置</Button></Space>
           </div>
         </Space>
       </section>

@@ -53,6 +53,10 @@ func buildValues(pairs ...any) url.Values {
 			if value > 0 {
 				values.Set(key, int64ToString(value))
 			}
+		case bool:
+			if value {
+				values.Set(key, "true")
+			}
 		}
 	}
 	return values

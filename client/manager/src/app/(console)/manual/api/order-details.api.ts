@@ -8,6 +8,7 @@ export interface ManualOrderDetailQuery {
   userId?: number;
   uid?: string;
   shopCategoryIds?: string;
+  excludeWhitelistUsers?: boolean;
   fansNumOrder?: "ASC" | "DESC";
   fansNumMin?: number;
   fansNumMax?: number;

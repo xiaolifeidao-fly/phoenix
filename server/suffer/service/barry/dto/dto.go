@@ -950,18 +950,19 @@ type ManualTaskStatisticsQueryDTO struct {
 }
 
 type ManualOrderDetailQueryDTO struct {
-	StartDate       string `json:"startDate,omitempty" form:"startDate"`
-	EndDate         string `json:"endDate,omitempty" form:"endDate"`
-	UserID          int64  `json:"userId,omitempty" form:"userId"`
-	UID             string `json:"uid,omitempty" form:"uid"`
-	ShopCategoryIDs string `json:"shopCategoryIds,omitempty" form:"shopCategoryIds"`
-	FansNumOrder    string `json:"fansNumOrder,omitempty" form:"fansNumOrder"`
-	FansNumMin      string `json:"fansNumMin,omitempty" form:"fansNumMin"`
-	FansNumMax      string `json:"fansNumMax,omitempty" form:"fansNumMax"`
-	ApprovalRateMin string `json:"approvalRateMin,omitempty" form:"approvalRateMin"`
-	ApprovalRateMax string `json:"approvalRateMax,omitempty" form:"approvalRateMax"`
-	Page            int    `json:"page,omitempty" form:"page"`
-	PageSize        int    `json:"pageSize,omitempty" form:"pageSize"`
+	StartDate             string `json:"startDate,omitempty" form:"startDate"`
+	EndDate               string `json:"endDate,omitempty" form:"endDate"`
+	UserID                int64  `json:"userId,omitempty" form:"userId"`
+	UID                   string `json:"uid,omitempty" form:"uid"`
+	ShopCategoryIDs       string `json:"shopCategoryIds,omitempty" form:"shopCategoryIds"`
+	ExcludeWhitelistUsers bool   `json:"excludeWhitelistUsers,omitempty" form:"excludeWhitelistUsers"`
+	FansNumOrder          string `json:"fansNumOrder,omitempty" form:"fansNumOrder"`
+	FansNumMin            string `json:"fansNumMin,omitempty" form:"fansNumMin"`
+	FansNumMax            string `json:"fansNumMax,omitempty" form:"fansNumMax"`
+	ApprovalRateMin       string `json:"approvalRateMin,omitempty" form:"approvalRateMin"`
+	ApprovalRateMax       string `json:"approvalRateMax,omitempty" form:"approvalRateMax"`
+	Page                  int    `json:"page,omitempty" form:"page"`
+	PageSize              int    `json:"pageSize,omitempty" form:"pageSize"`
 }
 
 type ManualOrderDetailDTO struct {

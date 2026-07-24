@@ -24,6 +24,7 @@ func (s *ManualOrderDetailService) List(ctx context.Context, query barryDTO.Manu
 		"userId", query.UserID,
 		"uid", query.UID,
 		"shopCategoryIds", query.ShopCategoryIDs,
+		"excludeWhitelistUsers", query.ExcludeWhitelistUsers,
 		"fansNumOrder", query.FansNumOrder,
 		"fansNumMin", query.FansNumMin,
 		"fansNumMax", query.FansNumMax,
