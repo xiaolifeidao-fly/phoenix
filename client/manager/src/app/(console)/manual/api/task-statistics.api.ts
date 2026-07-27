@@ -6,6 +6,7 @@ export interface ManualTaskStatisticsQuery {
   startDate?: string;
   endDate?: string;
   shopCategoryIds?: string;
+  excludeWhitelistUsers?: boolean;
   userId?: number;
   page?: number;
   pageSize?: number;

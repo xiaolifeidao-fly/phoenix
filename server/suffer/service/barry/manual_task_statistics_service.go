@@ -22,6 +22,7 @@ func (s *ManualTaskStatisticsService) Summary(ctx context.Context, query barryDT
 		"startDate", query.StartDate,
 		"endDate", query.EndDate,
 		"shopCategoryIds", query.ShopCategoryIDs,
+		"excludeWhitelistUsers", query.ExcludeWhitelistUsers,
 		"userId", query.UserID,
 		"page", query.Page,
 		"pageSize", query.PageSize,

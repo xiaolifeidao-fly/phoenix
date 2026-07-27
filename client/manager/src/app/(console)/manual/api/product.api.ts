@@ -205,7 +205,6 @@ export class AssignUidRuleRecord {
 
   minRecentApprovalRate = 0;
 
-
   minItemNum = 0;
 
   minInteractRate?: number;
@@ -253,6 +252,12 @@ export class AssignApprovalRateRuleRecord {
   recentApprovalRateDays = 3;
 
   minRecentApprovalRate = 0;
+
+  minDailySubmitNum = 10;
+
+  dailyAssignTimeRanges = "";
+
+  whitelistShopCategoryIds = "";
 }
 
 export class AssignSwitchRecord {
@@ -305,6 +310,9 @@ export interface AssignApprovalRateRulePayload {
   minFansNum: number;
   recentApprovalRateDays: number;
   minRecentApprovalRate: number;
+  minDailySubmitNum: number;
+  dailyAssignTimeRanges?: string;
+  whitelistShopCategoryIds?: string;
 }
 
 export interface AssignSwitchPayload {
@@ -398,6 +406,16 @@ export async function saveAssignWhitelistSwitch(payload: AssignSwitchPayload) {
     "/barry/assign-whitelist-switch",
     payload,
   );
+  return unwrapApiResponse(response.data);
+}
+
+export async function fetchAssignWhitelistApprovalRate(shopCategoryId: number) {
+  const response = await instance.get<ApiResponse<{ minRecentApprovalRate: number; recentApprovalRateDays: number | null } | null>>("/barry/assign-whitelist-approval-rate", { params: { shopCategoryId } });
+  return unwrapApiResponse(response.data) ?? { minRecentApprovalRate: 0, recentApprovalRateDays: 3 };
+}
+
+export async function saveAssignWhitelistApprovalRate(shopCategoryId: number, minRecentApprovalRate: number, recentApprovalRateDays: number | null) {
+  const response = await instance.post<ApiResponse<unknown>>("/barry/assign-whitelist-approval-rate", { shopCategoryId, minRecentApprovalRate, recentApprovalRateDays });
   return unwrapApiResponse(response.data);
 }
 

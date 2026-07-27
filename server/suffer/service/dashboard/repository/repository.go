@@ -235,6 +235,27 @@ func (r *DashboardRepository) ActualCompletedSnapshotByCategory(sumDate string, 
 	return rows, err
 }
 
+// YesterdayPendingByCategory mirrors the legacy dashboard's "昨日剩余未跑" metric:
+// pending orders created before today, measured by their remaining quantity.
+func (r *DashboardRepository) YesterdayPendingByCategory(todayStart time.Time, shopCategoryIDs []uint64) ([]ActualCompletedCategoryRow, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	rows := make([]ActualCompletedCategoryRow, 0)
+	query := `SELECT shop_category_id,
+		COALESCE(SUM(IFNULL(order_num, 0) - (IFNULL(end_num, 0) - IFNULL(init_num, 0))), 0) AS count
+	FROM order_record
+	WHERE created_time < ? AND order_status = 'PENDING'`
+	args := []interface{}{todayStart}
+	if len(shopCategoryIDs) > 0 {
+		query += " AND shop_category_id IN ?"
+		args = append(args, shopCategoryIDs)
+	}
+	query += " GROUP BY shop_category_id"
+	err := r.Db.Raw(query, args...).Scan(&rows).Error
+	return rows, err
+}
+
 // ActualCompletedPeriodsByCategory scans the last two days once and derives all
 // three running totals needed by the dashboard from conditional aggregation.
 func (r *DashboardRepository) ActualCompletedPeriodsByCategory(todayStart, tomorrowStart, yesterdaySameEnd time.Time, shopCategoryIDs []uint64) ([]ActualCompletedPeriodCategoryRow, error) {

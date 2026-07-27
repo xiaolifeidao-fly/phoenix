@@ -129,12 +129,17 @@ export interface ActualCompletedSummary {
   countChangeRate: number;
   pendingOrderCount: number;
   pendingCount: number;
+  yesterdayPendingCount: number;
+  totalPendingCount: number;
   totalOrderCount: number;
   totalCount: number;
   completedOrderCount: number;
   categoryList: Array<{
     shopCategoryId: number;
     count: number;
+    pendingCount: number;
+    yesterdayPendingCount: number;
+    totalPendingCount: number;
   }>;
 }
 

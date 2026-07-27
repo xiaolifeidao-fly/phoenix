@@ -32,6 +32,7 @@ import {
   fetchTodayRecharge,
   fetchWorkbenchDashboardStatisticsWithComparison,
   fetchWorkbenchUserOverview,
+  type ActualCompletedSummary,
   type DashboardStatistics,
   type ManualSpeedSummary,
   type WorkbenchDashboardStatistics,
@@ -50,6 +51,8 @@ type DashboardCardId =
   | "actualCompleted"
   | "realManualSubmitted"
   | "realActualCompleted"
+  | "lowPriceManualSubmitted"
+  | "lowPriceActualCompleted"
   | "averageSpeed";
 
 // The dashboard cards backed by their own independent API endpoint.
@@ -123,7 +126,7 @@ interface DashboardCardView {
   value: ReactNode;
   detailMetrics: Array<{
     label: string;
-    value: string;
+    value: ReactNode;
     description?: string;
   }>;
   detailRows: DerivedCategoryDetail[];
@@ -144,7 +147,7 @@ interface DashboardComparison {
 }
 
 const DASHBOARD_STORAGE_KEY = "phoenix_manager_dashboard_config_v1";
-const DASHBOARD_CONFIG_VERSION = 8;
+const DASHBOARD_CONFIG_VERSION = 9;
 const DASHBOARD_SPEED_STORAGE_KEY = "phoenix_manager_dashboard_speed_history_v1";
 const DASHBOARD_DATA_CACHE_KEY = "phoenix_manager_dashboard_data_cache_v1";
 const DASHBOARD_SPEED_WINDOW_MS = 48 * 60 * 60 * 1000;
@@ -168,22 +171,26 @@ interface DashboardDataCache {
 
 // `averageSpeed` is intentionally omitted here — 速度概览 renders as a full-width
 // trend chart at the very bottom of the dashboard instead of a grid card.
-const DASHBOARD_LEFT_CARD_ID: DashboardCardId = "realActualCompleted";
 const DASHBOARD_LAYOUT: DashboardCardId[][] = [
-  ["productCount", "todayConsume", "todayRecharge", "systemBalance"],
-  ["actualCompleted", "realManualSubmitted", "manualSubmitted", "taskRemaining"],
+  ["todayConsume", "todayRecharge", "systemBalance"],
+  ["actualCompleted", "manualSubmitted", "taskRemaining"],
 ];
+const DASHBOARD_WORKLOAD_CARD_IDS: DashboardCardId[] = ["realActualCompleted", "lowPriceActualCompleted"];
+const LOW_PRICE_MANUAL_PRODUCT_IDS = [15];
+const LOW_PRICE_UPSTREAM_CATEGORY_IDS = [8, 10];
 
 const DASHBOARD_TITLES: Record<DashboardCardId, string> = {
   productCount: "上号情况",
   todayConsume: "今日消费",
   todayRecharge: "今日充值",
   systemBalance: "系统余额",
-  taskRemaining: "总任务余量",
-  manualSubmitted: "总人工提交数量",
+  taskRemaining: "总任务余额",
+  manualSubmitted: "人工提交数量",
   actualCompleted: "实际完成总量",
   realManualSubmitted: "真人人工提交总量",
   realActualCompleted: "真人实际完成总量",
+  lowPriceManualSubmitted: "低价提交量",
+  lowPriceActualCompleted: "低价实际完成量",
   averageSpeed: "平均速度",
 };
 
@@ -197,6 +204,8 @@ const DASHBOARD_DEFAULT_CONFIG: Record<DashboardCardId, DashboardCardConfig> = {
   actualCompleted: { visible: true, categoryIds: [] },
   realManualSubmitted: { visible: true, categoryIds: [2, 18] },
   realActualCompleted: { visible: true, categoryIds: [7, 12] },
+  lowPriceManualSubmitted: { visible: true, categoryIds: LOW_PRICE_MANUAL_PRODUCT_IDS },
+  lowPriceActualCompleted: { visible: true, categoryIds: LOW_PRICE_UPSTREAM_CATEGORY_IDS },
   averageSpeed: { visible: true, categoryIds: [], barryWindowSeconds: 30 },
 };
 
@@ -224,6 +233,8 @@ export function ManagerDashboardPanel() {
   const [userStats, setUserStats] = useState<UserStats>(new UserStats());
   const [workbenchStatistics, setWorkbenchStatistics] = useState<WorkbenchDashboardStatistics | null>(null);
   const [realManualSubmittedStatistics, setRealManualSubmittedStatistics] = useState<WorkbenchDashboardStatistics | null>(null);
+  const [lowPriceManualSubmittedStatistics, setLowPriceManualSubmittedStatistics] = useState<WorkbenchDashboardStatistics | null>(null);
+  const [lowPriceActualCompleted, setLowPriceActualCompleted] = useState<ActualCompletedSummary | null>(null);
   const [manualSpeed, setManualSpeed] = useState<ManualSpeedSummary | null>(null);
   const [realManualSpeed, setRealManualSpeed] = useState<ManualSpeedSummary | null>(null);
   const [actualSpeedPerSecond, setActualSpeedPerSecond] = useState(0);
@@ -357,7 +368,7 @@ export function ManagerDashboardPanel() {
       DASHBOARD_METRIC_IDS.forEach((metricId) => loadDashboardMetric(metricId));
 
       const [categoryResult, productResult, manualProductResult, userResult, statsResult, workbenchResult] = await Promise.allSettled([
-        fetchProductCategories({ pageIndex: 1, pageSize: 200 }),
+        fetchProductCategories({ pageIndex: 1, pageSize: 500 }),
         fetchProducts({ pageIndex: 1, pageSize: 200 }),
         fetchManualProducts(),
         fetchUsers({ pageIndex: 1, pageSize: 200 }),
@@ -518,6 +529,38 @@ export function ManagerDashboardPanel() {
     return () => window.clearInterval(timer);
   }, [ready, realManualCategoryIdsKey]);
 
+  const lowPriceManualProductIds = configMap.lowPriceManualSubmitted?.categoryIds ?? LOW_PRICE_MANUAL_PRODUCT_IDS;
+  const lowPriceManualProductIdsKey = lowPriceManualProductIds.join(",");
+  const lowPriceUpstreamCategoryIds = configMap.lowPriceActualCompleted?.categoryIds ?? LOW_PRICE_UPSTREAM_CATEGORY_IDS;
+  const lowPriceUpstreamCategoryIdsKey = lowPriceUpstreamCategoryIds.join(",");
+
+  useEffect(() => {
+    if (!ready) {
+      return;
+    }
+
+    const loadLowPriceStatistics = () => {
+      void fetchWorkbenchDashboardStatisticsWithComparison(
+        lowPriceManualProductIdsKey ? { shopCategoryIds: lowPriceManualProductIdsKey } : undefined,
+      )
+        .then(setLowPriceManualSubmittedStatistics)
+        .catch(() => {
+          // Keep the most recent low-price submission data while a refresh is unavailable.
+        });
+      void fetchActualCompleted(
+        lowPriceUpstreamCategoryIdsKey ? { shopCategoryIds: lowPriceUpstreamCategoryIdsKey } : undefined,
+      )
+        .then(setLowPriceActualCompleted)
+        .catch(() => {
+          // Keep the most recent low-price completion data while a refresh is unavailable.
+        });
+    };
+
+    loadLowPriceStatistics();
+    const timer = window.setInterval(loadLowPriceStatistics, DASHBOARD_REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [ready, lowPriceManualProductIdsKey, lowPriceUpstreamCategoryIdsKey]);
+
   const barryWindowSeconds = clampBarryWindowSeconds(
     configMap.averageSpeed?.barryWindowSeconds,
   );
@@ -591,6 +634,10 @@ export function ManagerDashboardPanel() {
     () => buildDerivedManualProductDetails(manualProducts, workbenchStatistics),
     [manualProducts, workbenchStatistics],
   );
+  const lowPriceManualProductDetails = useMemo(
+    () => buildDerivedManualProductDetails(manualProducts, lowPriceManualSubmittedStatistics),
+    [lowPriceManualSubmittedStatistics, manualProducts],
+  );
 
   useEffect(() => {
     if (!ready || loading || typeof window === "undefined") {
@@ -643,10 +690,14 @@ export function ManagerDashboardPanel() {
         (Object.keys(DASHBOARD_TITLES) as DashboardCardId[]).map((cardId) => {
           const config = configMap[cardId] ?? DASHBOARD_DEFAULT_CONFIG[cardId];
           const isManualProduct = isManualProductMetric(cardId);
-          const scopedDetails = resolveScopedDetails(
-            isManualProduct ? derivedManualProductDetails : categoryDetailsWithSpeed,
-            config.categoryIds,
-          );
+          const scopedDetails = cardId === "taskRemaining"
+            ? categoryDetailsWithSpeed
+            : resolveScopedDetails(
+              isManualProduct
+                ? (cardId === "lowPriceManualSubmitted" ? lowPriceManualProductDetails : derivedManualProductDetails)
+                : categoryDetailsWithSpeed,
+              config.categoryIds,
+            );
           const view = buildDashboardCardView(
             cardId,
             scopedDetails,
@@ -655,8 +706,10 @@ export function ManagerDashboardPanel() {
             userStats,
             workbenchStatistics,
             realManualSubmittedStatistics,
+            lowPriceManualSubmittedStatistics,
             workbenchUserOverview,
             dashboardStatistics,
+            lowPriceActualCompleted,
             formatCategoryScopeLabel(
               config.categoryIds,
               isManualProduct ? manualProducts.length : categories.length,
@@ -675,24 +728,23 @@ export function ManagerDashboardPanel() {
           return [cardId, view];
         }),
       ) as Record<DashboardCardId, DashboardCardView>,
-    [categories.length, categoryDetailsWithSpeed, configMap, dashboardMetricLoading, dashboardStatistics, derivedManualProductDetails, manualProducts.length, products, realManualSubmittedStatistics, users, userStats, workbenchStatistics, workbenchUserOverview],
-  );
-
-  const visibleCardCount = useMemo(
-    () =>
-      (Object.keys(configMap) as DashboardCardId[]).filter((cardId) => configMap[cardId]?.visible)
-        .length,
-    [configMap],
+    [categories.length, categoryDetailsWithSpeed, configMap, dashboardMetricLoading, dashboardStatistics, derivedManualProductDetails, lowPriceActualCompleted, lowPriceManualProductDetails, lowPriceManualSubmittedStatistics, manualProducts.length, products, realManualSubmittedStatistics, users, userStats, workbenchStatistics, workbenchUserOverview],
   );
 
   const hiddenCardIds = useMemo(
     () =>
-      (Object.keys(configMap) as DashboardCardId[]).filter((cardId) => !configMap[cardId]?.visible),
+      (Object.keys(configMap) as DashboardCardId[]).filter(
+        (cardId) => !["realManualSubmitted", "lowPriceManualSubmitted", "lowPriceActualCompleted"].includes(cardId) && !configMap[cardId]?.visible,
+      ),
     [configMap],
   );
-  const leftCardVisible = configMap[DASHBOARD_LEFT_CARD_ID]?.visible;
-  const visibleRightCardIds = useMemo(
+  const visibleMetricCardIds = useMemo(
     () => DASHBOARD_LAYOUT.flat().filter((cardId) => configMap[cardId]?.visible),
+    [configMap],
+  );
+  const isAccountStatusVisible = configMap.productCount?.visible;
+  const visibleWorkloadCardIds = useMemo(
+    () => DASHBOARD_WORKLOAD_CARD_IDS.filter((cardId) => configMap[cardId]?.visible),
     [configMap],
   );
 
@@ -716,7 +768,9 @@ export function ManagerDashboardPanel() {
     setConfigMap((current) => ({
       ...current,
       [editingCardId]: {
-        visible: Boolean(values.visible),
+        visible: ["realManualSubmitted", "lowPriceManualSubmitted", "lowPriceActualCompleted"].includes(editingCardId)
+          ? true
+          : Boolean(values.visible),
         categoryIds: values.categoryIds ?? [],
         barryWindowSeconds: editingCardId === "averageSpeed"
           ? clampBarryWindowSeconds(values.barryWindowSeconds)
@@ -752,30 +806,48 @@ export function ManagerDashboardPanel() {
               </section>
             ) : null}
 
-            {leftCardVisible || visibleRightCardIds.length > 0 ? (
-              <section
-                className={`manager-stats-grid manager-dashboard-layout${leftCardVisible ? " manager-dashboard-layout--with-left-card" : ""}`}
-                style={{ gridTemplateColumns: `repeat(${leftCardVisible ? 5 : Math.min(Math.max(visibleRightCardIds.length, 1), 4)}, minmax(0, 1fr))` }}
-              >
-                {leftCardVisible ? (
-                  <div className="manager-dashboard-layout__left-card">
-                    {renderDashboardCard({
-                      cardId: DASHBOARD_LEFT_CARD_ID,
-                      view: cardViews[DASHBOARD_LEFT_CARD_ID],
-                      onEdit: openEditModal,
-                      onOpenDetail: setDetailCardId,
-                    })}
-                  </div>
+            {isAccountStatusVisible || visibleMetricCardIds.length > 0 || visibleWorkloadCardIds.length > 0 ? (
+              <>
+                {isAccountStatusVisible || visibleMetricCardIds.length > 0 ? (
+                  <section
+                    className={`manager-stats-grid manager-dashboard-layout${isAccountStatusVisible ? " manager-dashboard-layout--with-left-card" : ""}`}
+                    style={{ gridTemplateColumns: isAccountStatusVisible ? undefined : "repeat(3, minmax(0, 1fr))" }}
+                  >
+                    {isAccountStatusVisible ? (
+                      <div className="manager-dashboard-layout__left-card">
+                        {renderDashboardCard({
+                          cardId: "productCount",
+                          view: cardViews.productCount,
+                          onEdit: openEditModal,
+                          onOpenDetail: setDetailCardId,
+                        })}
+                      </div>
+                    ) : null}
+                    {visibleMetricCardIds.map((cardId) =>
+                      renderDashboardCard({
+                        cardId,
+                        view: cardViews[cardId],
+                        onEdit: openEditModal,
+                        onOpenDetail: setDetailCardId,
+                      }),
+                    )}
+                  </section>
                 ) : null}
-                {visibleRightCardIds.map((cardId) =>
-                  renderDashboardCard({
-                    cardId,
-                    view: cardViews[cardId],
-                    onEdit: openEditModal,
-                    onOpenDetail: setDetailCardId,
-                  }),
-                )}
-              </section>
+
+                {visibleWorkloadCardIds.length > 0 ? (
+                  <section className="manager-stats-grid manager-dashboard-workload-row">
+                    {visibleWorkloadCardIds.map((cardId) =>
+                      renderDashboardCard({
+                        cardId,
+                        view: cardViews[cardId],
+                        relatedView: cardViews[cardId === "realActualCompleted" ? "realManualSubmitted" : "lowPriceManualSubmitted"],
+                        onEdit: openEditModal,
+                        onOpenDetail: setDetailCardId,
+                      }),
+                    )}
+                  </section>
+                ) : null}
+              </>
             ) : (
               <section className="manager-data-card">
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="dashboard 已全部隐藏，可使用恢复按钮重新展示" />
@@ -813,8 +885,8 @@ export function ManagerDashboardPanel() {
               </Text>
               {detailCard.detailMetrics.length > 0 ? (
                 <div className="manager-dashboard-card__metrics" style={{ marginTop: 18 }}>
-                  {detailCard.detailMetrics.map((metric) => (
-                    <div key={`${metric.label}-${metric.value}`} className="manager-dashboard-card__metric">
+                  {detailCard.detailMetrics.map((metric, index) => (
+                    <div key={`${metric.label}-${index}`} className="manager-dashboard-card__metric">
                       <div className="manager-dashboard-card__metric-label">{metric.label}</div>
                       <div className="manager-dashboard-card__metric-value">{metric.value}</div>
                       {metric.description ? (
@@ -844,7 +916,7 @@ export function ManagerDashboardPanel() {
               <Table<DerivedCategoryDetail>
                 rowKey="key"
                 pagination={false}
-                scroll={detailCardId === "productCount" ? undefined : { x: 760 }}
+                scroll={detailCardId === "productCount" || detailCardId === "taskRemaining" ? undefined : { x: 760 }}
                 tableLayout={detailCardId === "productCount" ? "fixed" : undefined}
                 dataSource={detailCard.detailRows}
                 columns={buildDetailColumns(detailCardId)}
@@ -871,9 +943,11 @@ export function ManagerDashboardPanel() {
         }
       >
         <Form<DashboardCardConfig> form={form} layout="vertical" initialValues={{ visible: true, categoryIds: [] }}>
-          <Form.Item label="显示当前 dashboard" name="visible" valuePropName="checked">
-            <Switch checkedChildren="显示" unCheckedChildren="隐藏" />
-          </Form.Item>
+          {editingCardId && !["realManualSubmitted", "lowPriceManualSubmitted", "lowPriceActualCompleted"].includes(editingCardId) ? (
+            <Form.Item label="显示当前 dashboard" name="visible" valuePropName="checked">
+              <Switch checkedChildren="显示" unCheckedChildren="隐藏" />
+            </Form.Item>
+          ) : null}
 
           {editingCardId && !isUpstreamUserMetric(editingCardId) && editingCardId !== "actualCompleted" && editingCardId !== "averageSpeed" && editingCardId !== "productCount" ? (
             <Form.Item
@@ -958,7 +1032,9 @@ function mergeDashboardConfig(
     (accumulator, cardId) => {
       const config = incoming[cardId];
       accumulator[cardId] = {
-        visible: config?.visible ?? current[cardId].visible,
+        visible: ["realManualSubmitted", "lowPriceManualSubmitted", "lowPriceActualCompleted"].includes(cardId)
+          ? true
+          : (config?.visible ?? current[cardId].visible),
         categoryIds: Array.isArray(config?.categoryIds) ? config?.categoryIds : current[cardId].categoryIds,
         barryWindowSeconds: clampBarryWindowSeconds(
           config?.barryWindowSeconds ?? current[cardId].barryWindowSeconds,
@@ -991,12 +1067,15 @@ function applyDashboardConfigPresets(
     realActualCompleted: cards.realActualCompleted
       ? { ...cards.realActualCompleted, categoryIds: [7, 12] }
       : undefined,
+    lowPriceManualSubmitted: { visible: true, categoryIds: LOW_PRICE_MANUAL_PRODUCT_IDS },
+    lowPriceActualCompleted: { visible: true, categoryIds: LOW_PRICE_UPSTREAM_CATEGORY_IDS },
   };
 }
 
 function renderDashboardCard({
   cardId,
   view,
+  relatedView,
   onEdit,
   onOpenDetail,
   actions,
@@ -1004,6 +1083,7 @@ function renderDashboardCard({
 }: {
   cardId: DashboardCardId;
   view: DashboardCardView;
+  relatedView?: DashboardCardView;
   onEdit: (cardId: DashboardCardId) => void;
   onOpenDetail: (cardId: DashboardCardId) => void;
   actions?: ReactNode;
@@ -1011,6 +1091,105 @@ function renderDashboardCard({
 }) {
   const clickable = !view.disableDetail;
   const hasTopRow = Boolean(view.scopeLabel) || Boolean(actions) || view.editable !== false;
+  const isLowPriceWorkload = cardId === "lowPriceActualCompleted";
+  const relatedCardId: DashboardCardId = isLowPriceWorkload ? "lowPriceManualSubmitted" : "realManualSubmitted";
+  const relatedEditTooltip = isLowPriceWorkload ? "编辑低价点赞" : "编辑真人提交统计";
+  const actualEditTooltip = isLowPriceWorkload ? "编辑低价实际完成" : "编辑真人实际完成统计";
+
+  if ((cardId === "realActualCompleted" || cardId === "lowPriceActualCompleted") && relatedView) {
+    return (
+      <article
+        key={cardId}
+        className="manager-dashboard-card manager-dashboard-card--expanded manager-dashboard-card--real-workload"
+        onClick={() => onOpenDetail(cardId)}
+      >
+        <div className="manager-dashboard-card__backdrop" style={{ background: view.background }} />
+        <div className="manager-dashboard-card__content manager-dashboard-card__content--real-workload">
+          <div className="manager-dashboard-card__real-workload-header">
+            <div className="manager-section-label manager-dashboard-card__scope">{view.scopeLabel}</div>
+          </div>
+
+          <div className="manager-dashboard-card__real-workload-groups">
+            <section className="manager-dashboard-card__real-workload-group">
+              <div className="manager-dashboard-card__real-workload-group-header">
+                <div className="manager-section-label">{relatedView.title}</div>
+                {relatedView.editable !== false ? (
+                  <Tooltip title={relatedEditTooltip}>
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<EditOutlined />}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onEdit(relatedCardId);
+                      }}
+                    />
+                  </Tooltip>
+                ) : null}
+              </div>
+              <div
+                className="manager-display-title manager-dashboard-card__real-workload-value"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onOpenDetail(relatedCardId);
+                }}
+              >
+                {relatedView.value}
+              </div>
+              {relatedView.comparison ? (
+                <div
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpenDetail(relatedCardId);
+                  }}
+                >
+                  <DashboardComparisonSummary comparison={relatedView.comparison} />
+                </div>
+              ) : null}
+            </section>
+
+            <section className="manager-dashboard-card__real-workload-group manager-dashboard-card__real-workload-group--actual">
+              <div className="manager-dashboard-card__real-workload-group-header">
+                <div className="manager-section-label">{view.title}</div>
+                <div className="manager-dashboard-card__real-workload-group-actions">
+                  {view.editable !== false ? (
+                    <Tooltip title={actualEditTooltip}>
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<EditOutlined />}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onEdit(cardId);
+                        }}
+                      />
+                    </Tooltip>
+                  ) : null}
+                  <div
+                    className="manager-dashboard-card__icon"
+                    style={{ color: view.accent, background: `${view.accent}16` }}
+                  >
+                    {view.icon}
+                  </div>
+                </div>
+              </div>
+              <div className="manager-display-title manager-dashboard-card__real-workload-value">{view.value}</div>
+              {view.comparison ? <DashboardComparisonSummary comparison={view.comparison} /> : null}
+            </section>
+          </div>
+
+          <div className="manager-dashboard-card__metrics manager-dashboard-card__real-workload-metrics">
+            {view.detailMetrics.map((metric, index) => (
+              <div key={`${metric.label}-${index}`} className="manager-dashboard-card__metric">
+                <div className="manager-dashboard-card__metric-label">{metric.label}</div>
+                <div className="manager-dashboard-card__metric-value">{metric.value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </article>
+    );
+  }
 
   if (featured) {
     return (
@@ -1040,8 +1219,8 @@ function renderDashboardCard({
 
           {view.detailMetrics.length > 0 ? (
             <div className="manager-dashboard-card__featured-metrics">
-              {view.detailMetrics.map((metric) => (
-                <div key={`${metric.label}-${metric.value}`} className="manager-dashboard-card__featured-metric">
+              {view.detailMetrics.map((metric, index) => (
+                <div key={`${metric.label}-${index}`} className="manager-dashboard-card__featured-metric">
                   <span>{metric.label}</span>
                   <strong>{metric.value}</strong>
                 </div>
@@ -1094,8 +1273,8 @@ function renderDashboardCard({
             </Tooltip>
           </div>
           <div className="manager-dashboard-card__metrics">
-            {view.detailMetrics.map((metric) => (
-              <div key={`${metric.label}-${metric.value}`} className="manager-dashboard-card__metric">
+            {view.detailMetrics.map((metric, index) => (
+              <div key={`${metric.label}-${index}`} className="manager-dashboard-card__metric">
                 <div className="manager-dashboard-card__metric-label">{metric.label}</div>
                 <div className="manager-dashboard-card__metric-value">{metric.value}</div>
               </div>
@@ -1176,8 +1355,8 @@ function renderDashboardCard({
 
         {view.detailMetrics.length > 0 ? (
           <div className="manager-dashboard-card__metrics">
-            {view.detailMetrics.map((metric) => (
-              <div key={`${metric.label}-${metric.value}`} className="manager-dashboard-card__metric">
+            {view.detailMetrics.map((metric, index) => (
+              <div key={`${metric.label}-${index}`} className="manager-dashboard-card__metric">
                 <div className="manager-dashboard-card__metric-label">{metric.label}</div>
                 <div className="manager-dashboard-card__metric-value">{metric.value}</div>
                 {metric.description ? (
@@ -1206,6 +1385,17 @@ function DashboardComparisonSummary({ comparison }: { comparison: DashboardCompa
       <span>{`${comparison.yesterdayLabel} ${comparison.yesterdayValue}`}</span>
       <span className={directionClass}>{`较昨日 ${changePrefix}${comparison.changeValue} (${formatRate(comparison.changeRate)}%)`}</span>
     </div>
+  );
+}
+
+function renderTotalPendingMetricValue(totalPendingCount: number, yesterdayPendingCount: number): ReactNode {
+  return (
+    <span>
+      {formatCount(totalPendingCount)}
+      <Tooltip title="昨日剩余">
+        <span className="manager-dashboard-card__metric-note">（{formatCount(yesterdayPendingCount)}）</span>
+      </Tooltip>
+    </span>
   );
 }
 
@@ -1391,8 +1581,10 @@ function buildDashboardCardView(
   userStats: UserStats,
   workbenchStatistics: WorkbenchDashboardStatistics | null,
   realManualSubmittedStatistics: WorkbenchDashboardStatistics | null,
+  lowPriceManualSubmittedStatistics: WorkbenchDashboardStatistics | null,
   workbenchUserOverview: WorkbenchUserOverview | null,
   dashboardStatistics: DashboardStatistics | null,
+  lowPriceActualCompleted: ActualCompletedSummary | null,
   scopeLabel: string,
 ): DashboardCardView {
   const currencyTotal = detailRows.reduce((sum, item) => sum + item.todayConsume, 0);
@@ -1489,20 +1681,37 @@ function buildDashboardCardView(
         editable: false,
         compact: true,
       };
-    case "taskRemaining":
+    case "taskRemaining": {
+      // The workbench remaining endpoint only covers Barry's manual queue. Use
+      // the upstream order backlog so this card matches the real remaining data.
+      const pendingByCategory = new Map(
+        (dashboardStatistics?.actualCompleted?.categoryList ?? []).map((item) => [
+          item.shopCategoryId,
+          item.totalPendingCount,
+        ]),
+      );
+      const upstreamTaskDetails = detailRows
+        .map((item) => ({
+          ...item,
+          taskRemaining: pendingByCategory.get(item.id) ?? 0,
+        }))
+        .filter((item) => item.taskRemaining > 0)
+        .sort((left, right) => right.taskRemaining - left.taskRemaining);
+      const actualTotalPending = dashboardStatistics?.actualCompleted?.totalPendingCount;
       return {
         title: DASHBOARD_TITLES[cardId],
-        scopeLabel,
-        unitLabel: "剩余任务量",
+        scopeLabel: "所有上游商品类目",
+        unitLabel: "上游商品类目剩余任务量",
         icon: <ShopOutlined style={{ fontSize: 22 }} />,
         accent: "#4f46e5",
         background: "linear-gradient(135deg, rgba(79,70,229,0.09), rgba(255,255,255,0))",
-        value: <AnimatedNumber value={remainingTotal} format={formatCount} />,
+        value: <AnimatedNumber value={actualTotalPending ?? remainingTotal} format={formatCount} />,
         detailMetrics: [],
-        detailRows,
+        detailRows: upstreamTaskDetails,
         editable: false,
         compact: true,
       };
+    }
     case "manualSubmitted":
       return {
         title: DASHBOARD_TITLES[cardId],
@@ -1520,7 +1729,6 @@ function buildDashboardCardView(
         ),
         detailMetrics: [],
         detailRows,
-        editable: false,
         compact: true,
       };
     case "actualCompleted": {
@@ -1554,7 +1762,7 @@ function buildDashboardCardView(
     case "realManualSubmitted":
       return {
         title: DASHBOARD_TITLES[cardId],
-        scopeLabel,
+        scopeLabel: "真人",
         unitLabel: "真人人工提交量",
         icon: <TeamOutlined style={{ fontSize: 22 }} />,
         accent: "#0f766e",
@@ -1564,6 +1772,25 @@ function buildDashboardCardView(
           realManualSubmittedStatistics?.yesterdaySubmittedNum ?? 0,
           realManualSubmittedStatistics?.submittedChange ?? 0,
           realManualSubmittedStatistics?.submittedChangeRate ?? 0,
+          formatCount,
+        ),
+        detailMetrics: [],
+        detailRows,
+        compact: true,
+      };
+    case "lowPriceManualSubmitted":
+      return {
+        title: DASHBOARD_TITLES[cardId],
+        scopeLabel: "低价",
+        unitLabel: "低价提交量",
+        icon: <TeamOutlined style={{ fontSize: 22 }} />,
+        accent: "#0f766e",
+        background: "linear-gradient(135deg, rgba(15,118,110,0.1), rgba(255,255,255,0))",
+        value: <AnimatedNumber value={lowPriceManualSubmittedStatistics?.submittedNum ?? manualTotal} format={formatCount} />,
+        comparison: buildDashboardComparison(
+          lowPriceManualSubmittedStatistics?.yesterdaySubmittedNum ?? 0,
+          lowPriceManualSubmittedStatistics?.submittedChange ?? 0,
+          lowPriceManualSubmittedStatistics?.submittedChangeRate ?? 0,
           formatCount,
         ),
         detailMetrics: [],
@@ -1581,7 +1808,7 @@ function buildDashboardCardView(
       }));
       return {
         title: DASHBOARD_TITLES[cardId],
-        scopeLabel,
+        scopeLabel: "真人",
         unitLabel: "真人实际完成量",
         icon: <AppstoreOutlined style={{ fontSize: 22 }} />,
         accent: "#16a34a",
@@ -1595,13 +1822,60 @@ function buildDashboardCardView(
         ),
         detailMetrics: [
           { label: "剩余单量", value: formatCount(realActualCompleted?.pendingOrderCount ?? 0) },
-          { label: "剩余总量", value: formatCount(realActualCompleted?.pendingCount ?? 0) },
+          {
+            label: "总剩余量",
+            value: renderTotalPendingMetricValue(
+              realActualCompleted?.totalPendingCount ?? ((realActualCompleted?.pendingCount ?? 0) + (realActualCompleted?.yesterdayPendingCount ?? 0)),
+              realActualCompleted?.yesterdayPendingCount ?? 0,
+            ),
+          },
           { label: "今日新增总单量", value: formatCount(realActualCompleted?.totalOrderCount ?? 0) },
           { label: "今日新增总量", value: formatCount(realActualCompleted?.totalCount ?? 0) },
           { label: "完成单量", value: formatCount(realActualCompleted?.completedOrderCount ?? 0) },
           { label: "完成总量", value: formatCount(realActualCompleted?.count ?? 0) },
         ],
         detailRows: realActualDetailRows,
+        compact: true,
+        expanded: true,
+      };
+    }
+    case "lowPriceActualCompleted": {
+      const completedByCategory = new Map(
+        (lowPriceActualCompleted?.categoryList ?? []).map((item) => [item.shopCategoryId, item.count]),
+      );
+      const actualDetailRows = detailRows.map((item) => ({
+        ...item,
+        actualCompleted: completedByCategory.get(item.id) ?? 0,
+      }));
+      return {
+        title: DASHBOARD_TITLES[cardId],
+        scopeLabel: "低价",
+        unitLabel: "低价实际完成量",
+        icon: <AppstoreOutlined style={{ fontSize: 22 }} />,
+        accent: "#16a34a",
+        background: "linear-gradient(135deg, rgba(22,163,74,0.1), rgba(255,255,255,0))",
+        value: <AnimatedNumber value={lowPriceActualCompleted?.count ?? 0} format={formatCount} />,
+        comparison: buildDashboardComparison(
+          lowPriceActualCompleted?.yesterdayCount ?? 0,
+          lowPriceActualCompleted?.countChange ?? 0,
+          lowPriceActualCompleted?.countChangeRate ?? 0,
+          formatCount,
+        ),
+        detailMetrics: [
+          { label: "剩余单量", value: formatCount(lowPriceActualCompleted?.pendingOrderCount ?? 0) },
+          {
+            label: "总剩余量",
+            value: renderTotalPendingMetricValue(
+              lowPriceActualCompleted?.totalPendingCount ?? ((lowPriceActualCompleted?.pendingCount ?? 0) + (lowPriceActualCompleted?.yesterdayPendingCount ?? 0)),
+              lowPriceActualCompleted?.yesterdayPendingCount ?? 0,
+            ),
+          },
+          { label: "今日新增总单量", value: formatCount(lowPriceActualCompleted?.totalOrderCount ?? 0) },
+          { label: "今日新增总量", value: formatCount(lowPriceActualCompleted?.totalCount ?? 0) },
+          { label: "完成单量", value: formatCount(lowPriceActualCompleted?.completedOrderCount ?? 0) },
+          { label: "完成总量", value: formatCount(lowPriceActualCompleted?.count ?? 0) },
+        ],
+        detailRows: actualDetailRows,
         compact: true,
         expanded: true,
       };
@@ -1685,6 +1959,9 @@ function buildDetailColumns(cardId: DashboardCardId | null): ColumnsType<Derived
   if (isUpstreamUserMetric(cardId)) {
     return buildUpstreamUserDetailColumns(cardId);
   }
+  if (cardId === "taskRemaining") {
+    return buildTaskRemainingDetailColumns();
+  }
   if (isManualProductMetric(cardId)) {
     return buildManualProductDetailColumns();
   }
@@ -1745,6 +2022,28 @@ function buildDetailColumns(cardId: DashboardCardId | null): ColumnsType<Derived
       dataIndex: "completionRate",
       width: 100,
       render: (value: number) => formatPercent(value),
+    },
+  ];
+}
+
+function buildTaskRemainingDetailColumns(): ColumnsType<DerivedCategoryDetail> {
+  return [
+    {
+      title: "商品类目",
+      dataIndex: "categoryName",
+      width: 90,
+      sorter: (left, right) => String(left.categoryName ?? "").localeCompare(String(right.categoryName ?? ""), "zh-CN"),
+      sortDirections: ["ascend", "descend"],
+      render: (value: string) => <span className="manager-value">{value || "-"}</span>,
+    },
+    {
+      title: "剩余量",
+      dataIndex: "taskRemaining",
+      width: 130,
+      defaultSortOrder: "descend",
+      sorter: (left, right) => left.taskRemaining - right.taskRemaining,
+      sortDirections: ["ascend", "descend"],
+      render: (value: number) => <span className="manager-value">{formatCount(value)}</span>,
     },
   ];
 }
@@ -1853,12 +2152,12 @@ function isUpstreamUserMetric(cardId: DashboardCardId | null): boolean {
 
 // Submission cards are viewed along the 人工商品 (manual product) dimension.
 function isManualProductMetric(cardId: DashboardCardId | null): boolean {
-  return cardId === "manualSubmitted" || cardId === "realManualSubmitted";
+  return cardId === "manualSubmitted" || cardId === "realManualSubmitted" || cardId === "lowPriceManualSubmitted";
 }
 
 // Completion cards are viewed along the 上游商品类目 (upstream product category) dimension.
 function isUpstreamCategoryMetric(cardId: DashboardCardId | null): boolean {
-  return cardId === "actualCompleted" || cardId === "realActualCompleted";
+  return cardId === "actualCompleted" || cardId === "realActualCompleted" || cardId === "lowPriceActualCompleted";
 }
 
 function isDashboardMetricId(cardId: DashboardCardId): cardId is DashboardMetricId {
@@ -1866,6 +2165,9 @@ function isDashboardMetricId(cardId: DashboardCardId): cardId is DashboardMetric
 }
 
 function getDetailListDescription(cardId: DashboardCardId | null) {
+  if (cardId === "taskRemaining") {
+    return "展示当前有剩余任务量的上游商品类目";
+  }
   if (cardId === "productCount") {
     return "按人工用户查看当前统计时间窗口内的实时上号情况";
   }
@@ -1882,6 +2184,9 @@ function getDetailListDescription(cardId: DashboardCardId | null) {
 }
 
 function getDetailListUnitLabel(cardId: DashboardCardId | null) {
+  if (cardId === "taskRemaining") {
+    return "上游商品类目";
+  }
   if (cardId === "productCount") {
     return "人工用户";
   }
@@ -1895,6 +2200,20 @@ function getDetailListUnitLabel(cardId: DashboardCardId | null) {
 }
 
 function getEditSelectorConfig(cardId: DashboardCardId | null) {
+  if (cardId === "lowPriceManualSubmitted") {
+    return {
+      label: "低价提交人工商品",
+      placeholder: "请选择仅用于低价提交量的人工商品",
+      extra: "该配置仅用于低价提交量，不影响真人人工提交量。",
+    };
+  }
+  if (cardId === "lowPriceActualCompleted") {
+    return {
+      label: "低价完成商品类目",
+      placeholder: "请选择仅用于低价实际完成量的上游商品类目",
+      extra: "该配置仅用于低价实际完成量，不影响真人实际完成量。",
+    };
+  }
   if (isManualProductMetric(cardId)) {
     return {
       label: "人工商品列表",
@@ -1934,6 +2253,10 @@ function getDetailValueTitle(cardId: DashboardCardId | null) {
       return "真人人工提交";
     case "realActualCompleted":
       return "真人实际完成";
+    case "lowPriceManualSubmitted":
+      return "低价提交";
+    case "lowPriceActualCompleted":
+      return "低价实际完成";
     case "averageSpeed":
       return "速度";
     default:
@@ -1953,9 +2276,11 @@ function renderMetricValue(record: DerivedCategoryDetail, cardId: DashboardCardI
       return formatCount(record.taskRemaining);
     case "manualSubmitted":
     case "realManualSubmitted":
+    case "lowPriceManualSubmitted":
       return formatCount(record.manualSubmitted);
     case "actualCompleted":
     case "realActualCompleted":
+    case "lowPriceActualCompleted":
       return formatCount(record.actualCompleted);
     case "averageSpeed":
       return (

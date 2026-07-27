@@ -33,6 +33,8 @@ func (h *BarryHandler) registerProductRoutes(engine *gin.RouterGroup) {
 	engine.DELETE("/barry/assign-video-user-rules", h.deleteAssignVideoUserRule)
 	engine.GET("/barry/assign-whitelist-switch", h.getAssignWhitelistSwitch)
 	engine.POST("/barry/assign-whitelist-switch", h.saveAssignWhitelistSwitch)
+	engine.GET("/barry/assign-whitelist-approval-rate", h.getAssignWhitelistApprovalRate)
+	engine.POST("/barry/assign-whitelist-approval-rate", h.saveAssignWhitelistApprovalRate)
 	engine.GET("/barry/assign-uid-switch", h.getAssignUidSwitch)
 	engine.POST("/barry/assign-uid-switch", h.saveAssignUidSwitch)
 }
@@ -355,7 +357,7 @@ func (h *BarryHandler) getAssignApprovalRateRule(c *gin.Context) {
 
 func (h *BarryHandler) saveAssignApprovalRateRule(c *gin.Context) {
 	var req barryDTO.SaveAssignApprovalRateRuleDTO
-	if c.ShouldBindJSON(&req) != nil || req.ShopCategoryID <= 0 || req.MinFansNum < 0 || req.RecentApprovalRateDays <= 0 || req.MinRecentApprovalRate < 0 || req.MinRecentApprovalRate > 1 {
+	if c.ShouldBindJSON(&req) != nil || req.ShopCategoryID <= 0 || req.MinFansNum < 0 || req.RecentApprovalRateDays <= 0 || req.MinRecentApprovalRate < 0 || req.MinRecentApprovalRate > 1 || req.MinDailySubmitNum < 0 {
 		commonRouter.ToError(c, "参数错误")
 		return
 	}
@@ -464,6 +466,44 @@ func (h *BarryHandler) saveAssignWhitelistSwitch(c *gin.Context) {
 			return
 		}
 		commonRouter.ToError(c, response.Message)
+		return
+	}
+	commonRouter.ToJson(c, response.Data, nil)
+}
+
+func (h *BarryHandler) getAssignWhitelistApprovalRate(c *gin.Context) {
+	var q barryDTO.AssignSwitchQueryDTO
+	if c.ShouldBindQuery(&q) != nil || q.ShopCategoryID <= 0 {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := h.barryService.AssignWhitelistSwitch.GetApprovalRate(c.Request.Context(), q)
+	if err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	commonRouter.ToJson(c, response.Data, nil)
+}
+
+func (h *BarryHandler) saveAssignWhitelistApprovalRate(c *gin.Context) {
+	var req struct {
+		ShopCategoryID         int64   `json:"shopCategoryId"`
+		MinRecentApprovalRate  float64 `json:"minRecentApprovalRate"`
+		RecentApprovalRateDays *int    `json:"recentApprovalRateDays"`
+	}
+	if c.ShouldBindJSON(&req) != nil || req.ShopCategoryID <= 0 || req.MinRecentApprovalRate < 0 || req.MinRecentApprovalRate > 1 ||
+		(req.MinRecentApprovalRate == 0 && req.RecentApprovalRateDays == nil) ||
+		(req.RecentApprovalRateDays != nil && *req.RecentApprovalRateDays <= 0) {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := h.barryService.AssignWhitelistSwitch.SaveApprovalRate(c.Request.Context(), req.ShopCategoryID, req.MinRecentApprovalRate, req.RecentApprovalRateDays)
+	if err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	if !response.Success {
+		commonRouter.ToError(c, "保存失败")
 		return
 	}
 	commonRouter.ToJson(c, response.Data, nil)

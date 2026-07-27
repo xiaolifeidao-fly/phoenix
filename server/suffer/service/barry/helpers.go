@@ -34,6 +34,8 @@ const (
 
 	barryInnerAssignWhitelistSwitchGetPath                    = "barry.url.inner.assign.whitelist.switch.get.suffix"
 	barryInnerAssignWhitelistSwitchSavePath                   = "barry.url.inner.assign.whitelist.switch.save.suffix"
+	barryInnerAssignWhitelistApprovalRateGetPath              = "barry.url.inner.assign.whitelist.approval.rate.get.suffix"
+	barryInnerAssignWhitelistApprovalRateSavePath             = "barry.url.inner.assign.whitelist.approval.rate.save.suffix"
 	barryInnerAssignUidSwitchGetPath                          = "barry.url.inner.assign.uid.switch.get.suffix"
 	barryInnerAssignUidSwitchSavePath                         = "barry.url.inner.assign.uid.switch.save.suffix"
 	barryInnerAppUserListPath                                 = "barry.url.inner.app.user.list.suffix"

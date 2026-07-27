@@ -35,6 +35,23 @@ func (s *AssignWhitelistSwitchService) Save(ctx context.Context, req *barryDTO.S
 	return postSwitch(ctx, s.client, barryInnerAssignWhitelistSwitchSavePath, req)
 }
 
+func (s *AssignWhitelistSwitchService) GetApprovalRate(ctx context.Context, query barryDTO.AssignSwitchQueryDTO) (*barryDTO.DetailResponseDTO[barryDTO.WhitelistApprovalRateRuleDTO], error) {
+	response := &barryDTO.DetailResponseDTO[barryDTO.WhitelistApprovalRateRuleDTO]{}
+	err := s.client.GetAbsolute(ctx, innerServicePath(barryInnerAssignWhitelistApprovalRateGetPath), buildValues("shopCategoryId", query.ShopCategoryID), response)
+	return response, err
+}
+
+func (s *AssignWhitelistSwitchService) SaveApprovalRate(ctx context.Context, shopCategoryID int64, rate float64, days *int) (*barryDTO.ActionResponseDTO, error) {
+	response := &barryDTO.ActionResponseDTO{}
+	values := buildValues("shopCategoryId", shopCategoryID)
+	values.Set("minRecentApprovalRate", strconv.FormatFloat(rate, 'f', -1, 64))
+	if days != nil {
+		values.Set("recentApprovalRateDays", strconv.Itoa(*days))
+	}
+	err := s.client.PostAbsolute(ctx, innerServicePath(barryInnerAssignWhitelistApprovalRateSavePath)+"?"+values.Encode(), nil, response)
+	return response, err
+}
+
 // AssignUidSwitchService uid维度总开关(user 域), 有记录即启用.
 type AssignUidSwitchService struct {
 	client *Client

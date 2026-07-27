@@ -5,7 +5,7 @@ import dayjs, { type Dayjs } from "dayjs";
 import localeData from "dayjs/plugin/localeData";
 import weekday from "dayjs/plugin/weekday";
 import { CheckCircleOutlined, ClockCircleOutlined, ReloadOutlined, SearchOutlined, TeamOutlined, WarningOutlined } from "@ant-design/icons";
-import { Button, DatePicker, Empty, Select, Space, Table, Tag, Typography } from "antd";
+import { Button, DatePicker, Empty, Select, Space, Switch, Table, Tag, Typography } from "antd";
 import { message } from "@/utils/notify";
 import type { ColumnsType } from "antd/es/table";
 import type { TablePaginationConfig } from "antd/es/table/interface";
@@ -31,7 +31,7 @@ export function ManualTaskStatisticsPanel() {
   const [overview, setOverview] = useState<ManualTaskStatisticsOverview | null>(null);
   const [userOptions, setUserOptions] = useState<ManualUserOption[]>([]);
   const userOptionCacheRef = useRef(new Map<number, ManualUserOption>());
-  const [filters, setFilters] = useState({ dateRange: defaultDateRange, shopCategoryIds: [] as number[], userId: undefined as number | undefined, page: 1, pageSize: 20 });
+  const [filters, setFilters] = useState({ dateRange: defaultDateRange, shopCategoryIds: [] as number[], excludeWhitelistUsers: false, userId: undefined as number | undefined, page: 1, pageSize: 20 });
 
   const loadOverview = async (nextFilters = filters) => {
     setLoading(true);
@@ -42,6 +42,7 @@ export function ManualTaskStatisticsPanel() {
           startDate: startDate.format("YYYY-MM-DD"),
           endDate: endDate.format("YYYY-MM-DD"),
           shopCategoryIds: nextFilters.shopCategoryIds.length ? nextFilters.shopCategoryIds.join(",") : undefined,
+          excludeWhitelistUsers: nextFilters.excludeWhitelistUsers && nextFilters.shopCategoryIds.length > 0 ? true : undefined,
           userId: nextFilters.userId,
           page: nextFilters.page,
           pageSize: nextFilters.pageSize,
@@ -125,9 +126,10 @@ export function ManualTaskStatisticsPanel() {
           <div><div className="manager-section-label">筛选条件</div><Title level={4} style={{ margin: "10px 0 0" }}>定位人工任务处理情况</Title></div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, alignItems: "end" }}>
             <div><Text type="secondary">日期范围</Text><RangePicker style={{ width: "100%", marginTop: 8 }} value={filters.dateRange} allowClear={false} onChange={(value) => setFilters((current) => ({ ...current, dateRange: value && value[0] && value[1] ? ([value[0].startOf("day"), value[1].startOf("day")] as unknown as [Dayjs, Dayjs]) : defaultDateRange }))} /></div>
-            <div><Text type="secondary">人工商品</Text><Select mode="multiple" allowClear maxTagCount="responsive" placeholder="全部人工商品" style={{ width: "100%", marginTop: 8 }} options={categoryOptions} value={filters.shopCategoryIds} onChange={(value) => setFilters((current) => ({ ...current, shopCategoryIds: value }))} /></div>
+            <div><Text type="secondary">人工商品</Text><Select mode="multiple" allowClear maxTagCount="responsive" placeholder="全部人工商品" style={{ width: "100%", marginTop: 8 }} options={categoryOptions} value={filters.shopCategoryIds} onChange={(value) => setFilters((current) => ({ ...current, shopCategoryIds: value, excludeWhitelistUsers: value.length > 0 ? current.excludeWhitelistUsers : false }))} /></div>
+            <div><Text type="secondary">是否过滤所选人工商品白名单用户</Text><div style={{ marginTop: 11 }}><Switch checked={filters.excludeWhitelistUsers} disabled={filters.shopCategoryIds.length === 0} checkedChildren="过滤" unCheckedChildren="不过滤" onChange={(value) => setFilters((current) => ({ ...current, excludeWhitelistUsers: value }))} /></div></div>
             <div><Text type="secondary">人工用户</Text><Select allowClear showSearch filterOption={false} placeholder="输入用户名或昵称搜索" style={{ width: "100%", marginTop: 8 }} options={resolvedUserOptions.map((user) => ({ value: user.id, label: user.nickname ? `${user.username} (${user.nickname})` : user.username }))} value={filters.userId} onSearch={(value) => void searchUsers(value)} onChange={(value) => setFilters((current) => ({ ...current, userId: value }))} /></div>
-            <Space><Button type="primary" icon={<SearchOutlined />} loading={loading} onClick={() => { const next = { ...filters, page: 1 }; setFilters(next); void loadOverview(next); }}>查询</Button><Button icon={<ReloadOutlined />} onClick={() => { const reset = { dateRange: defaultDateRange, shopCategoryIds: [] as number[], userId: undefined, page: 1, pageSize: 20 }; setFilters(reset); void loadOverview(reset); }}>重置</Button></Space>
+            <Space><Button type="primary" icon={<SearchOutlined />} loading={loading} onClick={() => { const next = { ...filters, page: 1 }; setFilters(next); void loadOverview(next); }}>查询</Button><Button icon={<ReloadOutlined />} onClick={() => { const reset = { dateRange: defaultDateRange, shopCategoryIds: [] as number[], excludeWhitelistUsers: false, userId: undefined, page: 1, pageSize: 20 }; setFilters(reset); void loadOverview(reset); }}>重置</Button></Space>
           </div>
         </Space>
       </section>

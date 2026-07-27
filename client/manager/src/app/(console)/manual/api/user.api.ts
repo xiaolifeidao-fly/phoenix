@@ -76,6 +76,12 @@ export class BarryUserWhitelistRecord {
   status = "";
 
   active = true;
+
+  minRecentApprovalRate?: number;
+
+  recentApprovalRateDays?: number;
+
+  dailyAssignTimeRanges = "";
 }
 
 export interface ManualUserListQuery {
@@ -111,6 +117,10 @@ export interface BarryUserWhitelistPayload {
   userId: number;
   shopCategoryId: number;
   group?: string;
+  updatePolicy?: boolean;
+  minRecentApprovalRate?: number;
+  recentApprovalRateDays?: number;
+  dailyAssignTimeRanges?: string;
 }
 
 export interface CreateManualUserPayload {

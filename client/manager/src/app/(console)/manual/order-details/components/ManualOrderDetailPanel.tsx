@@ -149,6 +149,7 @@ export function ManualOrderDetailPanel() {
     },
     { title: "总提交数量", dataIndex: "totalSubmitNum", width: 120, render: formatCount },
     { title: "未提交数量", dataIndex: "unSubmitNum", width: 120, render: (value) => <Tag color="gold">{formatCount(value)}</Tag> },
+    { title: "待审核数量", dataIndex: "unCheckNum", width: 120, render: (value) => <Tag color="processing">{formatCount(value)}</Tag> },
     { title: "审核成功数量", dataIndex: "checkedNum", width: 130, render: (value) => <Tag color="success">{formatCount(value)}</Tag> },
     { title: "审核失败数量", dataIndex: "checkErrorNum", width: 130, render: (value) => <Tag color="error">{formatCount(value)}</Tag> },
     {

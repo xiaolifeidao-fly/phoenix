@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import dayjs, { type Dayjs } from "dayjs";
 import {
   ArrowDownOutlined,
   ArrowUpOutlined,
@@ -12,7 +13,7 @@ import {
   SearchOutlined,
   SettingOutlined,
 } from "@ant-design/icons";
-import { Button, Drawer, Form, Input, InputNumber, Modal, Pagination, Popconfirm, Select, Space, Switch, Table, Tabs, Tag, Transfer, Tooltip, Typography } from "antd";
+import { Button, Drawer, Form, Input, InputNumber, Modal, Pagination, Popconfirm, Select, Space, Switch, Table, Tabs, Tag, TimePicker, Transfer, Tooltip, Typography } from "antd";
 import { message } from "@/utils/notify";
 import type { ColumnsType } from "antd/es/table";
 import { WorkspaceDrawer } from "@/components/manager-shell/WorkspaceDrawer";
@@ -29,6 +30,7 @@ import {
   fetchAssignUidSwitch,
   fetchAssignVideoRule,
   fetchAssignWhitelistSwitch,
+  fetchAssignWhitelistApprovalRate,
   fetchJudgeConfigsByShopTypeId,
   fetchManualProducts,
   fetchManualProductTypes,
@@ -40,6 +42,7 @@ import {
   saveAssignUidSwitch,
   saveAssignVideoRule,
   saveAssignWhitelistSwitch,
+  saveAssignWhitelistApprovalRate,
   saveJudgeConfig,
   saveVideoUserRule,
   type AssignConfigRecord,
@@ -134,6 +137,36 @@ const getWhitelistGroupLabel = (group?: string) => {
   return normalizedGroup ? whitelistGroupLabels[normalizedGroup] || normalizedGroup : "未分组";
 };
 
+const parseTimeRanges = (value?: string) => (value || "").split(",").map((item) => item.trim()).filter((item) => /^\d{2}:\d{2}-\d{2}:\d{2}$/.test(item));
+const formatTimeRanges = (ranges: string[]) => ranges.join(",");
+const toTimeValue = (value: string) => {
+  const [hour, minute] = value.split(":").map(Number);
+  return dayjs().hour(hour).minute(minute).second(0).millisecond(0);
+};
+
+function TimeRangeEditor({ value, onChange }: { value: string[]; onChange: (ranges: string[]) => void }) {
+  return <Space direction="vertical" style={{ width: "100%" }} size={8}>
+    {value.map((range, index) => {
+      const [start, end] = range.split("-");
+      return <Space key={`${range}-${index}`} wrap>
+        <TimePicker.RangePicker
+          format="HH:mm"
+          minuteStep={1}
+          value={[toTimeValue(start), toTimeValue(end)] as [Dayjs, Dayjs]}
+          onChange={(times) => {
+            if (!times?.[0] || !times?.[1]) return;
+            const next = [...value];
+            next[index] = `${times[0].format("HH:mm")}-${times[1].format("HH:mm")}`;
+            onChange(next);
+          }}
+        />
+        <Button danger type="text" icon={<DeleteOutlined />} onClick={() => onChange(value.filter((_, itemIndex) => itemIndex !== index))}>删除</Button>
+      </Space>;
+    })}
+    <Button type="dashed" icon={<PlusOutlined />} onClick={() => onChange([...value, "09:00-00:00"])}>添加时间段</Button>
+  </Space>;
+}
+
 interface WhitelistUserRecord {
   id?: number;
   userId: string;
@@ -143,6 +176,9 @@ interface WhitelistUserRecord {
   group: string;
   shopCategoryId: string;
   active: boolean;
+  minRecentApprovalRate?: number;
+  recentApprovalRateDays?: number;
+  dailyAssignTimeRanges: string;
 }
 
 interface VideoUserStrategyRecord {
@@ -183,6 +219,9 @@ interface ApprovalRateRuleState {
   minFansNum: number;
   recentApprovalRateDays: number;
   minRecentApprovalRate: number;
+  minDailySubmitNum: number;
+  dailyAssignTimeRanges: string;
+  whitelistShopCategoryIds: number[];
 }
 
 const defaultInteractRate = 0.02;
@@ -214,6 +253,9 @@ const emptyApprovalRateRule: ApprovalRateRuleState = {
   minFansNum: 0,
   recentApprovalRateDays: 3,
   minRecentApprovalRate: 0,
+  minDailySubmitNum: 10,
+  dailyAssignTimeRanges: "",
+  whitelistShopCategoryIds: [],
 };
 
 const videoUrlKeywordOptions = [
@@ -252,6 +294,9 @@ export function ManualProductManagementPanel() {
   const [strategyTab, setStrategyTab] = useState<"user" | "uid" | "approvalRate" | "video" | "refund">("user");
   const [strategyDirty, setStrategyDirty] = useState(false);
   const [userWhitelistEnabled, setUserWhitelistEnabled] = useState(false);
+  const [whitelistGlobalApprovalRate, setWhitelistGlobalApprovalRate] = useState(0);
+  const [whitelistGlobalApprovalRateDays, setWhitelistGlobalApprovalRateDays] = useState<number | null>(3);
+  const [whitelistGlobalApprovalRateSaving, setWhitelistGlobalApprovalRateSaving] = useState(false);
   const [approvalRateRuleEnabled, setApprovalRateRuleEnabled] = useState(false);
   const [approvalRateRule, setApprovalRateRule] = useState<ApprovalRateRuleState>(emptyApprovalRateRule);
   const [approvalRateRuleSaving, setApprovalRateRuleSaving] = useState(false);
@@ -273,6 +318,10 @@ export function ManualProductManagementPanel() {
   const [appUserSearching, setAppUserSearching] = useState(false);
   const [selectedAppUserId, setSelectedAppUserId] = useState<string>();
   const [addWhitelistModalOpen, setAddWhitelistModalOpen] = useState(false);
+  const [editingWhitelistUser, setEditingWhitelistUser] = useState<WhitelistUserRecord | null>(null);
+  const [whitelistPolicyRate, setWhitelistPolicyRate] = useState<number | null>(null);
+  const [whitelistPolicyRateDays, setWhitelistPolicyRateDays] = useState<number | null>(null);
+  const [whitelistPolicyTimeRanges, setWhitelistPolicyTimeRanges] = useState<string[]>([]);
   const [selectedWhitelistGroup, setSelectedWhitelistGroup] = useState<WhitelistGroup>("BIG_CUSTOMER");
   const [batchWhitelistModalOpen, setBatchWhitelistModalOpen] = useState(false);
   const [batchWhitelistGroup, setBatchWhitelistGroup] = useState<WhitelistGroup>("BIG_CUSTOMER");
@@ -476,15 +525,20 @@ export function ManualProductManagementPanel() {
       return;
     }
     try {
-      const [loadedUidRule, loadedVideoRule, loadedRefundRule, loadedApprovalRateRule, loadedWhitelistSwitch, loadedUidSwitch] = await Promise.all([
+      const [loadedUidRule, loadedVideoRule, loadedRefundRule, loadedApprovalRateRule, loadedWhitelistSwitch, loadedWhitelistApprovalRate, loadedUidSwitch] = await Promise.all([
         fetchAssignUidRule(shopCategoryId),
         fetchAssignVideoRule(shopCategoryId),
         fetchAssignRefundRule(shopCategoryId),
         fetchAssignApprovalRateRule(shopCategoryId),
         fetchAssignWhitelistSwitch(shopCategoryId),
+        fetchAssignWhitelistApprovalRate(shopCategoryId),
         fetchAssignUidSwitch(shopCategoryId),
       ]);
       setUserWhitelistEnabled(loadedWhitelistSwitch);
+      const globalApprovalRate = Number(loadedWhitelistApprovalRate?.minRecentApprovalRate);
+      const globalApprovalRateDays = Number(loadedWhitelistApprovalRate?.recentApprovalRateDays);
+      setWhitelistGlobalApprovalRate(Number.isFinite(globalApprovalRate) ? globalApprovalRate * 100 : 0);
+      setWhitelistGlobalApprovalRateDays(Number.isFinite(globalApprovalRateDays) && globalApprovalRateDays > 0 ? globalApprovalRateDays : null);
       setUidRuleEnabled(loadedUidSwitch);
       if (loadedUidRule) {
         setUidRule({
@@ -531,6 +585,9 @@ export function ManualProductManagementPanel() {
           minFansNum: Number(loadedApprovalRateRule.minFansNum || 0),
           recentApprovalRateDays: Number(loadedApprovalRateRule.recentApprovalRateDays || 3),
           minRecentApprovalRate: Number(loadedApprovalRateRule.minRecentApprovalRate || 0),
+          minDailySubmitNum: Number(loadedApprovalRateRule.minDailySubmitNum ?? 10),
+          dailyAssignTimeRanges: loadedApprovalRateRule.dailyAssignTimeRanges || "",
+          whitelistShopCategoryIds: (loadedApprovalRateRule.whitelistShopCategoryIds || "").split(",").map(Number).filter((id) => id > 0),
         });
       } else {
         setApprovalRateRuleEnabled(false);
@@ -730,6 +787,9 @@ export function ManualProductManagementPanel() {
         minFansNum: Number(approvalRateRule.minFansNum || 0),
         recentApprovalRateDays: Number(approvalRateRule.recentApprovalRateDays || 3),
         minRecentApprovalRate: Number(approvalRateRule.minRecentApprovalRate || 0),
+        minDailySubmitNum: Number(approvalRateRule.minDailySubmitNum || 0),
+        dailyAssignTimeRanges: approvalRateRule.dailyAssignTimeRanges.trim(),
+        whitelistShopCategoryIds: approvalRateRule.whitelistShopCategoryIds.join(","),
       });
       if (saved) {
         setApprovalRateRuleEnabled(Boolean(saved.enabled));
@@ -738,6 +798,9 @@ export function ManualProductManagementPanel() {
           minFansNum: Number(saved.minFansNum || 0),
           recentApprovalRateDays: Number(saved.recentApprovalRateDays || 3),
           minRecentApprovalRate: Number(saved.minRecentApprovalRate || 0),
+          minDailySubmitNum: Number(saved.minDailySubmitNum || 0),
+          dailyAssignTimeRanges: saved.dailyAssignTimeRanges || "",
+          whitelistShopCategoryIds: (saved.whitelistShopCategoryIds || "").split(",").map(Number).filter((id) => id > 0),
         });
       }
       setApprovalRateRuleDirty(false);
@@ -747,6 +810,27 @@ export function ManualProductManagementPanel() {
       message.error(error instanceof Error ? error.message : "保存审核通过率策略失败");
     } finally {
       setApprovalRateRuleSaving(false);
+    }
+  };
+
+  const saveWhitelistGlobalApprovalRate = async () => {
+    if (!strategyProduct?.id) return;
+    if (!userWhitelistEnabled) {
+      message.warning("请先开启白名单，再保存全局审核通过率门槛");
+      return;
+    }
+    if (whitelistGlobalApprovalRate === 0 && whitelistGlobalApprovalRateDays === null) {
+      message.warning("审核通过率为 0% 时，统计天数不能为空");
+      return;
+    }
+    setWhitelistGlobalApprovalRateSaving(true);
+    try {
+      await saveAssignWhitelistApprovalRate(Number(strategyProduct.id), whitelistGlobalApprovalRate / 100, whitelistGlobalApprovalRateDays);
+      message.success("白名单全局审核通过率已保存");
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "保存白名单全局审核通过率失败");
+    } finally {
+      setWhitelistGlobalApprovalRateSaving(false);
     }
   };
 
@@ -896,6 +980,9 @@ export function ManualProductManagementPanel() {
         group: user.group || user.groupName || "",
         shopCategoryId: String(user.shopCategoryId || shopCategoryId),
         active: user.active !== false && user.status !== "EXPIRE" && user.status !== "INACTIVE",
+        minRecentApprovalRate: user.minRecentApprovalRate ?? undefined,
+        recentApprovalRateDays: user.recentApprovalRateDays ?? undefined,
+        dailyAssignTimeRanges: user.dailyAssignTimeRanges || "",
       }));
       setWhitelistUsers(rows);
       setWhitelistTotal(page.total ?? rows.length);
@@ -1024,6 +1111,9 @@ export function ManualProductManagementPanel() {
           minFansNum: Number(approvalRateRule.minFansNum || 0),
           recentApprovalRateDays: Number(approvalRateRule.recentApprovalRateDays || 3),
           minRecentApprovalRate: Number(approvalRateRule.minRecentApprovalRate || 0),
+          minDailySubmitNum: Number(approvalRateRule.minDailySubmitNum || 0),
+          dailyAssignTimeRanges: approvalRateRule.dailyAssignTimeRanges.trim(),
+          whitelistShopCategoryIds: approvalRateRule.whitelistShopCategoryIds.join(","),
         });
         if (saved) {
           setApprovalRateRuleEnabled(Boolean(saved.enabled));
@@ -1032,6 +1122,9 @@ export function ManualProductManagementPanel() {
             minFansNum: Number(saved.minFansNum || 0),
             recentApprovalRateDays: Number(saved.recentApprovalRateDays || 3),
             minRecentApprovalRate: Number(saved.minRecentApprovalRate || 0),
+            minDailySubmitNum: Number(saved.minDailySubmitNum || 0),
+            dailyAssignTimeRanges: saved.dailyAssignTimeRanges || "",
+            whitelistShopCategoryIds: (saved.whitelistShopCategoryIds || "").split(",").map(Number).filter((id) => id > 0),
           });
         }
         setApprovalRateRuleDirty(false);
@@ -1385,6 +1478,29 @@ export function ManualProductManagementPanel() {
         next.delete(rowId);
         return next;
       });
+    }
+  };
+
+  const saveWhitelistUserPolicy = async () => {
+    if (!editingWhitelistUser || !strategyProduct?.id) return;
+    setWhitelistSaving(true);
+    try {
+      await saveBarryUserWhitelist({
+        userId: Number(editingWhitelistUser.userId),
+        shopCategoryId: Number(strategyProduct.id),
+        group: editingWhitelistUser.group || undefined,
+        updatePolicy: true,
+        minRecentApprovalRate: whitelistPolicyRate === null ? undefined : whitelistPolicyRate / 100,
+        recentApprovalRateDays: whitelistPolicyRateDays === null ? undefined : whitelistPolicyRateDays,
+        dailyAssignTimeRanges: formatTimeRanges(whitelistPolicyTimeRanges) || undefined,
+      });
+      message.success("白名单用户策略已保存");
+      setEditingWhitelistUser(null);
+      await loadUserWhitelists(strategyProduct, whitelistPageIndex, whitelistPageSize);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "保存白名单用户策略失败");
+    } finally {
+      setWhitelistSaving(false);
     }
   };
 
@@ -2341,6 +2457,17 @@ export function ManualProductManagementPanel() {
                   />
                 </div>
                 <div style={strategyStyles.cardBody}>
+                  <div style={{ ...strategyStyles.criteriaRow, marginBottom: 20 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={strategyStyles.criteriaName}>近几日审核通过率 <code style={strategyStyles.operator}>通过率 ≥</code></div>
+                      <div style={strategyStyles.criteriaDesc}>白名单用户的全局接单门槛；填 0% 表示不限制。通过率不为 0% 时统计天数可留空，留空按默认 3 日统计。</div>
+                    </div>
+                    <Space size={8}>
+                      <InputNumber value={whitelistGlobalApprovalRateDays} min={1} precision={0} addonAfter="日" placeholder="可留空" style={{ width: 110 }} onChange={(value) => setWhitelistGlobalApprovalRateDays(value === null ? null : Number(value))} />
+                      <InputNumber value={whitelistGlobalApprovalRate} min={0} max={100} precision={2} addonAfter="%" style={{ width: 150 }} onChange={(value) => setWhitelistGlobalApprovalRate(Number(value || 0))} />
+                      <Button icon={<SaveOutlined />} loading={whitelistGlobalApprovalRateSaving} onClick={() => void saveWhitelistGlobalApprovalRate()}>保存</Button>
+                    </Space>
+                  </div>
                   <div style={{ ...strategyStyles.addRow, marginTop: 0, marginBottom: 28 }}>
                     <Select
                       size="large"
@@ -2436,7 +2563,6 @@ export function ManualProductManagementPanel() {
                             </button>
                           </Tooltip>
                         </th>
-                        <th style={strategyStyles.th}>品类ID</th>
                         <th style={strategyStyles.th}>
                           <Tooltip
                             title={
@@ -2458,6 +2584,9 @@ export function ManualProductManagementPanel() {
                             </button>
                           </Tooltip>
                         </th>
+                        <th style={strategyStyles.th}>近几日通过率</th>
+                        <th style={strategyStyles.th}>允许接单时间段</th>
+                        <th style={strategyStyles.th}>策略</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2479,7 +2608,6 @@ export function ManualProductManagementPanel() {
                                 onChange={(group) => void updateWhitelistUserGroup(user, group)}
                               />
                             </td>
-                            <td style={strategyStyles.td}>{user.shopCategoryId || "-"}</td>
                             <td style={strategyStyles.td}>
                               <Space size={8}>
                                 <Switch
@@ -2491,11 +2619,28 @@ export function ManualProductManagementPanel() {
                                 <Tag color={user.active ? "green" : "default"}>{user.active ? "生效" : "失效"}</Tag>
                               </Space>
                             </td>
+                            <td style={strategyStyles.td}>{user.minRecentApprovalRate == null ? "-" : `近${user.recentApprovalRateDays || whitelistGlobalApprovalRateDays || 3}日 ≥ ${(user.minRecentApprovalRate * 100).toFixed(2)}%`}</td>
+                            <td style={{ ...strategyStyles.td, maxWidth: 180 }}>
+                              {user.dailyAssignTimeRanges ? <Tooltip title={user.dailyAssignTimeRanges}><span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.dailyAssignTimeRanges}</span></Tooltip> : "-"}
+                            </td>
+                            <td style={strategyStyles.td}>
+                              <Button
+                                size="small"
+                                onClick={() => {
+                                  setEditingWhitelistUser(user);
+                                  setWhitelistPolicyRate(user.minRecentApprovalRate == null ? null : user.minRecentApprovalRate * 100);
+                                  setWhitelistPolicyRateDays(user.recentApprovalRateDays ?? null);
+                                  setWhitelistPolicyTimeRanges(parseTimeRanges(user.dailyAssignTimeRanges));
+                                }}
+                              >
+                                编辑
+                              </Button>
+                            </td>
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={6} style={strategyStyles.emptyCell}>
+                          <td colSpan={8} style={strategyStyles.emptyCell}>
                             白名单为空，点上方「添加」加入。
                           </td>
                         </tr>
@@ -2635,10 +2780,26 @@ export function ManualProductManagementPanel() {
                   </div>
                   <div style={strategyStyles.criteriaRow}>
                     <div style={{ flex: 1 }}>
+                      <div style={strategyStyles.criteriaName}>目标范围</div>
+                      <div style={strategyStyles.criteriaDesc}>选择后，仅所选人工商品白名单中的用户可使用本审核维度配置；不选择则保持原有的全部用户规则。</div>
+                    </div>
+                    <Select
+                      mode="multiple"
+                      allowClear
+                      maxTagCount="responsive"
+                      placeholder="选择人工商品"
+                      value={approvalRateRule.whitelistShopCategoryIds}
+                      style={{ width: 330 }}
+                      options={products.filter((product) => product.id !== strategyProduct?.id).map((product) => ({ value: product.id, label: product.code ? `${product.name} (${product.code})` : product.name }))}
+                      onChange={(value) => updateApprovalRateRule({ whitelistShopCategoryIds: value.map(Number) })}
+                    />
+                  </div>
+                  <div style={strategyStyles.criteriaRow}>
+                    <div style={{ flex: 1 }}>
                       <div style={strategyStyles.criteriaName}>
                         近 N 日平均审核成功率 <code style={strategyStyles.operator}>成功率 ≥</code>
                       </div>
-                      <div style={strategyStyles.criteriaDesc}>按最近配置天数（含当天）的审核结果计算；门槛填 0% 表示不限制。</div>
+                      <div style={strategyStyles.criteriaDesc}>按最近配置天数（含当天）计算；成功率填 0% 或日提交量填 0 均表示不限制。</div>
                     </div>
                     <Space size={8}>
                       <InputNumber
@@ -2658,6 +2819,14 @@ export function ManualProductManagementPanel() {
                         style={{ width: 150 }}
                         onChange={(value) => updateApprovalRateRule({ minRecentApprovalRate: Number(value || 0) / 100 })}
                       />
+                      <InputNumber
+                        value={approvalRateRule.minDailySubmitNum}
+                        min={0}
+                        precision={0}
+                        addonBefore="日提交量 >"
+                        style={{ width: 180 }}
+                        onChange={(value) => updateApprovalRateRule({ minDailySubmitNum: Number(value || 0) })}
+                      />
                     </Space>
                   </div>
                   <div style={strategyStyles.criteriaRow}>
@@ -2674,6 +2843,15 @@ export function ManualProductManagementPanel() {
                       style={{ width: 150 }}
                       onChange={(value) => updateApprovalRateRule({ minFansNum: Number(value || 0) })}
                     />
+                  </div>
+                  <div style={strategyStyles.criteriaRow}>
+                    <div style={{ flex: 1 }}>
+                      <div style={strategyStyles.criteriaName}>允许每日接单时间段</div>
+                      <div style={strategyStyles.criteriaDesc}>可填写多个时段，以英文逗号分隔；例如 09:00-12:00,14:00-18:00。留空表示全天允许。</div>
+                    </div>
+                    <div style={{ width: 330 }}>
+                      <TimeRangeEditor value={parseTimeRanges(approvalRateRule.dailyAssignTimeRanges)} onChange={(ranges) => updateApprovalRateRule({ dailyAssignTimeRanges: formatTimeRanges(ranges) })} />
+                    </div>
                   </div>
                 </div>
               </section>
@@ -2917,6 +3095,25 @@ export function ManualProductManagementPanel() {
           style={{ width: "100%" }}
           onChange={setSelectedWhitelistGroup}
         />
+      </Modal>
+
+      <Modal
+        title={`编辑白名单策略${editingWhitelistUser ? `：${editingWhitelistUser.username || editingWhitelistUser.userId}` : ""}`}
+        open={Boolean(editingWhitelistUser)}
+        zIndex={1200}
+        okText="保存"
+        cancelText="取消"
+        confirmLoading={whitelistSaving}
+        onCancel={() => setEditingWhitelistUser(null)}
+        onOk={() => void saveWhitelistUserPolicy()}
+      >
+        <div style={{ marginBottom: 8 }}>近几日审核通过率 ≥（两项均留空则使用白名单全局配置）</div>
+        <Space style={{ width: "100%", marginBottom: 18 }}>
+          <InputNumber value={whitelistPolicyRateDays} min={1} precision={0} addonAfter="日" placeholder="全局天数" style={{ width: 150 }} onChange={(value) => setWhitelistPolicyRateDays(value === null ? null : Number(value))} />
+          <InputNumber value={whitelistPolicyRate} min={0} max={100} precision={2} addonAfter="%" placeholder="全局通过率" style={{ width: 180 }} onChange={(value) => setWhitelistPolicyRate(value === null ? null : Number(value))} />
+        </Space>
+        <div style={{ marginBottom: 8 }}>允许每日接单时间段</div>
+        <TimeRangeEditor value={whitelistPolicyTimeRanges} onChange={setWhitelistPolicyTimeRanges} />
       </Modal>
 
       <Modal

@@ -148,6 +148,10 @@ func (s *DashboardService) TodayActualCompleted(shopCategoryIDs []uint64) (*dash
 	if err != nil {
 		return nil, err
 	}
+	yesterdayPendingRows, err := s.repository.YesterdayPendingByCategory(todayStart, shopCategoryIDs)
+	if err != nil {
+		return nil, err
+	}
 	snapshotRows, err := s.repository.ActualCompletedSnapshotByCategory(yesterdayStart.Format("2006-01-02"), shopCategoryIDs)
 	if err != nil {
 		return nil, err
@@ -161,6 +165,7 @@ func (s *DashboardService) TodayActualCompleted(shopCategoryIDs []uint64) (*dash
 		counts[row.ShopCategoryID] = &dashboardDTO.ActualCompletedCategoryDTO{
 			ShopCategoryID: row.ShopCategoryID,
 			Count:          row.TodayCount,
+			PendingCount:   row.PendingCount,
 		}
 	}
 	snapshotCounts := categoryCounts(snapshotRows)
@@ -178,7 +183,20 @@ func (s *DashboardService) TodayActualCompleted(shopCategoryIDs []uint64) (*dash
 		result.TotalCount += row.TotalCount
 		result.CompletedOrderCount += row.CompletedOrderCount
 	}
+	for _, row := range yesterdayPendingRows {
+		result.YesterdayPendingCount += row.Count
+		category, exists := counts[row.ShopCategoryID]
+		if !exists {
+			category = &dashboardDTO.ActualCompletedCategoryDTO{ShopCategoryID: row.ShopCategoryID}
+			counts[row.ShopCategoryID] = category
+		}
+		category.YesterdayPendingCount += row.Count
+	}
+	// pendingCount remains today's pending quantity for compatibility. The dashboard
+	// uses totalPendingCount when it needs the complete current backlog.
+	result.TotalPendingCount = result.PendingCount + result.YesterdayPendingCount
 	for _, category := range counts {
+		category.TotalPendingCount = category.PendingCount + category.YesterdayPendingCount
 		result.CategoryList = append(result.CategoryList, *category)
 	}
 	sort.Slice(result.CategoryList, func(left, right int) bool {

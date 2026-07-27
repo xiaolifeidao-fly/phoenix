@@ -573,11 +573,14 @@ type SaveAssignRefundRuleDTO struct {
 // AssignApprovalRateRuleDTO 分配策略-审核通过率维度规则，按品类维护。
 type AssignApprovalRateRuleDTO struct {
 	BarryBaseDTO
-	ShopCategoryID         int64   `json:"shopCategoryId"`
-	Enabled                bool    `json:"enabled"`
-	MinFansNum             int64   `json:"minFansNum"`
-	RecentApprovalRateDays int     `json:"recentApprovalRateDays"`
-	MinRecentApprovalRate  float64 `json:"minRecentApprovalRate"`
+	ShopCategoryID           int64   `json:"shopCategoryId"`
+	Enabled                  bool    `json:"enabled"`
+	MinFansNum               int64   `json:"minFansNum"`
+	RecentApprovalRateDays   int     `json:"recentApprovalRateDays"`
+	MinRecentApprovalRate    float64 `json:"minRecentApprovalRate"`
+	MinDailySubmitNum        int64   `json:"minDailySubmitNum"`
+	DailyAssignTimeRanges    string  `json:"dailyAssignTimeRanges,omitempty"`
+	WhitelistShopCategoryIDs string  `json:"whitelistShopCategoryIds,omitempty"`
 }
 
 type AssignApprovalRateRuleQueryDTO struct {
@@ -586,12 +589,15 @@ type AssignApprovalRateRuleQueryDTO struct {
 }
 
 type SaveAssignApprovalRateRuleDTO struct {
-	ID                     int     `json:"id,omitempty"`
-	ShopCategoryID         int64   `json:"shopCategoryId"`
-	Enabled                bool    `json:"enabled"`
-	MinFansNum             int64   `json:"minFansNum"`
-	RecentApprovalRateDays int     `json:"recentApprovalRateDays"`
-	MinRecentApprovalRate  float64 `json:"minRecentApprovalRate"`
+	ID                       int     `json:"id,omitempty"`
+	ShopCategoryID           int64   `json:"shopCategoryId"`
+	Enabled                  bool    `json:"enabled"`
+	MinFansNum               int64   `json:"minFansNum"`
+	RecentApprovalRateDays   int     `json:"recentApprovalRateDays"`
+	MinRecentApprovalRate    float64 `json:"minRecentApprovalRate"`
+	MinDailySubmitNum        int64   `json:"minDailySubmitNum"`
+	DailyAssignTimeRanges    string  `json:"dailyAssignTimeRanges,omitempty"`
+	WhitelistShopCategoryIDs string  `json:"whitelistShopCategoryIds,omitempty"`
 }
 
 // AssignVideoUserRuleDTO 分配策略-指定用户的视频维度过滤规则(覆盖品类全局视频规则), 按(shopCategoryId,userId)维护, user 域.
@@ -632,6 +638,11 @@ type DeleteAssignVideoUserRuleDTO struct {
 type AssignSwitchQueryDTO struct {
 	RequestDTO
 	ShopCategoryID int64 `json:"shopCategoryId,omitempty" form:"shopCategoryId"`
+}
+
+type WhitelistApprovalRateRuleDTO struct {
+	MinRecentApprovalRate  float64 `json:"minRecentApprovalRate"`
+	RecentApprovalRateDays *int    `json:"recentApprovalRateDays"`
 }
 
 // SaveAssignSwitchDTO 开/关某品类的维度总开关. enabled=true 开(插入), false 关(删除).
@@ -718,15 +729,18 @@ type UserDTO struct {
 
 type UserWhitelistDTO struct {
 	BarryBaseDTO
-	UserID         StringID `json:"userId"`
-	Username       string   `json:"username"`
-	Channel        string   `json:"channel,omitempty"`
-	Name           string   `json:"name,omitempty"`
-	Group          string   `json:"group,omitempty"`
-	GroupName      string   `json:"groupName,omitempty"`
-	ShopCategoryID StringID `json:"shopCategoryId,omitempty"`
-	Status         string   `json:"status,omitempty"`
-	Active         *bool    `json:"active,omitempty"`
+	UserID                 StringID `json:"userId"`
+	Username               string   `json:"username"`
+	Channel                string   `json:"channel,omitempty"`
+	Name                   string   `json:"name,omitempty"`
+	Group                  string   `json:"group,omitempty"`
+	GroupName              string   `json:"groupName,omitempty"`
+	ShopCategoryID         StringID `json:"shopCategoryId,omitempty"`
+	Status                 string   `json:"status,omitempty"`
+	Active                 *bool    `json:"active,omitempty"`
+	MinRecentApprovalRate  *float64 `json:"minRecentApprovalRate,omitempty"`
+	RecentApprovalRateDays *int     `json:"recentApprovalRateDays,omitempty"`
+	DailyAssignTimeRanges  string   `json:"dailyAssignTimeRanges,omitempty"`
 }
 
 type UserWhitelistQueryDTO struct {
@@ -750,9 +764,13 @@ type UpdateUserWhitelistGroupDTO struct {
 }
 
 type SaveUserWhitelistDTO struct {
-	UserID         int64  `json:"userId" binding:"required"`
-	ShopCategoryID int64  `json:"shopCategoryId" binding:"required"`
-	Group          string `json:"group,omitempty"`
+	UserID                 int64    `json:"userId" binding:"required"`
+	ShopCategoryID         int64    `json:"shopCategoryId" binding:"required"`
+	Group                  string   `json:"group,omitempty"`
+	UpdatePolicy           bool     `json:"updatePolicy,omitempty"`
+	MinRecentApprovalRate  *float64 `json:"minRecentApprovalRate,omitempty"`
+	RecentApprovalRateDays *int     `json:"recentApprovalRateDays,omitempty"`
+	DailyAssignTimeRanges  *string  `json:"dailyAssignTimeRanges,omitempty"`
 }
 
 type PaymentMethodDTO struct {
@@ -941,12 +959,13 @@ type RecordSummaryDTO struct {
 }
 
 type ManualTaskStatisticsQueryDTO struct {
-	StartDate       string `json:"startDate,omitempty" form:"startDate"`
-	EndDate         string `json:"endDate,omitempty" form:"endDate"`
-	ShopCategoryIDs string `json:"shopCategoryIds,omitempty" form:"shopCategoryIds"`
-	UserID          int64  `json:"userId,omitempty" form:"userId"`
-	Page            int    `json:"page,omitempty" form:"page"`
-	PageSize        int    `json:"pageSize,omitempty" form:"pageSize"`
+	StartDate             string `json:"startDate,omitempty" form:"startDate"`
+	EndDate               string `json:"endDate,omitempty" form:"endDate"`
+	ShopCategoryIDs       string `json:"shopCategoryIds,omitempty" form:"shopCategoryIds"`
+	ExcludeWhitelistUsers bool   `json:"excludeWhitelistUsers,omitempty" form:"excludeWhitelistUsers"`
+	UserID                int64  `json:"userId,omitempty" form:"userId"`
+	Page                  int    `json:"page,omitempty" form:"page"`
+	PageSize              int    `json:"pageSize,omitempty" form:"pageSize"`
 }
 
 type ManualOrderDetailQueryDTO struct {
@@ -973,6 +992,7 @@ type ManualOrderDetailDTO struct {
 	FansNum        int64   `json:"fansNum"`
 	TotalSubmitNum int64   `json:"totalSubmitNum"`
 	UnSubmitNum    int64   `json:"unSubmitNum"`
+	UnCheckNum     int64   `json:"unCheckNum"`
 	CheckedNum     int64   `json:"checkedNum"`
 	CheckErrorNum  int64   `json:"checkErrorNum"`
 	ApprovalRate   float64 `json:"approvalRate"`

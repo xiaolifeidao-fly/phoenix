@@ -26,6 +26,7 @@ export interface ManualOrderDetail {
   fansNum: number;
   totalSubmitNum: number;
   unSubmitNum: number;
+  unCheckNum: number;
   checkedNum: number;
   checkErrorNum: number;
   approvalRate: number;
