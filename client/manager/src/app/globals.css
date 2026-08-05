@@ -137,9 +137,15 @@
     --manager-duration-slow: 0ms;
   }
 
-  *,
-  *::before,
-  *::after {
+  /* 这里必须把 antd 的元素整体排除掉，不能一刀切压成 1ms。
+     antd 弹层用 animation-fill-mode: both + play-state 控制显隐，关键帧
+     起点是 opacity: 0，rc-motion 要等 animationend 回调才摘掉隐藏类；
+     同时 rc-trigger 会在动画期间量弹层尺寸来推算定位。压成 1ms 会同时
+     打断这两件事 —— 弹层要么停在透明态，要么被定位到左上角 (0, 0)。
+     表现为开了「减弱动态效果」的机器上全站下拉框/气泡都不可用。 */
+  *:not([class*="ant-"]),
+  *:not([class*="ant-"])::before,
+  *:not([class*="ant-"])::after {
     animation-duration: 1ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 1ms !important;
