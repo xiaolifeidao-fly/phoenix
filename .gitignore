@@ -6,7 +6,6 @@ config/config.ini
 .vscode/
 !.env.dev
 .env
-!client/manager/configs/.env
 **/__pycache__
 **__pycache__
 /**/*.png
@@ -28,3 +27,8 @@ package
 *.tar.gz
 !.codex
 old_source
+
+# Local web-api runtime artifacts
+/server/suffer/web-api/web-api
+/server/suffer/web-api/web-api.pid
+/server/suffer/web-api/logs/
