@@ -1920,7 +1920,7 @@ select {
 }
 
 .order-records-table .ant-table-tbody > tr.ant-table-row-selected > td {
-  background: var(--manager-info-bg) !important;
+  background: color-mix(in srgb, var(--manager-info) 8%, var(--manager-surface)) !important;
 }
 
 .order-records-table .ant-table-tbody > tr.ant-table-row-selected > td:first-child {
