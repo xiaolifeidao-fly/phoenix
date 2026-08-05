@@ -13,6 +13,7 @@ import {
 } from "@ant-design/icons";
 import { Button, DatePicker, Input, Modal, Select, Space, Table, Tag, Typography } from "antd";
 import { message } from "@/utils/notify";
+import { dateRangePresets } from "@/utils/date-range-presets";
 import type { ColumnsType } from "antd/es/table";
 import { fetchManualChannels, type ManualChannelRecord } from "../../api/channel.api";
 import {
@@ -322,6 +323,7 @@ export function ManualWithdrawApprovalPanel() {
             />
             <RangePicker
               showTime
+              presets={dateRangePresets}
               value={dateRangeValue}
               onChange={(value) => {
                 if (!value || !value[0] || !value[1]) {

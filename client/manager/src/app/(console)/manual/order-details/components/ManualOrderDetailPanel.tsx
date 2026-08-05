@@ -8,6 +8,7 @@ import type { TableProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { TablePaginationConfig } from "antd/es/table/interface";
 import { message } from "@/utils/notify";
+import { dateRangePresets } from "@/utils/date-range-presets";
 import { fetchManualTaskStatisticUsers, fetchManualTaskStatistics, type ManualShopCategoryOption, type ManualUserOption } from "../../api/task-statistics.api";
 import { fetchManualOrderDetailSecUid, fetchManualOrderDetails, type ManualOrderDetail, type ManualOrderDetailPage } from "../../api/order-details.api";
 
@@ -22,7 +23,6 @@ export function ManualOrderDetailPanel() {
   const [userOptions, setUserOptions] = useState<ManualUserOption[]>([]);
   const [shopCategoryOptions, setShopCategoryOptions] = useState<ManualShopCategoryOption[]>([]);
   const userOptionCacheRef = useRef(new Map<number, ManualUserOption>());
-  const [selectingStartDate, setSelectingStartDate] = useState<Dayjs | null>(null);
   const [filters, setFilters] = useState({
     dateRange: defaultDateRange,
     userId: undefined as number | undefined,
@@ -202,18 +202,12 @@ export function ManualOrderDetailPanel() {
               <Text type="secondary">做单日期区间</Text>
               <RangePicker
                 allowClear={false}
+                presets={dateRangePresets}
                 style={{ width: "100%", marginTop: 8 }}
                 value={filters.dateRange}
-                disabledDate={(current) => Boolean(selectingStartDate && Math.abs(current.diff(selectingStartDate, "day")) > 6)}
-                onCalendarChange={(dates) => setSelectingStartDate(dates?.[0] ?? null)}
                 onChange={(value) => {
-                  setSelectingStartDate(null);
                   if (!value?.[0] || !value?.[1]) return;
                   const nextRange: [Dayjs, Dayjs] = [value[0].startOf("day"), value[1].startOf("day")];
-                  if (nextRange[1].diff(nextRange[0], "day") > 6) {
-                    message.warning("做单日期区间最多选择 7 天");
-                    return;
-                  }
                   setFilters((current) => ({ ...current, dateRange: nextRange }));
                 }}
               />

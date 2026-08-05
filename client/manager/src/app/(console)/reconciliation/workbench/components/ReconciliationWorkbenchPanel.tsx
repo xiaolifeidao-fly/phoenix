@@ -5,6 +5,7 @@ import { CalendarOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Button, DatePicker, Space, Tooltip, Typography } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 import { message } from "@/utils/notify";
+import { dateRangePresets } from "@/utils/date-range-presets";
 import {
   DEFAULT_RANGE_END,
   DEFAULT_RANGE_START,
@@ -24,12 +25,6 @@ const { RangePicker } = DatePicker;
 const { Text } = Typography;
 
 const defaultRange: [Dayjs, Dayjs] = [dayjs(DEFAULT_RANGE_START), dayjs(DEFAULT_RANGE_END)];
-
-const quickRanges: { label: string; resolve: () => [Dayjs, Dayjs] }[] = [
-  { label: "本月", resolve: () => [dayjs().startOf("month"), dayjs()] },
-  { label: "近 7 天", resolve: () => [dayjs().subtract(6, "day"), dayjs()] },
-  { label: "上月", resolve: () => [dayjs().subtract(1, "month").startOf("month"), dayjs().subtract(1, "month").endOf("month")] },
-];
 
 export function ReconciliationWorkbenchPanel() {
   const [range, setRange] = useState<[Dayjs, Dayjs]>(defaultRange);
@@ -84,17 +79,11 @@ export function ReconciliationWorkbenchPanel() {
           </Text>
         </div>
         <div className="recon-toolbar-controls">
-          <Space size={6} wrap>
-            {quickRanges.map((item) => (
-              <Button key={item.label} size="small" onClick={() => setRange(item.resolve())}>
-                {item.label}
-              </Button>
-            ))}
-          </Space>
           <Space size={8} wrap>
             <RangePicker
               value={range}
               allowClear={false}
+              presets={dateRangePresets}
               suffixIcon={<CalendarOutlined />}
               style={{ width: 268 }}
               onChange={(value) =>

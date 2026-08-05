@@ -39,6 +39,7 @@ import {
   Typography,
 } from "antd";
 import { message } from "@/utils/notify";
+import { dateRangePresets } from "@/utils/date-range-presets";
 import type { ColumnsType } from "antd/es/table";
 import type { TableRowSelection } from "antd/es/table/interface";
 import { ORDER_STATUS_OPTIONS, type OrderRecord } from "../api/order.api";
@@ -921,6 +922,7 @@ export function OrderManagementPanel() {
                 <RangePicker
                   className="order-query-range"
                   showTime
+                  presets={dateRangePresets}
                   value={filters.range}
                   onChange={(value) => setFilters((current) => ({ ...current, range: value as [Dayjs, Dayjs] | null }))}
                 />
