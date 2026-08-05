@@ -3,9 +3,13 @@ package order
 import (
 	baseDTO "common/base/dto"
 	"common/middleware/db"
+	"context"
 	"fmt"
-	"math/big"
+	"log"
+	"strconv"
 	"strings"
+	barryService "suffer/service/barry"
+	kakrolotService "suffer/service/kakrolot"
 	orderDTO "suffer/service/order/dto"
 	orderRepository "suffer/service/order/repository"
 
@@ -26,6 +30,8 @@ type OrderService struct {
 	orderBkRecordRepository     *orderRepository.OrderBkRecordRepository
 	orderRecordRepository       *orderRepository.OrderRecordRepository
 	orderRefundRecordRepository *orderRepository.OrderRefundRecordRepository
+	barryService                *barryService.BarryService
+	kakrolotOrderService        *kakrolotService.OrderService
 }
 
 func NewOrderService() *OrderService {
@@ -34,6 +40,8 @@ func NewOrderService() *OrderService {
 		orderBkRecordRepository:     db.GetRepository[orderRepository.OrderBkRecordRepository](),
 		orderRecordRepository:       db.GetRepository[orderRepository.OrderRecordRepository](),
 		orderRefundRecordRepository: db.GetRepository[orderRepository.OrderRefundRecordRepository](),
+		barryService:                barryService.NewBarryService(),
+		kakrolotOrderService:        kakrolotService.NewOrderService(kakrolotService.NewClient()),
 	}
 }
 
@@ -49,6 +57,52 @@ func (s *OrderService) EnsureTable() error {
 		}
 	}
 	return nil
+}
+
+// parseCategoryIDs 解析逗号分隔的类目 ID，忽略非法项；返回空表示不按类目过滤
+func parseCategoryIDs(value string) []uint64 {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	parts := strings.Split(value, ",")
+	ids := make([]uint64, 0, len(parts))
+	seen := make(map[uint64]struct{}, len(parts))
+	for _, part := range parts {
+		id, err := strconv.ParseUint(strings.TrimSpace(part), 10, 64)
+		if err != nil || id == 0 {
+			continue
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+// parseOrderStatuses 解析逗号分隔的订单状态，去空去重
+func parseOrderStatuses(value string) []string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	parts := strings.Split(value, ",")
+	statuses := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		status := strings.TrimSpace(part)
+		if status == "" {
+			continue
+		}
+		if _, exists := seen[status]; exists {
+			continue
+		}
+		seen[status] = struct{}{}
+		statuses = append(statuses, status)
+	}
+	return statuses
 }
 
 func normalizeOrderPage(page, pageIndex, pageSize int) (int, int) {
@@ -254,6 +308,9 @@ func (s *OrderService) ListOrderRecords(query orderDTO.OrderRecordQueryDTO) (*ba
 	}
 	pageIndex, pageSize := normalizeOrderPage(query.Page, query.PageIndex, query.PageSize)
 	dbQuery := s.orderRecordRepository.Db.Model(&orderRepository.OrderRecord{}).Where("active = ?", 1)
+	if query.AbnormalOnly {
+		dbQuery = dbQuery.Where("exception_flag = ?", 1)
+	}
 	if query.OrderID > 0 {
 		dbQuery = dbQuery.Where("id = ?", query.OrderID)
 	}
@@ -263,13 +320,17 @@ func (s *OrderService) ListOrderRecords(query orderDTO.OrderRecordQueryDTO) (*ba
 	if query.ShopID > 0 {
 		dbQuery = dbQuery.Where("shop_id = ?", query.ShopID)
 	}
-	if query.ShopCategoryID > 0 {
+	if categoryIDs := parseCategoryIDs(query.ShopCategoryIDs); len(categoryIDs) > 0 {
+		dbQuery = dbQuery.Where("shop_category_id IN ?", categoryIDs)
+	} else if query.ShopCategoryID > 0 {
 		dbQuery = dbQuery.Where("shop_category_id = ?", query.ShopCategoryID)
 	}
 	if query.UserID > 0 {
 		dbQuery = dbQuery.Where("user_id = ?", query.UserID)
 	}
-	if value := strings.TrimSpace(query.OrderStatus); value != "" {
+	if statuses := parseOrderStatuses(query.OrderStatuses); len(statuses) > 0 {
+		dbQuery = dbQuery.Where("order_status IN ?", statuses)
+	} else if value := strings.TrimSpace(query.OrderStatus); value != "" {
 		dbQuery = dbQuery.Where("order_status = ?", value)
 	}
 	if value := strings.TrimSpace(query.OrderHash); value != "" {
@@ -296,6 +357,24 @@ func (s *OrderService) ListOrderRecords(query orderDTO.OrderRecordQueryDTO) (*ba
 	if value := strings.TrimSpace(query.EndTime); value != "" {
 		dbQuery = dbQuery.Where("created_time <= ?", value)
 	}
+	if query.SubmitRateMin != nil {
+		dbQuery = dbQuery.Where(submitRateExpr+" >= ?", *query.SubmitRateMin)
+	}
+	if query.SubmitRateMax != nil {
+		dbQuery = dbQuery.Where(submitRateExpr+" <= ?", *query.SubmitRateMax)
+	}
+	if query.GrowthRateMin != nil {
+		dbQuery = dbQuery.Where(growthRateExpr+" >= ?", *query.GrowthRateMin)
+	}
+	if query.GrowthRateMax != nil {
+		dbQuery = dbQuery.Where(growthRateExpr+" <= ?", *query.GrowthRateMax)
+	}
+	if query.AssignFinishTimesMin != nil {
+		dbQuery = dbQuery.Where("assign_finish_times >= ?", *query.AssignFinishTimesMin)
+	}
+	if query.AssignFinishTimesMax != nil {
+		dbQuery = dbQuery.Where("assign_finish_times <= ?", *query.AssignFinishTimesMax)
+	}
 	var total int64
 	if err := dbQuery.Count(&total).Error; err != nil {
 		return nil, err
@@ -306,6 +385,14 @@ func (s *OrderService) ListOrderRecords(query orderDTO.OrderRecordQueryDTO) (*ba
 	}
 	return baseDTO.BuildPage(int(total), db.ToDTOs[orderDTO.OrderRecordDTO](entities)), nil
 }
+
+// 提交率 / 上量率的 SQL 表达式，分母为 0 时与前端展示保持一致按 0% 处理。
+// end_num、init_num 为无符号列，先转成有符号再相减，避免 MySQL 下溢。
+const (
+	submitRateExpr = "(CASE WHEN order_assign_num > 0 THEN order_submit_num * 100.0 / order_assign_num ELSE 0 END)"
+	growthRateExpr = "(CASE WHEN order_assign_num > 0 THEN GREATEST(CAST(end_num AS SIGNED) - CAST(init_num AS SIGNED), 0) * 100.0 / order_assign_num ELSE 0 END)"
+)
+
 func (s *OrderService) GetOrderRecordByID(id uint) (*orderDTO.OrderRecordDTO, error) {
 	entity, err := s.orderRecordRepository.FindById(id)
 	if err != nil {
@@ -599,110 +686,267 @@ func (s *OrderService) DeleteOrderRefundRecord(id uint) error {
 	return err
 }
 
-// RefundOrderRecord 管理端退单：校验订单状态并生成退单记录，同步将订单置为退款中。
-// 仅 PENDING / INIT 状态允许退单，且不允许对同一订单重复退单。
-func (s *OrderService) RefundOrderRecord(id uint, operator string) (*orderDTO.OrderRefundRecordDTO, error) {
+// RefundOrderRecord 管理端退单：转调 kakrolot 的退单接口，由 kakrolot 落退单记录并通知 barry。
+// 仅 PENDING / INIT 状态允许退单，重复退单由 kakrolot 判重。
+func (s *OrderService) RefundOrderRecord(ctx context.Context, id uint, operator string, token string) error {
 	if s.orderRecordRepository.Db == nil {
-		return nil, fmt.Errorf("database is not initialized")
+		return fmt.Errorf("database is not initialized")
 	}
 	entity, err := s.orderRecordRepository.FindById(id)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if entity.Active == 0 {
-		return nil, gorm.ErrRecordNotFound
+		return gorm.ErrRecordNotFound
 	}
 	status := strings.TrimSpace(entity.OrderStatus)
 	if status != OrderStatusPending && status != OrderStatusInit {
-		return nil, fmt.Errorf("订单不允许退单")
+		return fmt.Errorf("订单不允许退单")
 	}
-	var refundCount int64
-	if err := s.orderRefundRecordRepository.Db.Model(&orderRepository.OrderRefundRecord{}).
-		Where("active = ? AND order_id = ?", 1, uint64(entity.Id)).Count(&refundCount).Error; err != nil {
-		return nil, err
+	if err := s.kakrolotOrderService.Refund(ctx, uint64(entity.Id), token); err != nil {
+		return err
 	}
-	if refundCount > 0 {
-		return nil, fmt.Errorf("不允许重复退单")
-	}
-	created, err := s.orderRefundRecordRepository.Create(&orderRepository.OrderRefundRecord{
-		TenantID:          entity.TenantID,
-		OrderID:           uint64(entity.Id),
-		RefundAmount:      defaultOrderDecimal(entity.OrderAmount),
-		ShopCategoryID:    entity.ShopCategoryID,
-		RefundNum:         0,
-		OrderRefundStatus: OrderStatusRefundPending,
-	})
-	if err != nil {
-		return nil, err
-	}
-	entity.OrderStatus = OrderStatusRefundPending
 	if op := strings.TrimSpace(operator); op != "" {
-		entity.UpdatedBy = op
+		s.orderRecordRepository.Db.Model(&orderRepository.OrderRecord{}).
+			Where("id = ?", uint64(entity.Id)).Update("updated_by", op)
 	}
-	if _, err := s.orderRecordRepository.SaveOrUpdate(entity); err != nil {
-		return nil, err
-	}
-	return db.ToDTO[orderDTO.OrderRefundRecordDTO](created), nil
+	return nil
 }
 
-// BkOrderRecord 管理端补款：校验订单状态并生成补款记录与金额明细。
-// 仅 REFUND / DONE 状态允许补款，补款数量需在订单总量范围内，且不允许重复补款。
-func (s *OrderService) BkOrderRecord(id uint, num uint64, operator string) (*orderDTO.OrderBkRecordDTO, error) {
+// RefundOrderRecordBatch 批量退单，逐单转调 kakrolot，返回每单的失败原因。
+func (s *OrderService) RefundOrderRecordBatch(ctx context.Context, ids []uint, operator string, token string) *orderDTO.OrderActionBatchResultDTO {
+	result := &orderDTO.OrderActionBatchResultDTO{Failures: []orderDTO.OrderActionFailureDTO{}}
+	for _, id := range ids {
+		if err := s.RefundOrderRecord(ctx, id, operator, token); err != nil {
+			message := err.Error()
+			if err == gorm.ErrRecordNotFound {
+				message = "订单不存在"
+			}
+			result.Failed++
+			result.Failures = append(result.Failures, orderDTO.OrderActionFailureDTO{
+				OrderID: uint64(id),
+				Message: message,
+			})
+			continue
+		}
+		result.Succeeded++
+	}
+	return result
+}
+
+// BkOrderRecord 管理端补款：转调 kakrolot 的补款接口，由 kakrolot 落补款记录与金额明细。
+// 仅 REFUND / DONE 状态允许补款，重复补款与金额计算由 kakrolot 负责。
+func (s *OrderService) BkOrderRecord(ctx context.Context, id uint, num uint64, operator string, token string) error {
 	if s.orderRecordRepository.Db == nil {
-		return nil, fmt.Errorf("database is not initialized")
+		return fmt.Errorf("database is not initialized")
 	}
 	if num == 0 {
-		return nil, fmt.Errorf("补款数量无效")
+		return fmt.Errorf("补款数量无效")
 	}
 	entity, err := s.orderRecordRepository.FindById(id)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if entity.Active == 0 {
-		return nil, gorm.ErrRecordNotFound
+		return gorm.ErrRecordNotFound
 	}
 	status := strings.TrimSpace(entity.OrderStatus)
 	if status != OrderStatusRefund && status != OrderStatusDone {
-		return nil, fmt.Errorf("此订单不允许补款")
+		return fmt.Errorf("此订单不允许补款")
 	}
 	if entity.OrderNum > 0 && int64(num) > entity.OrderNum {
-		return nil, fmt.Errorf("补款数量不能大于此订单的总数量")
+		return fmt.Errorf("补款数量不能大于此订单的总数量")
 	}
-	var bkCount int64
-	if err := s.orderBkRecordRepository.Db.Model(&orderRepository.OrderBkRecord{}).
-		Where("active = ? AND order_id = ?", 1, uint64(entity.Id)).Count(&bkCount).Error; err != nil {
-		return nil, err
+	if err := s.kakrolotOrderService.Bk(ctx, uint64(entity.Id), num, token); err != nil {
+		return err
 	}
-	if bkCount > 0 {
-		return nil, fmt.Errorf("不能重复补款")
+	if op := strings.TrimSpace(operator); op != "" {
+		s.orderRecordRepository.Db.Model(&orderRepository.OrderRecord{}).
+			Where("id = ?", uint64(entity.Id)).Update("updated_by", op)
 	}
-	amount := multiplyOrderDecimal(entity.Price, num)
-	created, err := s.orderBkRecordRepository.Create(&orderRepository.OrderBkRecord{
-		TenantID:       entity.TenantID,
-		OrderID:        uint64(entity.Id),
-		Amount:         amount,
-		Num:            num,
-		ShopCategoryID: entity.ShopCategoryID,
-		ShopID:         entity.ShopID,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if _, err := s.orderAmountDetailRepository.Create(&orderRepository.OrderAmountDetail{
-		OrderID:             uint64(entity.Id),
-		OrderConsumerAmount: amount,
-		Description:         "补款:" + amount + "元",
-	}); err != nil {
-		return nil, err
-	}
-	return db.ToDTO[orderDTO.OrderBkRecordDTO](created), nil
+	return nil
 }
 
-func multiplyOrderDecimal(price string, num uint64) string {
-	rat, ok := new(big.Rat).SetString(strings.TrimSpace(price))
-	if !ok {
-		return "0.00000000"
+// MarkOrderException 管理端异常打标：先调异常打标接口，再调 barry 停止分发。
+// 打标接口不鉴权，barry 走自己的网关凭证，因此这里不需要登录 token。
+// 仅 PENDING(进行中) 且未被标记异常的订单允许打标。
+// 若打标成功但停止分发失败，异常原因会补上未停止分发的说明，并返回错误提示人工重试。
+func (s *OrderService) MarkOrderException(ctx context.Context, id uint, reason string, operator string) error {
+	if s.orderRecordRepository.Db == nil {
+		return fmt.Errorf("database is not initialized")
 	}
-	rat.Mul(rat, new(big.Rat).SetUint64(num))
-	return rat.FloatString(8)
+	entity, err := s.orderRecordRepository.FindById(id)
+	if err != nil {
+		return err
+	}
+	if entity.Active == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	if strings.TrimSpace(entity.OrderStatus) != OrderStatusPending {
+		return fmt.Errorf("仅进行中的订单允许标记异常")
+	}
+	if entity.IsAbnormal {
+		return fmt.Errorf("订单已标记异常")
+	}
+
+	orderID := uint64(entity.Id)
+	if err := s.kakrolotOrderService.MarkException(ctx, orderID, reason); err != nil {
+		return fmt.Errorf("标记异常失败: %w", err)
+	}
+
+	if _, err := s.barryService.OrderAssign.StopAssign(ctx, orderID); err != nil {
+		s.appendExceptionReason(orderID, stopAssignFailedReason(err), operator)
+		return fmt.Errorf("已标记异常，但停止分发失败: %w", err)
+	}
+	if op := strings.TrimSpace(operator); op != "" {
+		s.orderRecordRepository.Db.Model(&orderRepository.OrderRecord{}).
+			Where("id = ?", orderID).Update("updated_by", op)
+	}
+	return nil
+}
+
+// MarkOrderExceptionBatch 批量异常打标，逐单执行，返回每单的失败原因。
+func (s *OrderService) MarkOrderExceptionBatch(ctx context.Context, ids []uint, reason string, operator string) *orderDTO.OrderActionBatchResultDTO {
+	result := &orderDTO.OrderActionBatchResultDTO{Failures: []orderDTO.OrderActionFailureDTO{}}
+	for _, id := range ids {
+		if err := s.MarkOrderException(ctx, id, reason, operator); err != nil {
+			message := err.Error()
+			if err == gorm.ErrRecordNotFound {
+				message = "订单不存在"
+			}
+			result.Failed++
+			result.Failures = append(result.Failures, orderDTO.OrderActionFailureDTO{
+				OrderID: uint64(id),
+				Message: message,
+			})
+			continue
+		}
+		result.Succeeded++
+	}
+	return result
+}
+
+// ForceFinishOrders 管理端强制完成：交给 barry 停止分发、将 assignment/shop 置为完成并通知 kak。
+// 一次请求把所有订单打包给 barry，barry 逐单处理并返回逐单结果。
+func (s *OrderService) ForceFinishOrders(ctx context.Context, ids []uint, operator string) (*orderDTO.OrderActionBatchResultDTO, error) {
+	if s.orderRecordRepository.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("请选择需要强制完成的订单")
+	}
+	result := &orderDTO.OrderActionBatchResultDTO{Failures: []orderDTO.OrderActionFailureDTO{}}
+	orderIDs := make([]uint64, 0, len(ids))
+	orders := make([]barryService.ForceFinishOrderDTO, 0, len(ids))
+	for _, id := range ids {
+		entity, err := s.orderRecordRepository.FindById(id)
+		if err != nil || entity.Active == 0 {
+			result.Failed++
+			result.Failures = append(result.Failures, orderDTO.OrderActionFailureDTO{
+				OrderID: uint64(id),
+				Message: "订单不存在",
+			})
+			continue
+		}
+		status := strings.TrimSpace(entity.OrderStatus)
+		if status != OrderStatusPending && status != OrderStatusInit {
+			result.Failed++
+			result.Failures = append(result.Failures, orderDTO.OrderActionFailureDTO{
+				OrderID: uint64(id),
+				Message: "当前状态不允许强制完成",
+			})
+			continue
+		}
+		orderIDs = append(orderIDs, uint64(entity.Id))
+		// 带上总量与业务 ID，barry 查不到进件记录时靠这两个字段兜底通知 kak
+		orders = append(orders, barryService.ForceFinishOrderDTO{
+			OriShopID:  strconv.FormatUint(uint64(entity.Id), 10),
+			TotalNum:   entity.OrderNum,
+			BusinessID: strings.TrimSpace(entity.BusinessID),
+		})
+	}
+	if len(orders) == 0 {
+		return result, nil
+	}
+
+	// 逐单串行调用 barry，单笔失败不影响其他单
+	for index, order := range orders {
+		orderID := orderIDs[index]
+		responses, err := s.barryService.OrderAssign.ForceFinish(ctx, []barryService.ForceFinishOrderDTO{order})
+		if err != nil {
+			result.Failed++
+			result.Failures = append(result.Failures, orderDTO.OrderActionFailureDTO{
+				OrderID: orderID,
+				Message: err.Error(),
+			})
+			continue
+		}
+		// barry 未返回结果时按失败处理，避免误报成功
+		var item *barryService.ForceFinishResultDTO
+		for _, response := range responses {
+			if response != nil && response.OriShopID == order.OriShopID {
+				item = response
+				break
+			}
+		}
+		if item == nil {
+			result.Failed++
+			result.Failures = append(result.Failures, orderDTO.OrderActionFailureDTO{
+				OrderID: orderID,
+				Message: "barry 未返回处理结果",
+			})
+			continue
+		}
+		if !item.Success {
+			message := strings.TrimSpace(item.Message)
+			if message == "" {
+				message = "强制完成失败"
+			}
+			result.Failed++
+			result.Failures = append(result.Failures, orderDTO.OrderActionFailureDTO{
+				OrderID: orderID,
+				Message: message,
+			})
+			continue
+		}
+		result.Succeeded++
+		if op := strings.TrimSpace(operator); op != "" {
+			s.orderRecordRepository.Db.Model(&orderRepository.OrderRecord{}).
+				Where("id = ?", orderID).Update("updated_by", op)
+		}
+	}
+	return result, nil
+}
+
+// appendExceptionReason 在既有异常原因后补充说明，用于停止分发失败的场景。
+func (s *OrderService) appendExceptionReason(orderID uint64, note string, operator string) {
+	entity, err := s.orderRecordRepository.FindById(uint(orderID))
+	if err != nil {
+		return
+	}
+	reason := strings.TrimSpace(entity.ExceptionReason)
+	if reason == "" {
+		reason = note
+	} else if !strings.Contains(reason, note) {
+		reason = reason + "；" + note
+	}
+	if len([]rune(reason)) > 2000 {
+		reason = string([]rune(reason)[:2000])
+	}
+	updates := map[string]any{"exception_reason": reason}
+	if op := strings.TrimSpace(operator); op != "" {
+		updates["updated_by"] = op
+	}
+	if err := s.orderRecordRepository.Db.Model(&orderRepository.OrderRecord{}).
+		Where("id = ?", orderID).Updates(updates).Error; err != nil {
+		log.Printf("append exception reason failed: orderId=%d err=%v", orderID, err)
+	}
+}
+
+func stopAssignFailedReason(err error) string {
+	message := strings.TrimSpace(err.Error())
+	if message == "" {
+		return "已标记异常，但未停止分发"
+	}
+	return "已标记异常，但未停止分发（" + message + "）"
 }

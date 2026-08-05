@@ -63,7 +63,6 @@ type ActualCompletedPeriodCategoryRow struct {
 	TodayCount            int64  `gorm:"column:today_count"`
 	YesterdayCurrentCount int64  `gorm:"column:yesterday_current_count"`
 	YesterdaySameCount    int64  `gorm:"column:yesterday_same_count"`
-	PendingOrderCount     int64  `gorm:"column:pending_order_count"`
 	PendingCount          int64  `gorm:"column:pending_count"`
 	TotalOrderCount       int64  `gorm:"column:total_order_count"`
 	TotalCount            int64  `gorm:"column:total_count"`
@@ -256,6 +255,49 @@ func (r *DashboardRepository) YesterdayPendingByCategory(todayStart time.Time, s
 	return rows, err
 }
 
+// UninitiatedOrderCount mirrors the legacy "待接单" card: every order still in
+// INIT status, independent of when it was created.
+func (r *DashboardRepository) UninitiatedOrderCount(shopCategoryIDs []uint64) (int64, error) {
+	return r.OrderCountByStatus("INIT", shopCategoryIDs)
+}
+
+// RecentUninitiatedOrderCount counts INIT orders created within the requested
+// time window so the workbench can distinguish newly arrived orders.
+func (r *DashboardRepository) RecentUninitiatedOrderCount(start, end time.Time, shopCategoryIDs []uint64) (int64, error) {
+	if r.Db == nil {
+		return 0, fmt.Errorf("database is not initialized")
+	}
+	var row ActualCompletedRow
+	query := "SELECT COUNT(1) AS count FROM order_record WHERE order_status = 'INIT' AND created_time >= ? AND created_time <= ?"
+	args := []interface{}{start, end}
+	if len(shopCategoryIDs) > 0 {
+		query += " AND shop_category_id IN ?"
+		args = append(args, shopCategoryIDs)
+	}
+	err := r.Db.Raw(query, args...).Scan(&row).Error
+	return row.Count, err
+}
+
+// RemainingOrderCount is the number of in-progress orders still remaining.
+func (r *DashboardRepository) RemainingOrderCount(shopCategoryIDs []uint64) (int64, error) {
+	return r.OrderCountByStatus("PENDING", shopCategoryIDs)
+}
+
+func (r *DashboardRepository) OrderCountByStatus(orderStatus string, shopCategoryIDs []uint64) (int64, error) {
+	if r.Db == nil {
+		return 0, fmt.Errorf("database is not initialized")
+	}
+	var row ActualCompletedRow
+	query := "SELECT COUNT(1) AS count FROM order_record WHERE order_status = ?"
+	args := []interface{}{orderStatus}
+	if len(shopCategoryIDs) > 0 {
+		query += " AND shop_category_id IN ?"
+		args = append(args, shopCategoryIDs)
+	}
+	err := r.Db.Raw(query, args...).Scan(&row).Error
+	return row.Count, err
+}
+
 // ActualCompletedPeriodsByCategory scans the last two days once and derives all
 // three running totals needed by the dashboard from conditional aggregation.
 func (r *DashboardRepository) ActualCompletedPeriodsByCategory(todayStart, tomorrowStart, yesterdaySameEnd time.Time, shopCategoryIDs []uint64) ([]ActualCompletedPeriodCategoryRow, error) {
@@ -277,7 +319,6 @@ func (r *DashboardRepository) ActualCompletedPeriodsByCategory(todayStart, tomor
 			WHEN order_status = 'DONE' THEN IFNULL(order_num, 0)
 			WHEN order_status IN ('PENDING', 'REFUND') THEN IFNULL(end_num, 0) - IFNULL(init_num, 0)
 			ELSE 0 END ELSE 0 END), 0) AS yesterday_same_count,
-		COALESCE(SUM(CASE WHEN created_time >= ? AND created_time < ? AND order_status = 'PENDING' THEN 1 ELSE 0 END), 0) AS pending_order_count,
 		COALESCE(SUM(CASE WHEN created_time >= ? AND created_time < ? AND order_status = 'PENDING'
 			THEN IFNULL(order_num, 0) - (IFNULL(end_num, 0) - IFNULL(init_num, 0)) ELSE 0 END), 0) AS pending_count,
 		COALESCE(SUM(CASE WHEN created_time >= ? AND created_time < ? AND order_status IN ('PENDING', 'DONE', 'INIT') THEN 1 ELSE 0 END), 0) AS total_order_count,
@@ -289,7 +330,6 @@ func (r *DashboardRepository) ActualCompletedPeriodsByCategory(todayStart, tomor
 		todayStart, tomorrowStart,
 		yesterdayStart, todayStart,
 		yesterdayStart, yesterdaySameEnd,
-		todayStart, tomorrowStart,
 		todayStart, tomorrowStart,
 		todayStart, tomorrowStart,
 		todayStart, tomorrowStart,

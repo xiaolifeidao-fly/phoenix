@@ -9,10 +9,11 @@ import {
 import { Avatar, Breadcrumb, Dropdown, Layout, Menu, Tooltip, Typography } from "antd";
 import type { MenuProps } from "antd";
 import { usePathname, useRouter } from "next/navigation";
-import { PropsWithChildren, useCallback, useEffect, useMemo, useState } from "react";
+import { CSSProperties, PropsWithChildren, useCallback, useEffect, useMemo, useState } from "react";
 import { clearAuthToken, getAuthUser, type AuthUser } from "@/utils/auth";
-import { KeepAlive } from "./KeepAlive";
 import { findNavTrail, findOpenKeys, findPageTitle, navTree } from "./navigation";
+import { isCacheableRoute } from "./route-registry";
+import { TabWorkspace } from "./TabWorkspace";
 
 const { Content, Header, Sider } = Layout;
 const { Text } = Typography;
@@ -33,18 +34,46 @@ export function ManagerShell({ children }: ManagerShellProps) {
   // 菜单展开态受控：折叠时清空，展开时恢复当前路径所属分组
   const [openKeys, setOpenKeys] = useState<string[]>(() => findOpenKeys(activePath));
 
+  // 分组标题与叶子项都自带图标胶囊，图标不走 antd 的 icon 插槽，
+  // 这样才能对图标底板单独做悬停/选中的立体效果。
   const menuItems = useMemo<MenuProps["items"]>(
     () =>
-      navTree.map((node) => ({
-        key: node.key,
-        icon: node.icon,
-        label: node.label,
-        children: node.children?.map((child) => ({
-          key: child.key,
-          icon: child.icon,
-          label: child.label,
-        })),
-      })),
+      navTree.map((node) => {
+        const toneStyle = { "--manager-nav-accent": `var(--manager-${node.tone ?? "green"})` } as CSSProperties;
+        if (!node.children?.length) {
+          // 顶层单页（如工作台）走叶子项样式，避免出现没有子项的分组标题
+          return {
+            key: node.key,
+            label: (
+              <span className="manager-nav-item-content" style={toneStyle}>
+                <span className="manager-nav-item-icon">{node.icon}</span>
+                <span className="manager-nav-item-label">{node.label}</span>
+              </span>
+            ),
+          };
+        }
+        return {
+          key: node.key,
+          label: (
+            <span className="manager-nav-group-heading" style={toneStyle}>
+              <span className="manager-nav-group-icon">{node.icon}</span>
+              <span className="manager-nav-group-copy">
+                <b>{node.label}</b>
+                {node.caption ? <small>{node.caption}</small> : null}
+              </span>
+            </span>
+          ),
+          children: node.children?.map((child) => ({
+            key: child.key,
+            label: (
+              <span className="manager-nav-item-content" style={toneStyle}>
+                <span className="manager-nav-item-icon">{child.icon}</span>
+                <span className="manager-nav-item-label">{child.label}</span>
+              </span>
+            ),
+          })),
+        };
+      }),
     [],
   );
 
@@ -197,8 +226,12 @@ export function ManagerShell({ children }: ManagerShellProps) {
           </Dropdown>
         </Header>
 
+        {/*
+          已登记的路由由 TabWorkspace 统一挂载并常驻缓存（此时不渲染 children，
+          避免同一页面被渲染两次）；未登记的路由仍走默认的 App Router 渲染。
+        */}
         <Content className="manager-content">
-          <KeepAlive activeKey={activePath}>{children}</KeepAlive>
+          {isCacheableRoute(activePath) ? <TabWorkspace activePath={activePath} /> : children}
         </Content>
       </Layout>
     </Layout>

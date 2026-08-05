@@ -53,6 +53,10 @@ export class OrderRecord {
 
   assignFinishTimes = 0;
 
+  isAbnormal = false;
+
+  exceptionReason = "";
+
   createdTime = "";
 
   updatedTime = "";
@@ -70,16 +74,20 @@ export class OrderAmountDetail {
   createdTime = "";
 }
 
-export interface OrderListQuery extends Record<string, string | number | undefined> {
+export interface OrderListQuery extends Record<string, string | number | boolean | undefined> {
   pageIndex?: number;
   pageSize?: number;
   orderId?: number;
   tenantId?: number;
   shopId?: number;
   shopCategoryId?: number;
+  /** 多选类目，逗号分隔；为空表示查全部 */
+  shopCategoryIds?: string;
   userId?: number;
   userName?: string;
   orderStatus?: string;
+  /** 多选状态，逗号分隔 */
+  orderStatuses?: string;
   orderHash?: string;
   businessId?: string;
   businessKey?: string;
@@ -87,6 +95,16 @@ export interface OrderListQuery extends Record<string, string | number | undefin
   channel?: string;
   startTime?: string;
   endTime?: string;
+  abnormalOnly?: boolean;
+  /** 提交率区间（百分比，0-100） */
+  submitRateMin?: number;
+  submitRateMax?: number;
+  /** 上量率区间（百分比，0-100） */
+  growthRateMin?: number;
+  growthRateMax?: number;
+  /** 分发轮次区间 */
+  assignFinishTimesMin?: number;
+  assignFinishTimesMax?: number;
 }
 
 export const ORDER_STATUS_OPTIONS = [
@@ -117,6 +135,46 @@ export async function fetchOrderAmountDetails(orderId: number) {
 
 export async function refundOrder(orderId: number) {
   const response = await instance.post<ApiResponse<unknown>>(`/order-records/${orderId}/refund`);
+  return unwrapApiResponse(response.data);
+}
+
+export async function batchRefundOrders(orderIds: number[]) {
+  const response = await instance.post<ApiResponse<OrderActionBatchResult>>(
+    "/order-record-refunds/batch",
+    { orderIds },
+  );
+  return unwrapApiResponse(response.data);
+}
+
+/** 批量操作结果（批量退单、批量异常打标共用） */
+export interface OrderActionBatchResult {
+  succeeded: number;
+  failed: number;
+  failures: { orderId: number; message: string }[];
+}
+
+/** 异常打标：kakrolot 打标 + barry 停止分发 */
+export async function markOrderException(orderId: number, reason?: string) {
+  const response = await instance.post<ApiResponse<unknown>>(`/order-records/${orderId}/exception`, {
+    reason: reason?.trim() || undefined,
+  });
+  return unwrapApiResponse(response.data);
+}
+
+export async function batchMarkOrderException(orderIds: number[], reason?: string) {
+  const response = await instance.post<ApiResponse<OrderActionBatchResult>>(
+    "/order-record-exceptions/batch",
+    { orderIds, reason: reason?.trim() || undefined },
+  );
+  return unwrapApiResponse(response.data);
+}
+
+/** 强制完成：barry 停止分发 + assignment/shop 置完成 + 通知 kak */
+export async function forceFinishOrders(orderIds: number[]) {
+  const response = await instance.post<ApiResponse<OrderActionBatchResult>>(
+    "/order-record-force-finish",
+    { orderIds },
+  );
   return unwrapApiResponse(response.data);
 }
 

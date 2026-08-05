@@ -7,6 +7,8 @@ import (
 	"net/mail"
 	"strings"
 	authService "suffer/service/auth"
+	permissionRepository "suffer/service/permission/repository"
+	tenantRepository "suffer/service/tenant/repository"
 	userDTO "suffer/service/user/dto"
 	userRepository "suffer/service/user/repository"
 	"time"
@@ -207,11 +209,21 @@ func (s *UserService) ListUsers(query userDTO.UserQueryDTO) (*baseDTO.PageDTO[us
 	if err != nil {
 		return nil, err
 	}
-	tenantByUserID := make(map[int]userRepository.UserTenantRow, len(tenantRows))
+	tenantByUserID := make(map[int][]userDTO.UserTenantBindingDTO, len(tenantRows))
 	for _, row := range tenantRows {
-		if _, exists := tenantByUserID[row.UserID]; !exists {
-			tenantByUserID[row.UserID] = row
-		}
+		tenantByUserID[row.UserID] = append(tenantByUserID[row.UserID], userDTO.UserTenantBindingDTO{
+			ID: row.ID, TenantID: row.TenantID, TenantName: row.TenantName,
+		})
+	}
+	roleRows, err := s.userRepository.ListUserRoles(userIDs)
+	if err != nil {
+		return nil, err
+	}
+	roleByUserID := make(map[int][]userDTO.UserRoleBindingDTO, len(roleRows))
+	for _, row := range roleRows {
+		roleByUserID[row.UserID] = append(roleByUserID[row.UserID], userDTO.UserRoleBindingDTO{
+			ID: row.ID, RoleID: row.RoleID, RoleName: row.RoleName, RoleCode: row.RoleCode,
+		})
 	}
 
 	for _, item := range items {
@@ -220,10 +232,18 @@ func (s *UserService) ListUsers(query userDTO.UserQueryDTO) (*baseDTO.PageDTO[us
 			item.AccountStatus = account.AccountStatus
 			item.BalanceAmount = account.BalanceAmount
 		}
-		if tenant, ok := tenantByUserID[item.Id]; ok {
-			item.TenantUserID = tenant.ID
-			item.TenantID = tenant.TenantID
-			item.TenantName = tenant.TenantName
+		item.Roles = roleByUserID[item.Id]
+		if item.Roles == nil {
+			item.Roles = []userDTO.UserRoleBindingDTO{}
+		}
+		item.Tenants = tenantByUserID[item.Id]
+		if item.Tenants == nil {
+			item.Tenants = []userDTO.UserTenantBindingDTO{}
+		}
+		if len(item.Tenants) > 0 {
+			item.TenantUserID = item.Tenants[0].ID
+			item.TenantID = item.Tenants[0].TenantID
+			item.TenantName = item.Tenants[0].TenantName
 		}
 	}
 	return baseDTO.BuildPage(int(total), items), nil
@@ -517,6 +537,173 @@ func (s *UserService) DeleteUserLoginRecord(id uint) error {
 	entity.Active = 0
 	_, err = s.userLoginRecordRepository.SaveOrUpdate(entity)
 	return err
+}
+
+func (s *UserService) SaveUserRoleBindings(userID uint, req *userDTO.SaveUserRoleBindingsDTO) ([]userDTO.UserRoleBindingDTO, error) {
+	if s.userRoleRepository.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	if req == nil {
+		return nil, fmt.Errorf("request is nil")
+	}
+	if err := ensureUserExists(s.userRepository, uint64(userID)); err != nil {
+		return nil, err
+	}
+
+	roleIDs := uniqueUint64IDs(req.RoleIDs)
+	if len(roleIDs) == 0 {
+		return nil, fmt.Errorf("at least one role is required")
+	}
+	var roles []permissionRepository.Role
+	if err := s.userRoleRepository.Db.Where("active = ? AND id IN ?", 1, roleIDs).Find(&roles).Error; err != nil {
+		return nil, err
+	}
+	if len(roles) != len(roleIDs) {
+		return nil, fmt.Errorf("some roles were not found")
+	}
+	roleCodeByID := make(map[uint64]string, len(roles))
+	for _, role := range roles {
+		roleCodeByID[uint64(role.Id)] = role.Code
+	}
+
+	err := s.userRoleRepository.Db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&userRepository.UserRole{}).
+			Where("user_id = ? AND active = ?", userID, 1).
+			Updates(map[string]interface{}{"active": 0, "updated_time": time.Now()}).Error; err != nil {
+			return err
+		}
+		for _, roleID := range roleIDs {
+			if err := activateUserRoleBinding(tx, uint64(userID), roleID); err != nil {
+				return err
+			}
+		}
+		return tx.Model(&userRepository.User{}).
+			Where("id = ? AND active = ?", userID, 1).
+			Updates(map[string]interface{}{"role": roleCodeByID[roleIDs[0]], "updated_time": time.Now()}).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	authService.ClearUserRoleCache(uint64(userID))
+
+	rows, err := s.userRepository.ListUserRoles([]int{int(userID)})
+	if err != nil {
+		return nil, err
+	}
+	return toUserRoleBindings(rows), nil
+}
+
+func (s *UserService) SaveUserTenantBindings(userID uint, req *userDTO.SaveUserTenantBindingsDTO) ([]userDTO.UserTenantBindingDTO, error) {
+	if s.tenantUserRepository.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	if req == nil {
+		return nil, fmt.Errorf("request is nil")
+	}
+	if err := ensureUserExists(s.userRepository, uint64(userID)); err != nil {
+		return nil, err
+	}
+
+	tenantIDs := uniqueUint64IDs(req.TenantIDs)
+	if len(tenantIDs) > 0 {
+		var count int64
+		if err := s.tenantUserRepository.Db.Model(&tenantRepository.Tenant{}).
+			Where("active = ? AND id IN ?", 1, tenantIDs).
+			Count(&count).Error; err != nil {
+			return nil, err
+		}
+		if count != int64(len(tenantIDs)) {
+			return nil, fmt.Errorf("some tenants were not found")
+		}
+	}
+
+	err := s.tenantUserRepository.Db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&userRepository.TenantUser{}).
+			Where("user_id = ? AND active = ?", userID, 1).
+			Updates(map[string]interface{}{"active": 0, "updated_time": time.Now()}).Error; err != nil {
+			return err
+		}
+		for _, tenantID := range tenantIDs {
+			if err := activateTenantUserBinding(tx, uint64(userID), tenantID); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	authService.ClearUserTenantCache(uint64(userID))
+
+	rows, err := s.userRepository.ListUserTenants([]int{int(userID)})
+	if err != nil {
+		return nil, err
+	}
+	return toUserTenantBindings(rows), nil
+}
+
+func activateUserRoleBinding(tx *gorm.DB, userID, roleID uint64) error {
+	var existing userRepository.UserRole
+	result := tx.Where("user_id = ? AND role_id = ?", userID, roleID).Order("id DESC").Limit(1).Find(&existing)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected > 0 {
+		return tx.Model(&existing).Updates(map[string]interface{}{"active": 1, "updated_time": time.Now()}).Error
+	}
+	created := &userRepository.UserRole{UserID: userID, RoleID: roleID}
+	created.Init()
+	return tx.Create(created).Error
+}
+
+func activateTenantUserBinding(tx *gorm.DB, userID, tenantID uint64) error {
+	var existing userRepository.TenantUser
+	result := tx.Where("user_id = ? AND tenant_id = ?", userID, tenantID).Order("id DESC").Limit(1).Find(&existing)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected > 0 {
+		return tx.Model(&existing).Updates(map[string]interface{}{"active": 1, "updated_time": time.Now()}).Error
+	}
+	created := &userRepository.TenantUser{UserID: userID, TenantID: tenantID}
+	created.Init()
+	return tx.Create(created).Error
+}
+
+func uniqueUint64IDs(values []uint64) []uint64 {
+	result := make([]uint64, 0, len(values))
+	seen := make(map[uint64]struct{}, len(values))
+	for _, value := range values {
+		if value == 0 {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
+}
+
+func toUserRoleBindings(rows []userRepository.UserRoleRow) []userDTO.UserRoleBindingDTO {
+	result := make([]userDTO.UserRoleBindingDTO, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, userDTO.UserRoleBindingDTO{
+			ID: row.ID, RoleID: row.RoleID, RoleName: row.RoleName, RoleCode: row.RoleCode,
+		})
+	}
+	return result
+}
+
+func toUserTenantBindings(rows []userRepository.UserTenantRow) []userDTO.UserTenantBindingDTO {
+	result := make([]userDTO.UserTenantBindingDTO, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, userDTO.UserTenantBindingDTO{
+			ID: row.ID, TenantID: row.TenantID, TenantName: row.TenantName,
+		})
+	}
+	return result
 }
 
 func (s *UserService) ListUserRoles(query userDTO.UserRoleQueryDTO) (*baseDTO.PageDTO[userDTO.UserRoleDTO], error) {

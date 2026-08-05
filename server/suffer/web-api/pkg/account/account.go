@@ -6,6 +6,8 @@ import (
 	"strconv"
 	accountService "suffer/service/account"
 	accountDTO "suffer/service/account/dto"
+	kakrolotService "suffer/service/kakrolot"
+	webAuth "suffer/web-api/auth"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -13,7 +15,8 @@ import (
 
 type AccountHandler struct {
 	*commonRouter.BaseHandler
-	accountService *accountService.AccountService
+	accountService         *accountService.AccountService
+	kakrolotAccountService *kakrolotService.AccountService
 }
 
 func NewAccountHandler() *AccountHandler {
@@ -21,8 +24,9 @@ func NewAccountHandler() *AccountHandler {
 	_ = service.EnsureTable()
 
 	return &AccountHandler{
-		BaseHandler:    &commonRouter.BaseHandler{},
-		accountService: service,
+		BaseHandler:            &commonRouter.BaseHandler{},
+		accountService:         service,
+		kakrolotAccountService: kakrolotService.NewAccountService(kakrolotService.NewClient()),
 	}
 }
 
@@ -31,6 +35,7 @@ func (h *AccountHandler) RegisterHandler(engine *gin.RouterGroup) {
 	engine.GET("/accounts/:id", h.getAccountByID)
 	engine.POST("/accounts", h.createAccount)
 	engine.PUT("/accounts/:id", h.updateAccount)
+	engine.POST("/accounts/:id/recharge", h.rechargeAccount)
 	engine.DELETE("/accounts/:id", h.deleteAccount)
 
 	engine.GET("/account-details", h.listAccountDetails)
@@ -38,6 +43,35 @@ func (h *AccountHandler) RegisterHandler(engine *gin.RouterGroup) {
 	engine.POST("/account-details", h.createAccountDetail)
 	engine.PUT("/account-details/:id", h.updateAccountDetail)
 	engine.DELETE("/account-details/:id", h.deleteAccountDetail)
+}
+
+func (h *AccountHandler) rechargeAccount(context *gin.Context) {
+	id, ok := parseID(context)
+	if !ok {
+		return
+	}
+	var req struct {
+		Amount     float64 `json:"amount"`
+		GivenScale int     `json:"givenScale"`
+	}
+	if context.ShouldBindJSON(&req) != nil || req.Amount <= 0 {
+		commonRouter.ToError(context, "充值金额需大于 0")
+		return
+	}
+	if req.GivenScale < 0 {
+		commonRouter.ToError(context, "赠送比例不能小于 0")
+		return
+	}
+	token := ""
+	if value, exists := context.Get(webAuth.ContextTokenKey); exists {
+		token, _ = value.(string)
+	}
+	message, err := h.kakrolotAccountService.Recharge(context.Request.Context(), uint64(id), req.Amount, req.GivenScale, token)
+	if err != nil {
+		commonRouter.ToError(context, err.Error())
+		return
+	}
+	commonRouter.ToJson(context, gin.H{"message": message}, nil)
 }
 
 func (h *AccountHandler) listAccounts(context *gin.Context) {

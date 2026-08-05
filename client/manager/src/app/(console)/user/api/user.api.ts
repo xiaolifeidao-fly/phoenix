@@ -51,6 +51,10 @@ export class UserRecord {
 
   tenantName = "";
 
+  roles: UserRoleBinding[] = [];
+
+  tenants: UserTenantBinding[] = [];
+
   lastLoginTime?: string;
 
   updatedTime?: string;
@@ -139,6 +143,27 @@ export class TenantOption {
   code = "";
 }
 
+export class RoleOption {
+  id!: number;
+
+  name = "";
+
+  code = "";
+}
+
+export interface UserRoleBinding {
+  id: number;
+  roleId: number;
+  roleName: string;
+  roleCode: string;
+}
+
+export interface UserTenantBinding {
+  id: number;
+  tenantId: number;
+  tenantName: string;
+}
+
 export interface TenantUserPayload {
   userId: number;
   tenantId: number;
@@ -150,8 +175,42 @@ export interface AccountPayload {
   balanceAmount?: string;
 }
 
+export class AccountRechargeDetail {
+  id!: number;
+
+  accountId!: number;
+
+  amount = "0";
+
+  balanceAmount = "0";
+
+  operator = "";
+
+  type = "";
+
+  description = "";
+
+  businessId = "";
+
+  createdTime = "";
+}
+
 export async function fetchTenantOptions() {
   return getPage(TenantOption, "/tenants", { pageIndex: 1, pageSize: 200 });
+}
+
+export async function fetchRoleOptions() {
+  return getPage(RoleOption, "/roles", { pageIndex: 1, pageSize: 1000 });
+}
+
+export async function saveUserRoleBindings(userId: number, roleIds: number[]) {
+  const response = await instance.put<ApiResponse<UserRoleBinding[]>>(`/users/${userId}/roles`, { roleIds });
+  return unwrapApiResponse(response.data);
+}
+
+export async function saveUserTenantBindings(userId: number, tenantIds: number[]) {
+  const response = await instance.put<ApiResponse<UserTenantBinding[]>>(`/users/${userId}/tenants`, { tenantIds });
+  return unwrapApiResponse(response.data);
 }
 
 export async function createTenantUser(payload: TenantUserPayload) {
@@ -177,4 +236,21 @@ export async function createAccount(payload: AccountPayload) {
 export async function updateAccount(id: number, payload: Partial<AccountPayload>) {
   const response = await instance.put<ApiResponse<{ id: number }>>(`/accounts/${id}`, payload);
   return unwrapApiResponse(response.data);
+}
+
+export async function rechargeAccount(accountId: number, amount: number, givenScale: number) {
+  const response = await instance.post<ApiResponse<{ message: string }>>(
+    `/accounts/${accountId}/recharge`,
+    { amount, givenScale },
+  );
+  return unwrapApiResponse(response.data);
+}
+
+export async function fetchAccountRechargeDetails(accountId: number, pageIndex: number, pageSize: number) {
+  return getPage(AccountRechargeDetail, "/account-details", {
+    accountId,
+    type: "PAY,GIVEN",
+    pageIndex,
+    pageSize,
+  });
 }

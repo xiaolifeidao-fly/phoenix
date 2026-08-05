@@ -1399,6 +1399,19 @@ function renderTotalPendingMetricValue(totalPendingCount: number, yesterdayPendi
   );
 }
 
+function renderUninitiatedOrderMetricValue(totalCount: number, recentCount: number): ReactNode {
+  return (
+    <span className="manager-dashboard-card__metric-value--pending">
+      {formatCount(totalCount)}
+      <Tooltip title="括号内为最近 3 分钟创建且当前仍处于未开始状态的订单数量">
+        <span className="manager-dashboard-card__metric-value--recent-uninitiated">
+          （{formatCount(recentCount)}）
+        </span>
+      </Tooltip>
+    </span>
+  );
+}
+
 function buildDashboardComparison(
   yesterdayValue: number,
   changeValue: number,
@@ -1821,7 +1834,14 @@ function buildDashboardCardView(
           formatCount,
         ),
         detailMetrics: [
-          { label: "剩余单量", value: formatCount(realActualCompleted?.pendingOrderCount ?? 0) },
+          {
+            label: "未开始",
+            value: renderUninitiatedOrderMetricValue(
+              realActualCompleted?.pendingOrderCount ?? 0,
+              realActualCompleted?.recentUninitiatedOrderCount ?? 0,
+            ),
+          },
+          { label: "剩余总量", value: formatCount(realActualCompleted?.remainingOrderCount ?? 0) },
           {
             label: "总剩余量",
             value: renderTotalPendingMetricValue(
@@ -1832,7 +1852,6 @@ function buildDashboardCardView(
           { label: "今日新增总单量", value: formatCount(realActualCompleted?.totalOrderCount ?? 0) },
           { label: "今日新增总量", value: formatCount(realActualCompleted?.totalCount ?? 0) },
           { label: "完成单量", value: formatCount(realActualCompleted?.completedOrderCount ?? 0) },
-          { label: "完成总量", value: formatCount(realActualCompleted?.count ?? 0) },
         ],
         detailRows: realActualDetailRows,
         compact: true,
@@ -1862,7 +1881,14 @@ function buildDashboardCardView(
           formatCount,
         ),
         detailMetrics: [
-          { label: "剩余单量", value: formatCount(lowPriceActualCompleted?.pendingOrderCount ?? 0) },
+          {
+            label: "未开始",
+            value: renderUninitiatedOrderMetricValue(
+              lowPriceActualCompleted?.pendingOrderCount ?? 0,
+              lowPriceActualCompleted?.recentUninitiatedOrderCount ?? 0,
+            ),
+          },
+          { label: "剩余总量", value: formatCount(lowPriceActualCompleted?.remainingOrderCount ?? 0) },
           {
             label: "总剩余量",
             value: renderTotalPendingMetricValue(
@@ -1873,7 +1899,6 @@ function buildDashboardCardView(
           { label: "今日新增总单量", value: formatCount(lowPriceActualCompleted?.totalOrderCount ?? 0) },
           { label: "今日新增总量", value: formatCount(lowPriceActualCompleted?.totalCount ?? 0) },
           { label: "完成单量", value: formatCount(lowPriceActualCompleted?.completedOrderCount ?? 0) },
-          { label: "完成总量", value: formatCount(lowPriceActualCompleted?.count ?? 0) },
         ],
         detailRows: actualDetailRows,
         compact: true,

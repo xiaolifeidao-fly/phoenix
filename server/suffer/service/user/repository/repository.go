@@ -41,7 +41,12 @@ func (r *UserRepository) CountActiveByRoles(roles []string) (int64, error) {
 	if len(roles) == 0 {
 		return 0, nil
 	}
-	return r.CountBySQL("SELECT id FROM user WHERE active = 1 AND role IN ?", roles)
+	sql := "SELECT u.id FROM user u\n" +
+		"WHERE u.active = 1 AND (u.role IN ? OR EXISTS (\n" +
+		"SELECT 1 FROM user_role ur\n" +
+		"LEFT JOIN `role` role_item ON role_item.id = ur.role_id AND role_item.active = 1\n" +
+		"WHERE ur.user_id = u.id AND ur.active = 1 AND role_item.code IN ?))"
+	return r.CountBySQL(sql, roles, roles)
 }
 
 func (r *UserRepository) CountRecentLoginUsers() (int64, error) {
@@ -127,6 +132,25 @@ func (r *UserRepository) ListUserTenants(userIDs []int) ([]UserTenantRow, error)
 	return rows, nil
 }
 
+func (r *UserRepository) ListUserRoles(userIDs []int) ([]UserRoleRow, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	if len(userIDs) == 0 {
+		return []UserRoleRow{}, nil
+	}
+	sql := "SELECT ur.id, ur.user_id, ur.role_id, r.name AS role_name, r.code AS role_code\n" +
+		"FROM user_role ur\n" +
+		"LEFT JOIN `role` r ON r.id = ur.role_id AND r.active = 1\n" +
+		"WHERE ur.active = 1 AND ur.user_id IN ?\n" +
+		"ORDER BY ur.id DESC"
+	var rows []UserRoleRow
+	if err := r.QueryBySQL(&rows, sql, userIDs); err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
 func buildUserListWhere(query userDTO.UserQueryDTO) (string, []interface{}) {
 	clauses := []string{"WHERE u.active = 1"}
 	values := make([]interface{}, 0, 16)
@@ -163,8 +187,11 @@ func buildUserListWhere(query userDTO.UserQueryDTO) (string, []interface{}) {
 		values = append(values, "%"+value+"%")
 	}
 	if value := strings.TrimSpace(query.Role); value != "" {
-		clauses = append(clauses, "u.role = ?")
-		values = append(values, value)
+		clauses = append(clauses, "(u.role = ? OR EXISTS (\n"+
+			"SELECT 1 FROM user_role ur\n"+
+			"LEFT JOIN `role` r ON r.id = ur.role_id AND r.active = 1\n"+
+			"WHERE ur.user_id = u.id AND ur.active = 1 AND (r.code = ? OR r.name = ?)))")
+		values = append(values, value, value, value)
 	}
 	if value := strings.TrimSpace(query.Status); value != "" {
 		clauses = append(clauses, `(u.status = ? OR EXISTS (

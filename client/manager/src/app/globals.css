@@ -1,78 +1,87 @@
-/* =========================================================================
-   设计令牌 (Design Tokens)
-   全站唯一的色彩 / 圆角 / 阴影 / 间距来源。业务样式一律引用变量，
-   不要再写死 hex 或用属性选择器 !important 去覆盖内联样式。
-   ========================================================================= */
+@import url("https://fonts.googleapis.com/css2?family=Instrument+Serif&family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap");
+
 :root {
   color-scheme: light;
 
-  /* --- 品牌主色阶 --- */
-  --manager-primary-50: #eef4ff;
-  --manager-primary-100: #dbe7ff;
-  --manager-primary-200: #bed3ff;
-  --manager-primary-300: #91b5fb;
-  --manager-primary-400: #6493f2;
-  --manager-primary: #3b73e5;
-  --manager-primary-strong: #2a5fcc;
-  --manager-primary-deep: #1f4aa6;
+  /* --- 品牌主色阶（绿）--- */
+  --manager-primary-50: #e9f7ef;
+  --manager-primary-100: #d3efdf;
+  --manager-primary-200: #a9dfc0;
+  --manager-primary-300: #74caa0;
+  --manager-primary-400: #3fb677;
+  --manager-primary: #12a150;
+  --manager-primary-strong: #0e8544;
+  --manager-primary-deep: #0b6b37;
+  --manager-primary-light: rgba(18, 161, 80, 0.1);
+  --manager-primary-muted: rgba(18, 161, 80, 0.16);
 
   /* --- 中性色阶（内容区）--- */
   --manager-neutral-50: #f7f9fc;
-  --manager-neutral-100: #eef2f7;
-  --manager-neutral-200: #e2e8f0;
-  --manager-neutral-300: #cbd5e1;
-  --manager-neutral-400: #94a3b8;
-  --manager-neutral-500: #64748b;
-  --manager-neutral-600: #475569;
-  --manager-neutral-700: #334155;
-  --manager-neutral-800: #1e293b;
-  --manager-neutral-900: #0f172a;
+  --manager-neutral-100: #f2f5f9;
+  --manager-neutral-200: #e6eaf1;
+  --manager-neutral-300: #d0d6e0;
+  --manager-neutral-400: #98a2b3;
+  --manager-neutral-500: #667085;
+  --manager-neutral-600: #3d4757;
+  --manager-neutral-700: #2b3444;
+  --manager-neutral-800: #1d2534;
+  --manager-neutral-900: #101828;
 
   /* --- 语义化表面 --- */
-  --manager-bg: #f2f5f9;
-  --manager-bg-soft: #eaf0f7;
+  --manager-bg: #eef1f6;
+  --manager-bg-soft: #f2f5f9;
   --manager-surface: #ffffff;
   --manager-surface-strong: #ffffff;
-  --manager-surface-sunken: var(--manager-neutral-50);
-  --manager-panel: var(--manager-neutral-50);
-  --manager-panel-strong: var(--manager-neutral-100);
-  --manager-panel-muted: var(--manager-neutral-50);
-  --manager-panel-glow: rgba(59, 115, 229, 0.08);
-  --manager-hover: var(--manager-neutral-50);
+  --manager-surface-raised: #ffffff;
+  --manager-surface-sunken: var(--manager-neutral-100);
+  --manager-panel: #f2f5f9;
+  --manager-panel-strong: #e9edf4;
+  --manager-panel-muted: rgba(16, 24, 40, 0.07);
+  --manager-panel-glow: rgba(18, 161, 80, 0.08);
+  --manager-hover: rgba(16, 24, 40, 0.035);
 
   /* --- 描边 --- */
-  --manager-border: #e3e9f1;
-  --manager-border-soft: #edf1f7;
-  --manager-border-strong: #cbd5e1;
+  --manager-border: rgba(16, 24, 40, 0.09);
+  --manager-border-soft: rgba(16, 24, 40, 0.06);
+  --manager-border-strong: rgba(16, 24, 40, 0.14);
 
   /* --- 文字 --- */
-  --manager-text: #16213a;
-  --manager-text-soft: #5a6b83;
-  --manager-text-faint: #8896a9;
+  --manager-text: #101828;
+  --manager-text-soft: #3d4757;
+  --manager-text-faint: #667085;
 
   /* --- 状态色（每个状态配 底/描边/前景 三件套）--- */
-  --manager-accent: #0f8a96;
-  --manager-accent-strong: #0b6f79;
-  --manager-success: #15a34a;
-  --manager-success-bg: #ecfdf3;
-  --manager-success-border: #abefc6;
-  --manager-warning: #d97706;
-  --manager-warning-bg: #fffaeb;
-  --manager-warning-border: #fedf89;
+  --manager-accent: #0e8ba8;
+  --manager-accent-strong: #0b7189;
+  --manager-cyan: #0e8ba8;
+  --manager-blue: #2563eb;
+  --manager-violet: #7c3aed;
+  --manager-orange: #e0631b;
+  --manager-amber: #b45309;
+  --manager-success: #12a150;
+  --manager-success-bg: #e9f7ef;
+  --manager-success-border: #a9dfc0;
+  --manager-warning: #c07600;
+  --manager-warning-bg: #fdf5e6;
+  --manager-warning-border: #f2ddab;
   --manager-danger: #dc2626;
-  --manager-danger-bg: #fef3f2;
-  --manager-danger-border: #fecdca;
-  --manager-info: var(--manager-primary);
-  --manager-info-bg: var(--manager-primary-50);
-  --manager-info-border: var(--manager-primary-200);
+  --manager-danger-bg: #fdeceb;
+  --manager-danger-border: #f6c6c3;
+  --manager-info: var(--manager-cyan);
+  --manager-info-bg: rgba(14, 139, 168, 0.08);
+  --manager-info-border: rgba(14, 139, 168, 0.24);
 
   /* --- 圆角尺度 --- */
   --manager-radius-xs: 6px;
   --manager-radius-sm: 8px;
-  --manager-radius-md: 10px;
-  --manager-radius-lg: 14px;
-  --manager-radius-xl: 18px;
+  --manager-radius-md: 12px;
+  --manager-radius-lg: 16px;
+  --manager-radius-xl: 20px;
   --manager-radius-pill: 999px;
+  --manager-r-sm: 8px;
+  --manager-r: 12px;
+  --manager-r-lg: 16px;
+  --manager-r-xl: 20px;
 
   /* --- 间距尺度（4 的倍数）--- */
   --manager-space-1: 4px;
@@ -83,40 +92,42 @@
   --manager-space-6: 24px;
   --manager-space-8: 32px;
 
-  /* --- 高度尺度（4 级，越高层级越少用）--- */
-  --manager-elevation-1: 0 1px 2px rgba(15, 23, 42, 0.04);
-  --manager-elevation-2:
-    0 1px 3px rgba(15, 23, 42, 0.06),
-    0 4px 12px rgba(15, 23, 42, 0.04);
-  --manager-elevation-3:
-    0 2px 6px rgba(15, 23, 42, 0.06),
-    0 12px 28px rgba(15, 23, 42, 0.08);
-  --manager-elevation-4:
-    0 4px 10px rgba(15, 23, 42, 0.08),
-    0 24px 48px rgba(15, 23, 42, 0.12);
-  /* 兼容旧名 */
-  --manager-shadow: var(--manager-elevation-3);
-  --manager-shadow-soft: var(--manager-elevation-2);
+  /* --- 高度尺度 --- */
+  --manager-elevation-1: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --manager-elevation-2: 0 1px 2px rgba(16, 24, 40, 0.05), 0 4px 12px -4px rgba(16, 24, 40, 0.1);
+  --manager-elevation-3: 0 2px 4px rgba(16, 24, 40, 0.05), 0 12px 24px -8px rgba(16, 24, 40, 0.14);
+  --manager-elevation-4: 0 24px 60px -20px rgba(16, 24, 40, 0.28);
+  --manager-shadow: var(--manager-elevation-2);
+  --manager-shadow-soft: var(--manager-elevation-1);
+  --manager-shadow-sm: var(--manager-elevation-1);
+  --manager-shadow-md: var(--manager-elevation-3);
+  --manager-shadow-lg: var(--manager-elevation-4);
 
   /* --- 焦点环 --- */
-  --manager-ring: 0 0 0 3px rgba(59, 115, 229, 0.18);
+  --manager-ring: 0 0 0 3px rgba(18, 161, 80, 0.22);
   --manager-ring-danger: 0 0 0 3px rgba(220, 38, 38, 0.16);
 
   /* --- 动效 --- */
-  --manager-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --manager-ease: cubic-bezier(0.4, 0, 0.2, 1);
   --manager-duration-fast: 120ms;
   --manager-duration: 180ms;
   --manager-duration-slow: 280ms;
+  --manager-t: 0.18s var(--manager-ease);
 
-  /* --- 深色侧边栏 --- */
+  /* --- 字体 --- */
+  --manager-sans: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  --manager-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --manager-serif: "Instrument Serif", Georgia, serif;
+
+  /* --- 浅色侧边栏 --- */
   --manager-grid: transparent;
-  --manager-sidebar: #18212f;
-  --manager-sidebar-elevated: #1f2a3a;
-  --manager-sidebar-border: rgba(255, 255, 255, 0.07);
-  --manager-sidebar-text: #eef2f8;
-  --manager-sidebar-muted: rgba(203, 213, 225, 0.66);
-  --manager-sidebar-hover: rgba(255, 255, 255, 0.06);
-  --manager-sidebar-active: rgba(59, 115, 229, 0.22);
+  --manager-sidebar: #ffffff;
+  --manager-sidebar-elevated: #f4f7fb;
+  --manager-sidebar-border: rgba(16, 24, 40, 0.09);
+  --manager-sidebar-text: #3d4757;
+  --manager-sidebar-muted: #667085;
+  --manager-sidebar-hover: rgba(16, 24, 40, 0.04);
+  --manager-sidebar-active: rgba(18, 161, 80, 0.1);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -149,9 +160,8 @@ body {
 }
 
 body {
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
-    "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
-    sans-serif;
+  font-family: var(--manager-sans);
+  font-weight: 400;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -332,19 +342,414 @@ select {
 
 .order-query-fields {
   display: grid;
-  grid-template-columns: 132px minmax(140px, 0.85fr) 140px 128px minmax(290px, 1.45fr);
-  gap: 10px;
-  align-items: center;
+  grid-template-columns: 150px minmax(150px, 0.9fr) 150px 140px minmax(300px, 1.4fr);
+  gap: var(--manager-space-3);
+  align-items: end;
 }
 
 .order-query-fields--advanced {
-  grid-template-columns: repeat(4, minmax(180px, 1fr));
-  padding-top: 12px;
+  grid-template-columns: repeat(4, minmax(190px, 1fr));
+  padding-top: var(--manager-space-3);
   border-top: 1px dashed var(--manager-border);
+}
+
+/* --- 查询区标题栏 --- */
+.order-query-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--manager-space-3);
+  padding-bottom: var(--manager-space-3);
+  border-bottom: 1px solid var(--manager-border-soft);
+}
+
+.order-query-header__title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--manager-space-2);
+}
+
+.order-query-header__heading.ant-typography {
+  margin: 0;
+  color: var(--manager-text);
+  font-size: 15px;
+  letter-spacing: 0.01em;
+}
+
+.order-scope-tag {
+  display: inline-flex;
+  max-width: 220px;
+  align-items: center;
+  overflow: hidden;
+  padding: 2px 10px;
+  border: 1px solid var(--manager-info-border);
+  border-radius: var(--manager-radius-pill);
+  background: var(--manager-info-bg);
+  color: var(--manager-primary-deep);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.order-scope-tag--muted {
+  border-color: var(--manager-border);
+  background: var(--manager-panel);
+  color: var(--manager-text-faint);
+}
+
+.order-total-tag {
+  color: var(--manager-text-soft);
+  font-size: 12px;
+}
+
+/* --- 带标签的筛选字段 --- */
+.order-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--manager-space-1);
+}
+
+.order-field__label {
+  color: var(--manager-text-soft);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* --- 已生效条件摘要 --- */
+.order-filter-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--manager-space-2);
+  padding-top: var(--manager-space-3);
+  border-top: 1px dashed var(--manager-border);
+}
+
+.order-filter-summary__label {
+  flex: none;
+  padding-top: 3px;
+  color: var(--manager-text-faint);
+  font-size: 12px;
+}
+
+.order-filter-summary__chips {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.order-filter-chip.ant-tag {
+  margin: 0;
+  padding: 2px 8px;
+  border-color: var(--manager-border);
+  border-radius: var(--manager-radius-sm);
+  background: var(--manager-panel);
+  color: var(--manager-text-soft);
+  font-size: 12px;
+}
+
+.order-filter-chip.ant-tag:hover {
+  border-color: var(--manager-primary-200);
+  background: var(--manager-info-bg);
+  color: var(--manager-primary-deep);
+}
+
+/* --- 选中后的批量操作条 --- */
+.order-selection-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--manager-space-3);
+  padding: 10px var(--manager-space-4);
+  border: 1px solid var(--manager-info-border);
+  border-radius: var(--manager-radius-md);
+  background: linear-gradient(180deg, var(--manager-primary-50), var(--manager-surface));
+  box-shadow: var(--manager-elevation-1);
+  animation: order-selection-in var(--manager-duration) var(--manager-ease);
+}
+
+.order-selection-bar__info {
+  display: flex;
+  align-items: center;
+  gap: var(--manager-space-2);
+}
+
+.order-selection-bar__text.ant-typography {
+  color: var(--manager-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+@keyframes order-selection-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* --- 状态标签：底/描边/前景三件套 --- */
+.order-status-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border: 1px solid transparent;
+  border-radius: var(--manager-radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.order-status-tag--neutral {
+  border-color: var(--manager-border);
+  background: var(--manager-panel-strong);
+  color: var(--manager-text-soft);
+}
+
+.order-status-tag--active {
+  border-color: var(--manager-info-border);
+  background: var(--manager-info-bg);
+  color: var(--manager-primary-deep);
+}
+
+.order-status-tag--success {
+  border-color: var(--manager-success-border);
+  background: var(--manager-success-bg);
+  color: var(--manager-success);
+}
+
+.order-status-tag--warning {
+  border-color: var(--manager-warning-border);
+  background: var(--manager-warning-bg);
+  color: var(--manager-warning);
+}
+
+.order-status-tag--danger {
+  border-color: var(--manager-danger-border);
+  background: var(--manager-danger-bg);
+  color: var(--manager-danger);
+}
+
+.order-status-tag--ghost {
+  background: transparent;
+}
+
+/* --- 行内操作 --- */
+/* 操作列固定在右侧，5 个图标按钮必须完整放下，不能溢出到固定列外 */
+.order-actions-cell {
+  padding-inline: 8px !important;
+  white-space: nowrap;
+}
+
+.order-row-actions {
+  flex-wrap: nowrap;
+  justify-content: center;
+}
+
+.order-row-action.ant-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--manager-radius-sm);
+  color: var(--manager-text-soft);
+  transition: background var(--manager-duration-fast) var(--manager-ease),
+    color var(--manager-duration-fast) var(--manager-ease);
+}
+
+.order-row-action.ant-btn:not(:disabled):hover {
+  background: var(--manager-info-bg);
+  color: var(--manager-primary-deep);
+}
+
+.order-row-action--success.ant-btn:not(:disabled):hover {
+  background: var(--manager-success-bg);
+  color: var(--manager-success);
+}
+
+.order-row-action--warning.ant-btn:not(:disabled):hover {
+  background: var(--manager-warning-bg);
+  color: var(--manager-warning);
+}
+
+.order-row-action--danger.ant-btn:not(:disabled):hover {
+  background: var(--manager-danger-bg);
+  color: var(--manager-danger);
+}
+
+/* 数字统一等宽，避免翻页时列宽跳动 */
+.order-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+.order-record-cell--status {
+  gap: 4px;
+}
+
+/* 状态列居中 */
+.order-record-cell--center {
+  align-items: center;
+  text-align: center;
+}
+
+/* 分发与提交：进度条下方的比率行 */
+.order-record-cell__rate-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  color: var(--manager-text-faint);
+  font-size: 12px;
+}
+
+.order-record-cell__rate b {
+  color: var(--manager-text-soft);
+}
+
+/* 下单链接为空：红色高亮提醒，避免漏看 */
+.order-link-empty {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border: 1px solid var(--manager-danger-border);
+  border-radius: var(--manager-radius-xs);
+  background: var(--manager-danger-bg);
+  color: var(--manager-danger);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* 下单链接一行：文本占满，复制图标之后再跟一个"打开"按钮 */
+.order-link-line {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.order-link-line__text {
+  min-width: 0;
+  flex: 1;
+}
+
+.order-link-open {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--manager-radius-xs);
+  color: var(--manager-text-faint);
+  font-size: 12px;
+  transition: background var(--manager-duration-fast) var(--manager-ease),
+    color var(--manager-duration-fast) var(--manager-ease);
+}
+
+.order-link-open:hover {
+  background: var(--manager-primary-light);
+  color: var(--manager-primary);
+}
+
+.order-record-cell__link {
+  color: var(--manager-primary);
+  text-decoration: none;
+}
+
+.order-record-cell__link:hover {
+  color: var(--manager-primary-strong);
+  text-decoration: underline;
+}
+
+.order-record-cell--amount {
+  align-items: flex-end;
+}
+
+.order-record-cell__id .ant-typography-copy {
+  color: var(--manager-text-faint);
+}
+
+.order-empty__title {
+  color: var(--manager-text-soft);
+  font-size: 13px;
+}
+
+/* --- 左侧类目：全部类目开关 --- */
+.order-category-all {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--manager-border);
+  border-radius: var(--manager-radius-sm);
+  background: var(--manager-panel);
+  cursor: pointer;
+}
+
+.order-category-all:hover {
+  border-color: color-mix(in srgb, var(--manager-primary) 40%, var(--manager-border));
+}
+
+.order-category-all__hint {
+  padding-left: 24px;
+  color: var(--manager-text-faint);
+  font-size: 11px;
+}
+
+/* --- 左侧类目条目 --- */
+.order-category-cell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.order-category-cell__name.ant-typography {
+  color: var(--manager-text);
+  font-size: 13px;
+}
+
+.order-category-cell__code.ant-typography {
+  color: var(--manager-text-faint);
+  font-size: 12px;
 }
 
 .order-query-range {
   width: 100%;
+}
+
+.order-query-fields--advanced .order-metric-range {
+  width: 100%;
+}
+
+.order-metric-range__label {
+  color: var(--manager-text-soft);
+  font-size: 12px;
+}
+
+.order-metric-range__body {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.order-metric-range__input {
+  flex: 1;
+  min-width: 0;
+}
+
+.order-metric-range__divider {
+  color: var(--manager-text-faint);
 }
 
 .order-query-actions {
@@ -408,8 +813,8 @@ select {
 }
 
 .order-category-panel .manager-filter-input.ant-input-affix-wrapper {
-  background: #f8fafc;
-  border-color: #d8e2ee;
+  background: var(--manager-panel);
+  border-color: var(--manager-border-strong);
   box-shadow: none;
 }
 
@@ -440,31 +845,31 @@ select {
 
 .order-category-panel .ant-table-thead > tr > th {
   color: var(--manager-text-faint) !important;
-  border-bottom-color: #e7edf4 !important;
+  border-bottom-color: var(--manager-border) !important;
 }
 
 .order-category-panel .ant-table-tbody > tr > td {
-  border-bottom-color: #edf1f5 !important;
+  border-bottom-color: var(--manager-border) !important;
 }
 
 .order-category-panel .ant-table-tbody > tr.order-category-row:hover > td {
-  background: #f7faff !important;
+  background: var(--manager-panel) !important;
 }
 
 .order-category-panel .ant-table-tbody > tr.order-category-row--selected > td {
-  background: #e9f4f6 !important;
-  border-top-color: #9bcbd1 !important;
-  border-bottom-color: #9bcbd1 !important;
+  background: var(--manager-info-bg) !important;
+  border-top-color: var(--manager-info-border) !important;
+  border-bottom-color: var(--manager-info-border) !important;
 }
 
 .order-category-panel .ant-table-tbody > tr.order-category-row--selected > td:first-child {
-  border-left: 1px solid #9bcbd1 !important;
+  border-left: 1px solid var(--manager-info-border) !important;
   border-radius: 8px 0 0 8px;
-  box-shadow: inset 3px 0 0 #0f8995;
+  box-shadow: inset 3px 0 0 var(--manager-cyan);
 }
 
 .order-category-panel .ant-table-tbody > tr.order-category-row--selected > td:last-child {
-  border-right: 1px solid #9bcbd1 !important;
+  border-right: 1px solid var(--manager-info-border) !important;
   border-radius: 0 8px 8px 0;
 }
 
@@ -713,7 +1118,7 @@ select {
 }
 
 .manager-sider__nav::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.14);
+  background-color: var(--manager-neutral-300);
 }
 
 .manager-sider__footer {
@@ -739,79 +1144,286 @@ select {
   height: 7px;
   flex: none;
   border-radius: var(--manager-radius-pill);
-  background: #34d399;
+  background: var(--manager-success);
   box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.16);
 }
 
-/* --- 侧边栏菜单 --- */
+/* --- 侧边栏菜单：分组与叶子项都用「图标胶囊 + 文案」两段式 --- */
 .manager-shell-menu.ant-menu {
   background: transparent !important;
-  color: var(--manager-sidebar-muted);
+  color: var(--manager-sidebar-text);
   border-inline-end: none !important;
-  font-size: 14px;
+  font-family: var(--manager-sans);
+  font-size: 13.5px;
 }
 
-.manager-shell-menu.ant-menu .ant-menu-submenu-title,
-.manager-shell-menu.ant-menu .ant-menu-item {
-  height: 40px;
-  min-height: 40px;
-  margin-block: 2px;
-  margin-inline: 0;
-  width: 100%;
-  border-radius: var(--manager-radius-sm);
-  color: var(--manager-sidebar-muted) !important;
-  transition:
-    background var(--manager-duration) var(--manager-ease),
-    color var(--manager-duration) var(--manager-ease);
+.manager-shell-menu.ant-menu .ant-menu-submenu {
+  margin-top: 10px;
 }
 
-.manager-shell-menu.ant-menu .ant-menu-sub.ant-menu-inline {
-  background: transparent !important;
+.manager-shell-menu.ant-menu .ant-menu-submenu:first-child {
+  margin-top: 2px;
 }
 
-.manager-shell-menu.ant-menu .ant-menu-sub .ant-menu-item {
-  height: 36px;
-  min-height: 36px;
-  font-size: 13px;
+.manager-shell-menu.ant-menu .ant-menu-submenu-title {
+  height: 48px;
+  min-height: 48px;
+  margin: 0;
+  padding: 5px 10px !important;
+  border-radius: 11px;
+  color: var(--manager-text) !important;
+  transition: background var(--manager-t), color var(--manager-t);
 }
 
-/* 子菜单图标比父级弱一档，保持「父级分组 > 子项」的层级读感 */
-.manager-shell-menu.ant-menu .ant-menu-sub .ant-menu-item .ant-menu-item-icon {
-  font-size: 14px;
-  opacity: 0.75;
-}
-
-.manager-shell-menu.ant-menu .ant-menu-sub .ant-menu-item-selected .ant-menu-item-icon {
-  opacity: 1;
-}
-
-.manager-shell-menu.ant-menu .ant-menu-item:hover,
 .manager-shell-menu.ant-menu .ant-menu-submenu-title:hover {
-  color: var(--manager-sidebar-text) !important;
   background: var(--manager-sidebar-hover) !important;
 }
 
-.manager-shell-menu.ant-menu .ant-menu-item-selected {
-  background: var(--manager-sidebar-active) !important;
-  color: #fff !important;
-  font-weight: 600;
+.manager-nav-group-heading {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  line-height: 1.15;
 }
 
-/* 父级仅高亮文字，不抢子项的选中态 */
-.manager-shell-menu.ant-menu .ant-menu-submenu-selected > .ant-menu-submenu-title {
-  color: var(--manager-sidebar-text) !important;
+/* 图标胶囊：描边 + 主色浅底，选中时变实心渐变并投影，立体感来自这里 */
+.manager-nav-group-icon {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  place-items: center;
+  padding-bottom: 2px;
+  border: 1px solid color-mix(in srgb, var(--manager-nav-accent, var(--manager-primary)) 24%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--manager-nav-accent, var(--manager-primary)) 12%, transparent);
+  color: var(--manager-nav-accent, var(--manager-primary));
+  font-size: 13px;
+  line-height: 1;
+  transition: transform var(--manager-t), background var(--manager-t), box-shadow var(--manager-t);
+}
+
+.manager-nav-group-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.manager-nav-group-copy b {
+  overflow: hidden;
+  color: var(--manager-text);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manager-nav-group-copy small {
+  overflow: hidden;
+  color: var(--manager-text-faint);
+  font-family: var(--manager-mono);
+  font-size: 8.5px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manager-shell-menu.ant-menu .ant-menu-submenu-title:hover .manager-nav-group-icon {
+  background: color-mix(in srgb, var(--manager-nav-accent, var(--manager-primary)) 20%, transparent);
+  transform: translateY(-1px);
+}
+
+.manager-shell-menu.ant-menu .ant-menu-submenu-selected > .ant-menu-submenu-title .manager-nav-group-icon {
+  border-color: transparent;
+  background: linear-gradient(
+    135deg,
+    var(--manager-nav-accent, var(--manager-primary)),
+    color-mix(in srgb, var(--manager-nav-accent, var(--manager-primary)) 48%, #fff)
+  );
+  color: #fff;
+  box-shadow: 0 4px 10px -5px var(--manager-nav-accent, var(--manager-primary));
+}
+
+/* 子菜单靠一条竖线归组 */
+.manager-shell-menu.ant-menu .ant-menu-sub.ant-menu-inline {
+  margin: 0 0 0 19px;
+  padding: 0 0 0 8px !important;
+  border-left: 1px solid var(--manager-border);
   background: transparent !important;
 }
 
-.manager-shell-menu.ant-menu .ant-menu-title-content,
-.manager-shell-menu.ant-menu .ant-menu-item-icon,
+.manager-shell-menu.ant-menu .ant-menu-item {
+  height: 44px;
+  min-height: 44px;
+  width: auto;
+  margin: 2px 0 !important;
+  padding: 0 10px !important;
+  border-radius: 11px;
+  color: var(--manager-text-soft) !important;
+  transition: background var(--manager-t), color var(--manager-t), box-shadow var(--manager-t);
+}
+
+.manager-nav-item-content {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 11px;
+}
+
+.manager-nav-item-icon {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  place-items: center;
+  padding-bottom: 2px;
+  border-radius: 8px;
+  background: rgba(24, 34, 48, 0.045);
+  color: var(--manager-text-faint);
+  font-size: 15px;
+  line-height: 1;
+  transition: background var(--manager-t), color var(--manager-t), box-shadow var(--manager-t),
+    transform var(--manager-t);
+}
+
+.manager-nav-item-label {
+  flex: 1;
+  overflow: hidden;
+  font-size: 13.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manager-shell-menu.ant-menu .ant-menu-item:hover {
+  background: var(--manager-sidebar-hover) !important;
+  color: var(--manager-text) !important;
+}
+
+/* 悬停：图标底板抬起并翻白，产生浮起的层次 */
+.manager-shell-menu.ant-menu .ant-menu-item:hover .manager-nav-item-icon {
+  background: #fff;
+  color: var(--manager-nav-accent, var(--manager-primary));
+  box-shadow: var(--manager-shadow-sm);
+  transform: translateY(-1px);
+}
+
+.manager-shell-menu.ant-menu .ant-menu-item-selected {
+  position: relative;
+  background: linear-gradient(90deg, rgba(18, 161, 80, 0.14), rgba(14, 139, 168, 0.06)) !important;
+  color: var(--manager-text) !important;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px rgba(18, 161, 80, 0.16);
+}
+
+.manager-shell-menu.ant-menu .ant-menu-item-selected::before {
+  position: absolute;
+  top: 9px;
+  bottom: 9px;
+  left: -5px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--manager-nav-accent, var(--manager-primary));
+  content: "";
+}
+
+.manager-shell-menu.ant-menu .ant-menu-item-selected .manager-nav-item-icon {
+  border-color: transparent;
+  background: linear-gradient(
+    135deg,
+    var(--manager-nav-accent, var(--manager-primary)),
+    color-mix(in srgb, var(--manager-nav-accent, var(--manager-primary)) 48%, #fff)
+  );
+  color: #fff;
+  box-shadow: 0 4px 12px -5px color-mix(in srgb, var(--manager-nav-accent, var(--manager-primary)) 78%, transparent);
+}
+
 .manager-shell-menu.ant-menu .ant-menu-submenu-arrow {
+  color: var(--manager-text-faint) !important;
+}
+
+.manager-shell-menu.ant-menu .ant-menu-title-content {
   color: inherit !important;
 }
 
-/* 折叠态下弹出的子菜单同样走深色皮肤 */
+/* 折叠态：只留图标胶囊并居中。
+   antd 会给折叠项算一个内联 padding-inline，且滚动条会占掉右侧几像素，
+   两者叠加会把图标推向左边，所以这里把轨道和菜单项的左右内距都清零。 */
+.manager-sider.ant-layout-sider-collapsed .manager-sider__nav {
+  padding-inline: 0;
+  scrollbar-width: none;
+}
+
+.manager-sider.ant-layout-sider-collapsed .manager-sider__nav::-webkit-scrollbar {
+  width: 0;
+}
+
+.manager-sider.ant-layout-sider-collapsed .manager-shell-menu.ant-menu .ant-menu-item,
+.manager-sider.ant-layout-sider-collapsed .manager-shell-menu.ant-menu .ant-menu-submenu-title {
+  display: flex !important;
+  width: 100% !important;
+  align-items: center;
+  justify-content: center;
+  padding: 0 !important;
+  margin-inline: 0 !important;
+  text-align: center;
+}
+
+.manager-sider.ant-layout-sider-collapsed .manager-shell-menu.ant-menu .ant-menu-title-content {
+  display: flex !important;
+  width: 100%;
+  max-width: none !important;
+  justify-content: center;
+  margin: 0 !important;
+  opacity: 1 !important;
+}
+
+.manager-sider.ant-layout-sider-collapsed .manager-nav-group-copy,
+.manager-sider.ant-layout-sider-collapsed .manager-nav-item-label {
+  display: none;
+}
+
+.manager-sider.ant-layout-sider-collapsed .manager-nav-group-heading,
+.manager-sider.ant-layout-sider-collapsed .manager-nav-item-content {
+  width: 100%;
+  justify-content: center;
+  gap: 0;
+}
+
+.manager-sider.ant-layout-sider-collapsed .manager-nav-group-icon > .anticon > svg,
+.manager-sider.ant-layout-sider-collapsed .manager-nav-item-icon > .anticon > svg {
+  position: relative;
+  top: -6px;
+}
+
+.manager-sider.ant-layout-sider-collapsed .manager-shell-menu.ant-menu .ant-menu-sub.ant-menu-inline {
+  margin-left: 0;
+  padding-left: 0 !important;
+  border-left: none;
+}
+
+/* 折叠态隐藏箭头，否则它会占位把图标挤偏 */
+.manager-sider.ant-layout-sider-collapsed .manager-shell-menu.ant-menu .ant-menu-submenu-arrow {
+  display: none !important;
+}
+
+/* 选中条贴住轨道左缘 */
+.manager-sider.ant-layout-sider-collapsed .manager-shell-menu.ant-menu .ant-menu-item-selected::before {
+  left: 0;
+}
+
+/* 折叠态下弹出的子菜单同样走侧边栏皮肤 */
 .ant-menu-submenu-popup .ant-menu {
-  background: var(--manager-sidebar-elevated) !important;
+  background: var(--manager-surface) !important;
+  border: 1px solid var(--manager-border);
   border-radius: var(--manager-radius-md);
   box-shadow: var(--manager-elevation-4);
 }
@@ -822,12 +1434,12 @@ select {
 }
 
 .ant-menu-submenu-popup .ant-menu .ant-menu-item:hover {
-  color: #fff !important;
+  color: var(--manager-text) !important;
   background: var(--manager-sidebar-hover) !important;
 }
 
 .ant-menu-submenu-popup .ant-menu .ant-menu-item-selected {
-  color: #fff !important;
+  color: var(--manager-primary-deep) !important;
   background: var(--manager-sidebar-active) !important;
 }
 
@@ -956,6 +1568,48 @@ select {
   padding: var(--manager-space-6);
 }
 
+/* --- 多标签页 --- */
+.manager-tabs__bar.ant-tabs {
+  margin-bottom: var(--manager-space-4);
+}
+
+.manager-tabs__bar.ant-tabs .ant-tabs-nav {
+  margin: 0;
+}
+
+.manager-tabs__bar.ant-tabs .ant-tabs-nav::before {
+  border-bottom-color: var(--manager-border);
+}
+
+.manager-tabs__bar.ant-tabs .ant-tabs-tab {
+  padding: 5px 12px;
+  border-radius: var(--manager-radius-sm) var(--manager-radius-sm) 0 0;
+  border-color: var(--manager-border);
+  background: var(--manager-surface);
+  color: var(--manager-text-soft);
+  font-size: 13px;
+  transition:
+    background var(--manager-duration) var(--manager-ease),
+    color var(--manager-duration) var(--manager-ease);
+}
+
+.manager-tabs__bar.ant-tabs .ant-tabs-tab:hover {
+  color: var(--manager-text);
+}
+
+.manager-tabs__bar.ant-tabs .ant-tabs-tab.ant-tabs-tab-active {
+  background: #fff;
+  font-weight: 600;
+}
+
+.manager-tabs__label {
+  user-select: none;
+}
+
+.manager-tabs__pane {
+  min-width: 0;
+}
+
 @media (max-width: 900px) {
   .manager-topbar.ant-layout-header,
   .manager-content.ant-layout-content {
@@ -991,7 +1645,7 @@ select {
 .manager-progress-rail {
   height: 8px;
   border-radius: 999px;
-  background: #e5e7eb;
+  background: var(--manager-neutral-200);
   overflow: hidden;
 }
 
@@ -1002,53 +1656,280 @@ select {
   background: var(--manager-primary);
 }
 
+/* =========================================================================
+   表格皮肤：全站统一。层次靠「表头静音 / 正文清晰 / 悬停发亮」三档拉开，
+   不靠边框堆叠。
+   ========================================================================= */
 .manager-table {
   padding: 0;
+  overflow: hidden;
 }
 
 .manager-table .ant-table {
   background: transparent !important;
   color: var(--manager-text);
+  font-size: 13px;
 }
 
 .manager-table .ant-table-container {
-  border-radius: 8px;
   overflow: hidden;
+  border: 1px solid var(--manager-border);
+  border-radius: var(--manager-radius-md);
+  background: var(--manager-surface);
 }
 
+/* --- 表头：等宽小字 + 大写 + 字距，弱化成"标签" --- */
 .manager-table .ant-table-thead > tr > th {
-  background: #f8fafc !important;
-  color: var(--manager-text-soft) !important;
-  border-bottom: 1px solid var(--manager-border) !important;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0;
-  padding: 12px 14px !important;
+  position: relative;
+  padding: 13px 14px !important;
+  border-bottom: none !important;
+  background: linear-gradient(180deg, var(--manager-surface), var(--manager-panel)) !important;
+  box-shadow: inset 0 -1px 0 var(--manager-border);
+  color: var(--manager-text-faint) !important;
+  font-family: var(--manager-mono);
+  font-size: 10.5px;
+  font-weight: 400 !important;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
+/* 去掉表头竖分隔线，改用留白分列 */
+.manager-table .ant-table-thead > tr > th::before {
+  display: none !important;
+}
+
+/* --- 正文行 --- */
 .manager-table .ant-table-tbody > tr > td {
-  background: #ffffff !important;
-  border-bottom: 1px solid #eef1f5 !important;
-  padding: 13px 14px !important;
+  padding: 14px !important;
+  border-bottom: 1px solid var(--manager-border-soft) !important;
+  background: var(--manager-surface) !important;
+  transition: background var(--manager-duration-fast) var(--manager-ease);
+}
+
+.manager-table .ant-table-tbody > tr:last-child > td {
+  border-bottom: none !important;
+}
+
+/* 首列略重，给每行一个视觉起点 */
+.manager-table .ant-table-tbody > tr > td:first-child {
+  color: var(--manager-text);
+  font-weight: 500;
 }
 
 .manager-table .ant-table-tbody > tr:hover > td {
-  background: #f8fafc !important;
+  background: color-mix(in srgb, var(--manager-primary) 4.5%, var(--manager-surface)) !important;
 }
 
+/* 悬停行左侧品牌色细条 */
+.manager-table .ant-table-tbody > tr:hover > td:first-child {
+  box-shadow: inset 2px 0 0 var(--manager-primary);
+}
+
+.manager-table .ant-table-tbody > tr.ant-table-row-selected > td {
+  background: color-mix(in srgb, var(--manager-primary) 8%, var(--manager-surface)) !important;
+}
+
+.manager-table .ant-table-tbody > tr.ant-table-row-selected > td:first-child {
+  box-shadow: inset 2px 0 0 var(--manager-primary);
+}
+
+.manager-table .manager-row-active > td {
+  background: color-mix(in srgb, var(--manager-primary) 7%, var(--manager-surface)) !important;
+}
+
+.user-binding-tags {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.user-binding-tag.ant-tag {
+  min-width: 0;
+  max-width: 82px;
+  flex: 0 1 auto;
+  overflow: hidden;
+  margin: 0;
+  color: var(--manager-text-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-binding-tag--more.ant-tag {
+  flex: none;
+  background: var(--manager-panel-strong);
+  color: var(--manager-text-faint);
+}
+
+/* 数字统一等宽，列宽不随翻页跳动 */
+.manager-table .ant-table-tbody .ant-typography-copy + span,
+.manager-table td .manager-mono,
+.manager-table td .order-num {
+  font-family: var(--manager-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- 固定列：用渐变阴影收边，替代硬边框 --- */
+.manager-table .ant-table-cell-fix-left-last::after,
+.manager-table .ant-table-cell-fix-right-first::after {
+  width: 22px;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.manager-table .ant-table-ping-left .ant-table-cell-fix-left-last::after {
+  background: linear-gradient(90deg, rgba(16, 24, 40, 0.08), transparent);
+}
+
+.manager-table .ant-table-ping-right .ant-table-cell-fix-right-first::after {
+  background: linear-gradient(270deg, rgba(16, 24, 40, 0.08), transparent);
+}
+
+/* --- 行内操作：默认低调，悬停整行时才亮起 --- */
+.manager-table .ant-table-tbody > tr > td .ant-btn-text {
+  color: var(--manager-text-faint);
+}
+
+.manager-table .ant-table-tbody > tr:hover > td .ant-btn-text:not(:disabled) {
+  color: var(--manager-text-soft);
+}
+
+/* --- 滚动条：细，且只在表格内 --- */
+.manager-table .ant-table-body::-webkit-scrollbar,
+.manager-table .ant-table-content::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.manager-table .ant-table-body::-webkit-scrollbar-thumb,
+.manager-table .ant-table-content::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: var(--manager-radius-pill);
+  background-clip: padding-box;
+  background-color: var(--manager-neutral-300);
+}
+
+/* --- 分页：与表格拉开，文字静音 --- */
 .manager-table .ant-pagination {
-  margin: 14px 18px !important;
+  margin: 16px 4px 2px !important;
+  color: var(--manager-text-faint);
+}
+
+.manager-table .ant-pagination .ant-pagination-total-text {
+  margin-inline-end: auto;
+  color: var(--manager-text-faint);
+  font-family: var(--manager-mono);
+  font-size: 11.5px;
+}
+
+.manager-table .ant-pagination .ant-pagination-item {
+  border-color: transparent;
+  background: transparent;
+  font-family: var(--manager-mono);
+}
+
+.manager-table .ant-pagination .ant-pagination-item:hover {
+  background: var(--manager-panel);
+}
+
+.manager-table .ant-pagination .ant-pagination-item-active,
+.manager-table .ant-pagination .ant-pagination-item-active a {
+  border-color: transparent;
+  background: var(--manager-primary-light);
+  color: var(--manager-primary-deep) !important;
+  font-weight: 700;
+}
+
+.manager-table-subline {
+  margin-top: 3px;
+  color: var(--manager-text-faint);
+  font-family: var(--manager-mono);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* --- 空态：给足呼吸，不与表头挤在一起 --- */
+.manager-table .ant-table-placeholder > td {
+  padding: 52px 16px !important;
+  border-bottom: none !important;
+  background: var(--manager-surface) !important;
+}
+
+.manager-table .ant-table-placeholder:hover > td {
+  background: var(--manager-surface) !important;
+  box-shadow: none;
+}
+
+.manager-table .ant-empty-description {
+  color: var(--manager-text-faint);
+  font-size: 13px;
+}
+
+/* --- 加载态：内容轻微褪色，不整块变灰 --- */
+.manager-table .ant-spin-blur {
+  opacity: 0.45;
+}
+
+.manager-table .ant-spin-container::after {
+  background: var(--manager-surface);
 }
 
 .order-records-table .ant-table-tbody > tr > td {
   vertical-align: top;
 }
 
+/* 表头吸顶，长表格滚动时保持列名可见 */
+.order-records-table .ant-table-thead > tr > th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--manager-panel) !important;
+  white-space: nowrap;
+}
+
+.order-records-table .ant-table-tbody > tr.order-record-row:hover > td {
+  background: var(--manager-primary-50) !important;
+}
+
+/* 异常订单：左侧色条 + 极浅底色，扫视时一眼可辨 */
+.order-records-table .ant-table-tbody > tr.order-record-row--abnormal > td {
+  background: var(--manager-danger-bg) !important;
+}
+
+.order-records-table .ant-table-tbody > tr.order-record-row--abnormal > td:first-child {
+  box-shadow: inset 3px 0 0 var(--manager-danger);
+}
+
+.order-records-table .ant-table-tbody > tr.ant-table-row-selected > td {
+  background: var(--manager-info-bg) !important;
+}
+
+.order-records-table .ant-table-tbody > tr.ant-table-row-selected > td:first-child {
+  box-shadow: inset 3px 0 0 var(--manager-primary);
+}
+
+/* 紧凑行高 */
+.order-records-table--compact .ant-table-tbody > tr > td {
+  padding-block: 8px !important;
+}
+
+.order-records-table--compact .ant-table-thead > tr > th {
+  padding-block: 9px !important;
+}
+
+.order-records-table--compact .order-record-cell {
+  gap: 3px;
+}
+
 .order-list-records-table .ant-table-thead > tr:first-child > th {
-  background: #18243a !important;
-  color: #dcecff !important;
-  border-bottom-color: #2c3d59 !important;
-  border-inline-end-color: #2c3d59 !important;
+  background: var(--manager-panel) !important;
+  color: var(--manager-text-faint) !important;
+  border-bottom-color: var(--manager-border) !important;
+  border-inline-end-color: var(--manager-border) !important;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0;
@@ -1056,25 +1937,30 @@ select {
 }
 
 .order-list-records-table .ant-table-thead > tr:last-child > th {
-  background: #eef4fb !important;
-  color: #40536d !important;
-  border-bottom-color: #cfdceb !important;
+  background: var(--manager-panel) !important;
+  color: var(--manager-text-faint) !important;
+  border-bottom-color: var(--manager-border) !important;
   font-size: 12px;
   font-weight: 700;
   padding-block: 12px !important;
 }
 
 .order-list-records-table .ant-table-tbody > tr:hover > td {
-  background: #f1f7ff !important;
+  background: var(--manager-primary-light) !important;
 }
 
 .order-list-records-table .ant-table-tbody > tr:hover > td:first-child {
-  box-shadow: inset 4px 0 0 #3478f6;
+  box-shadow: inset 4px 0 0 var(--manager-primary);
 }
 
 .order-list-records-table .ant-table-tbody > tr > td {
-  border-bottom-color: #e5edf6 !important;
+  border-bottom-color: var(--manager-border) !important;
   padding-block: 16px !important;
+}
+
+.order-list-records-table .ant-table-thead > tr > th:last-child,
+.order-list-records-table .ant-table-tbody > tr > td:last-child {
+  white-space: nowrap;
 }
 
 .order-record-cell {
@@ -1092,14 +1978,26 @@ select {
 }
 
 .order-record-cell__primary {
-  color: #22324a !important;
+  color: var(--manager-text) !important;
   font-size: 14px;
   font-weight: 700;
 }
 
 .order-record-cell__meta {
-  color: #71829a !important;
+  color: var(--manager-text-faint) !important;
   font-size: 12px;
+}
+
+.order-rate {
+  font-weight: 700;
+}
+
+.order-rate--warning {
+  color: var(--manager-warning) !important;
+}
+
+.order-rate--critical {
+  color: var(--manager-danger) !important;
 }
 
 .order-record-cell__metric-row {
@@ -1107,7 +2005,7 @@ select {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  color: #344761;
+  color: var(--manager-text-soft);
   font-size: 12px;
   font-weight: 600;
 }
@@ -1118,13 +2016,13 @@ select {
 }
 
 .order-record-cell__order-number {
-  color: #2769ef !important;
+  color: var(--manager-primary) !important;
   font-size: 15px;
   font-weight: 700;
 }
 
 .order-record-cell__amount {
-  color: #0f7d88 !important;
+  color: var(--manager-cyan) !important;
   font-weight: 700;
   font-size: 15px;
 }
@@ -1137,12 +2035,17 @@ select {
   font-weight: 600;
 }
 
+.order-record-action {
+  min-width: 56px;
+  padding-inline: 4px !important;
+}
+
 .order-list-records-table .ant-progress-bg {
-  background: #3478f6 !important;
+  background: var(--manager-primary) !important;
 }
 
 .order-list-records-table .ant-progress-inner {
-  background: #dfe9f6 !important;
+  background: var(--manager-neutral-200) !important;
 }
 
 .manager-filter-input.ant-input-affix-wrapper,
@@ -1191,15 +2094,17 @@ select {
 .manager-form-skin .ant-modal-content,
 .manager-dashboard-drawer .ant-drawer-content,
 .manager-workspace-drawer .ant-drawer-content {
-  background: #ffffff !important;
-  border: 1px solid var(--manager-border);
-  box-shadow: var(--manager-shadow);
+  background: var(--manager-surface) !important;
+  border: 1px solid var(--manager-border-strong);
+  border-radius: var(--manager-radius-xl);
+  box-shadow: var(--manager-shadow-lg);
 }
 
 .manager-form-skin .ant-modal-header,
 .manager-dashboard-drawer .ant-drawer-header,
 .manager-workspace-drawer .ant-drawer-header {
-  background: #ffffff !important;
+  padding-bottom: 14px;
+  background: transparent !important;
   border-bottom: 1px solid var(--manager-border);
 }
 
@@ -1208,6 +2113,44 @@ select {
 .manager-dashboard-drawer .ant-drawer-title,
 .manager-workspace-drawer .ant-drawer-title {
   color: var(--manager-text) !important;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* 弹窗/抽屉内的表单节奏：标签紧贴控件，项与项之间留一档 */
+.manager-form-skin .ant-modal-body,
+.manager-workspace-drawer .ant-drawer-body .manager-form-skin {
+  padding-top: 4px;
+}
+
+.manager-form-skin .ant-form-item {
+  margin-bottom: var(--manager-space-4);
+}
+
+.manager-form-skin .ant-form-item:last-child {
+  margin-bottom: 0;
+}
+
+.manager-form-skin .ant-form-vertical .ant-form-item-label {
+  padding-bottom: 6px;
+}
+
+.manager-form-skin .ant-form-item-label > label {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.manager-form-skin .ant-form-item-extra,
+.manager-form-skin .ant-form-item-explain {
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.manager-form-skin .ant-modal-footer,
+.manager-workspace-drawer .ant-drawer-footer {
+  margin-top: var(--manager-space-5);
+  padding-top: var(--manager-space-4);
+  border-top: 1px solid var(--manager-border);
 }
 
 .manager-workspace-drawer .ant-drawer-header {
@@ -1216,12 +2159,12 @@ select {
 
 .manager-workspace-drawer .ant-drawer-title {
   font-size: 18px;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .manager-workspace-drawer .ant-drawer-body {
   padding: 0;
-  background: #fbfcff;
+  background: var(--manager-surface);
 }
 
 .manager-workspace-drawer .ant-drawer-footer {
@@ -1271,7 +2214,7 @@ select {
 
 .permission-role-item:hover {
   border-color: var(--manager-border-strong);
-  background: #f8fafc;
+  background: var(--manager-panel);
   transform: translateY(-1px);
 }
 
@@ -1296,7 +2239,7 @@ select {
   overflow: auto;
   border: 1px solid var(--manager-border);
   border-radius: 8px;
-  background: #fbfcff;
+  background: var(--manager-surface);
   transition:
     border-color 160ms ease,
     background 160ms ease,
@@ -1339,7 +2282,7 @@ select {
   grid-template-columns: 88px minmax(0, 1fr);
   gap: 12px;
   padding: 10px 0;
-  border-bottom: 1px solid #eef1f5;
+  border-bottom: 1px solid var(--manager-border);
   transition:
     border-color 160ms ease,
     background 160ms ease,
@@ -1453,7 +2396,7 @@ select {
 }
 
 .manager-sidebar-card .manager-brand-kicker::before {
-  background: #75a4ff;
+  background: var(--manager-primary-300);
 }
 
 .manager-sidebar-card .manager-crest {
@@ -1472,16 +2415,26 @@ select {
   height: 105px;
   min-height: 0;
   padding: 10px;
-  border-radius: 10px;
+  border-radius: var(--manager-radius-md);
   cursor: pointer;
   overflow: hidden;
   border: 1px solid var(--manager-border);
-  background: #ffffff;
-  box-shadow: var(--manager-shadow-soft);
+  background: var(--manager-surface);
+  box-shadow: var(--manager-shadow-sm);
   transition:
-    transform 160ms ease,
-    box-shadow 160ms ease,
-    border-color 160ms ease;
+    transform var(--manager-duration) var(--manager-ease),
+    box-shadow var(--manager-duration) var(--manager-ease),
+    border-color var(--manager-duration) var(--manager-ease);
+}
+
+/* 顶部一道极淡高光，让卡片有厚度而不是纯色块 */
+.manager-dashboard-card::after {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.9), transparent);
+  content: "";
+  pointer-events: none;
 }
 
 .manager-dashboard-card--featured {
@@ -1552,8 +2505,8 @@ select {
 
 .manager-dashboard-card:hover {
   transform: translateY(-2px);
-  border-color: #aeb8c8;
-  box-shadow: var(--manager-shadow);
+  border-color: color-mix(in srgb, var(--manager-primary) 30%, var(--manager-border));
+  box-shadow: var(--manager-shadow-md);
 }
 
 .manager-dashboard-card--static:hover {
@@ -1563,8 +2516,13 @@ select {
 .manager-dashboard-card__backdrop {
   position: absolute;
   inset: 0;
-  opacity: 0.68;
+  opacity: 0.5;
   pointer-events: none;
+  transition: opacity var(--manager-duration) var(--manager-ease);
+}
+
+.manager-dashboard-card:hover .manager-dashboard-card__backdrop {
+  opacity: 0.72;
 }
 
 .manager-dashboard-card__content {
@@ -1596,13 +2554,13 @@ select {
 .manager-dashboard-card__real-workload-group {
   min-width: 0;
   padding: 8px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--manager-border);
   border-radius: 8px;
   background: rgba(248, 250, 252, 0.84);
 }
 
 .manager-dashboard-card__real-workload-group--actual {
-  border-color: #ccebd6;
+  border-color: var(--manager-success-border);
   background: rgba(240, 253, 244, 0.76);
 }
 
@@ -1712,22 +2670,33 @@ select {
   justify-content: space-between;
   gap: 10px;
   padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid #e5e9f0;
-  background: #f8fafc;
+  border-radius: var(--manager-radius-sm);
+  border: 1px solid var(--manager-border-soft);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(6px);
+  transition: border-color var(--manager-duration) var(--manager-ease),
+    background var(--manager-duration) var(--manager-ease);
+}
+
+.manager-dashboard-card:hover .manager-dashboard-card__featured-metric {
+  border-color: var(--manager-border);
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .manager-dashboard-card__featured-metric span {
-  color: var(--manager-text-soft);
+  color: var(--manager-text-faint);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   white-space: nowrap;
 }
 
 .manager-dashboard-card__featured-metric strong {
   color: var(--manager-text);
+  font-family: var(--manager-mono);
   font-size: 15px;
-  font-weight: 800;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
   white-space: nowrap;
 }
 
@@ -1745,9 +2714,10 @@ select {
 .manager-dashboard-card__icon {
   width: 42px;
   height: 42px;
-  border-radius: 8px;
+  border-radius: var(--manager-radius-sm);
   display: grid;
   place-items: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 6px 14px -8px rgba(16, 24, 40, 0.55);
 }
 
 .manager-dashboard-card__metrics {
@@ -1836,40 +2806,63 @@ select {
 }
 
 .manager-dashboard-card__comparison-change--up {
-  color: #15803d;
+  color: var(--manager-primary-deep);
 }
 
 .manager-dashboard-card__comparison-change--down {
-  color: #dc2626;
+  color: var(--manager-danger);
 }
 
 .manager-dashboard-card__metric {
   min-width: 0;
   padding: 6px 8px;
-  border-radius: 8px;
-  border: 1px solid #e5e9f0;
-  background: #f8fafc;
+  border-radius: var(--manager-radius-sm);
+  border: 1px solid var(--manager-border-soft);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(6px);
+  transition: border-color var(--manager-duration) var(--manager-ease),
+    background var(--manager-duration) var(--manager-ease);
+}
+
+.manager-dashboard-card:hover .manager-dashboard-card__metric {
+  border-color: var(--manager-border);
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .manager-dashboard-card__metric-label {
-  color: var(--manager-text-soft);
+  color: var(--manager-text-faint);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
+/* 数值用等宽体，卡片之间的数字纵向能对齐 */
 .manager-dashboard-card__metric-value {
   margin-top: 2px;
   color: var(--manager-text);
+  font-family: var(--manager-mono);
   font-size: 14px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.manager-dashboard-card__metric-value--pending {
+  color: var(--manager-warning);
+}
+
+.manager-dashboard-card__metric-value--recent-uninitiated {
+  margin-left: 4px;
+  color: var(--manager-blue);
+  cursor: help;
+}
+
 .manager-dashboard-card__metric-note {
   margin-left: 4px;
-  color: #d97706;
+  color: var(--manager-warning);
   cursor: help;
 }
 
@@ -1950,9 +2943,9 @@ select {
 .manager-dashboard-tag.ant-tag {
   margin-inline-end: 0;
   padding: 4px 9px;
-  border-radius: 999px;
-  border: 1px solid var(--manager-border);
-  background: #f8fafc;
+  border-radius: var(--manager-radius-pill);
+  border: 1px solid var(--manager-border-soft);
+  background: rgba(255, 255, 255, 0.8);
   color: var(--manager-text-soft);
   font-weight: 600;
 }
@@ -2021,7 +3014,7 @@ select {
 .manager-speed-chart__stat {
   border: 1px solid var(--manager-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--manager-panel);
   padding: 9px 11px;
   min-width: 0;
 }
@@ -2265,5 +3258,632 @@ select {
   .order-query-actions {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .order-selection-bar,
+  .order-query-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+/* =========================================================================
+   对账工作台：维度核算 / 出入账 / 账户状态
+   ========================================================================= */
+.recon-page {
+  gap: 14px;
+}
+
+.recon-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* --- 顶部工具条：标题 + 快捷区间 + 日期范围 --- */
+.recon-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 16px 18px;
+}
+
+.recon-toolbar-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.recon-toolbar-title {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--manager-text);
+}
+
+.recon-toolbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* --- 概览指标条 --- */
+.recon-overview {
+  grid-template-columns: repeat(auto-fit, minmax(196px, 1fr));
+}
+
+.recon-overview-chip {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  min-height: 84px;
+  padding: 14px 16px;
+}
+
+.recon-overview-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--manager-text-faint);
+}
+
+.recon-overview-value {
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.recon-overview-value .recon-amount {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+/* --- 卡片标题 --- */
+.recon-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.recon-section-head-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.recon-section-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--manager-text);
+}
+
+.recon-section-mark {
+  width: 4px;
+  height: 17px;
+  border-radius: 999px;
+  background: var(--manager-primary);
+}
+
+.recon-section-caption {
+  padding-left: 13px;
+  font-size: 12px;
+  color: var(--manager-text-faint);
+}
+
+.recon-section-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+}
+
+.recon-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* --- 双维度并排 --- */
+/* 人工维度 / 上游维度左右并排，人工维度多两列所以稍宽 */
+.recon-dimension-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.28fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+/* 出入账 / 账户状态左右并排，两张卡片各自独立滚动与折行 */
+.recon-duo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.recon-duo-grid > .recon-card {
+  min-width: 0;
+}
+
+.recon-subcard {
+  overflow: hidden;
+  border: 1px solid var(--manager-border);
+  border-radius: 10px;
+  background: var(--manager-surface);
+}
+
+.recon-subcard-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--manager-border-soft);
+  background: var(--manager-bg-soft);
+}
+
+.recon-subcard-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--manager-text);
+}
+
+.recon-subcard-caption {
+  font-size: 12px;
+  color: var(--manager-text-faint);
+}
+
+/* --- 表格：等宽数字、合计行、差异行 --- */
+.recon-table .ant-table {
+  background: transparent;
+}
+
+.recon-table .ant-table-thead > tr > th {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--manager-text-soft);
+  background: var(--manager-bg-soft);
+}
+
+.recon-table .ant-table-tbody > tr > td {
+  font-size: 13px;
+}
+
+.recon-table--editable .ant-table-tbody > tr > td {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+/* 编辑态金额输入沿用只读态的右对齐等宽数字，切换视图时数字不跳动 */
+.recon-table--editable .ant-input-number .ant-input-number-input {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.recon-amount {
+  font-family: "Segoe UI", "SF Mono", "Cascadia Mono", "PingFang SC", monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--manager-text);
+}
+
+.recon-amount--negative {
+  color: var(--manager-danger);
+}
+
+.recon-row-name {
+  font-weight: 600;
+  color: var(--manager-text);
+}
+
+.recon-row-total > td {
+  background: var(--manager-primary-light) !important;
+}
+
+.recon-row-total .recon-amount,
+.recon-row-total .recon-row-name {
+  font-weight: 700;
+}
+
+.recon-row-mismatch > td {
+  background: var(--manager-danger-bg) !important;
+}
+
+.recon-diff--zero {
+  font-variant-numeric: tabular-nums;
+  color: var(--manager-text-faint);
+}
+
+.recon-diff--alert .recon-amount {
+  color: var(--manager-danger);
+  font-weight: 700;
+}
+
+/* --- 系统计算条 --- */
+.recon-calc-strip {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  border: 1px solid var(--manager-success-border);
+  border-radius: 10px;
+  background: linear-gradient(90deg, var(--manager-success-bg) 0%, var(--manager-surface) 68%);
+}
+
+.recon-calc-strip-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--manager-primary-deep);
+  white-space: nowrap;
+}
+
+.recon-calc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+  flex: 1 1 460px;
+}
+
+.recon-calc-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--manager-border);
+  border-radius: 8px;
+  background: var(--manager-surface);
+}
+
+.recon-calc-item--highlight {
+  border-color: var(--manager-success-border);
+  box-shadow: inset 3px 0 0 var(--manager-primary);
+}
+
+.recon-calc-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--manager-text-faint);
+  white-space: nowrap;
+}
+
+.recon-calc-value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.recon-calc-value .recon-amount {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.recon-calc-unit {
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+  color: var(--manager-text-faint);
+}
+
+.recon-calc-divider {
+  width: 1px;
+  height: 11px;
+  margin: 0 3px;
+  background: var(--manager-border-strong);
+}
+
+/* --- 公式说明 --- */
+.recon-formula-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.recon-formula {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px dashed var(--manager-border-strong);
+  border-radius: 8px;
+  background: var(--manager-bg-soft);
+}
+
+.recon-formula-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--manager-text-faint);
+}
+
+.recon-formula-expression {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--manager-text-soft);
+}
+
+/* --- 状态标签 --- */
+.recon-readonly-tag {
+  margin: 0;
+  border-color: var(--manager-border);
+  background: var(--manager-panel);
+  color: var(--manager-text-faint);
+  font-weight: 600;
+}
+
+.recon-kind-tag {
+  margin: 0;
+  border-color: var(--manager-border);
+  background: var(--manager-bg-soft);
+  color: var(--manager-text-soft);
+}
+
+.recon-type-tag {
+  margin: 0;
+  border: 1px solid transparent;
+  font-weight: 600;
+}
+
+.recon-type-tag--income {
+  border-color: var(--manager-success-border);
+  background: var(--manager-success-bg);
+  color: var(--manager-primary-deep);
+}
+
+.recon-type-tag--outcome {
+  border-color: var(--manager-warning-border);
+  background: var(--manager-warning-bg);
+  color: var(--manager-warning);
+}
+
+.recon-type-tag--net {
+  border-color: var(--manager-info-border);
+  background: var(--manager-info-bg);
+  color: var(--manager-accent-strong);
+}
+
+.recon-ok-pill,
+.recon-alert-pill {
+  margin: 0;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.recon-ok-pill {
+  border-color: var(--manager-success-border);
+  background: var(--manager-success-bg);
+  color: var(--manager-primary-deep);
+}
+
+.recon-alert-pill {
+  border-color: var(--manager-danger-border);
+  background: var(--manager-danger-bg);
+  color: var(--manager-danger);
+}
+
+/* --- 人工录入差异高亮 --- */
+.recon-manual-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.recon-manual-cell--flagged .recon-amount {
+  color: var(--manager-warning);
+}
+
+.recon-manual-cell-badge {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--manager-warning-bg);
+  color: var(--manager-warning);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 18px;
+}
+
+.recon-edit-hint {
+  padding: 9px 12px;
+  border: 1px solid var(--manager-info-border);
+  border-radius: 8px;
+  background: var(--manager-info-bg);
+  color: var(--manager-accent-strong);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* --- 差异预警 --- */
+.recon-alert-zone {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.recon-alert-zone-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--manager-danger);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.recon-alert-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 8px;
+}
+
+.recon-alert {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--manager-danger-border);
+  border-radius: 8px;
+  background: var(--manager-danger-bg);
+  font-size: 12px;
+}
+
+.recon-alert-date {
+  color: var(--manager-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.recon-alert-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--manager-text-soft);
+}
+
+.recon-alert-copy strong {
+  color: var(--manager-text);
+}
+
+.recon-alert-percent {
+  font-family: "Segoe UI", "SF Mono", "Cascadia Mono", "PingFang SC", monospace;
+  font-weight: 700;
+  color: var(--manager-danger);
+  white-space: nowrap;
+}
+
+.recon-alert-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 13px;
+  border: 1px solid var(--manager-success-border);
+  border-radius: 8px;
+  background: var(--manager-success-bg);
+  color: var(--manager-primary-deep);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* --- 差异对比：半宽容器放不下宽表，改用三栏小卡 --- */
+.recon-compare-list {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.recon-compare-item {
+  padding: 10px 12px;
+  border: 1px solid var(--manager-border);
+  border-radius: 8px;
+  background: var(--manager-bg-soft);
+}
+
+.recon-compare-item--mismatch {
+  border-color: var(--manager-danger-border);
+  background: var(--manager-danger-bg);
+}
+
+.recon-compare-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.recon-compare-head .ant-tag {
+  margin-inline-end: 0;
+  margin-left: auto;
+}
+
+.recon-compare-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--manager-text);
+}
+
+.recon-compare-target {
+  font-size: 12px;
+  color: var(--manager-text-faint);
+}
+
+.recon-compare-grid {
+  display: grid;
+  grid-template-columns: 34px repeat(3, minmax(0, 1fr));
+  gap: 4px 8px;
+  align-items: center;
+}
+
+.recon-compare-col {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--manager-text-faint);
+  text-align: right;
+}
+
+.recon-compare-unit {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--manager-text-faint);
+}
+
+.recon-compare-cell {
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recon-compare-cell .recon-amount {
+  font-size: 13px;
+}
+
+/* --- 弹窗表单：两列栅格 --- */
+.recon-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+}
+
+.recon-form-grid .ant-form-item {
+  margin-bottom: 16px;
+}
+
+.recon-form-wide {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 1180px) {
+  .recon-dimension-grid,
+  .recon-duo-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .recon-toolbar,
+  .recon-section-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .recon-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .recon-alert {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

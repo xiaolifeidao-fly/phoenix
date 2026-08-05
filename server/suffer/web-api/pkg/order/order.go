@@ -4,6 +4,7 @@ import (
 	commonRouter "common/middleware/routers"
 	"net/http"
 	"strconv"
+	kakrolotService "suffer/service/kakrolot"
 	orderService "suffer/service/order"
 	orderDTO "suffer/service/order/dto"
 
@@ -13,13 +14,18 @@ import (
 
 type OrderHandler struct {
 	*commonRouter.BaseHandler
-	orderService *orderService.OrderService
+	orderService       *orderService.OrderService
+	refundBatchService *kakrolotService.RefundBatchService
 }
 
 func NewOrderHandler() *OrderHandler {
 	service := orderService.NewOrderService()
 	_ = service.EnsureTable()
-	return &OrderHandler{BaseHandler: &commonRouter.BaseHandler{}, orderService: service}
+	return &OrderHandler{
+		BaseHandler:        &commonRouter.BaseHandler{},
+		orderService:       service,
+		refundBatchService: kakrolotService.NewRefundBatchService(kakrolotService.NewClient()),
+	}
 }
 
 func (h *OrderHandler) RegisterHandler(engine *gin.RouterGroup) {
@@ -41,6 +47,15 @@ func (h *OrderHandler) RegisterHandler(engine *gin.RouterGroup) {
 	engine.GET("/order-records/:id/amount-details", h.listOrderRecordAmountDetails)
 	engine.POST("/order-records/:id/refund", h.refundOrderRecord)
 	engine.POST("/order-records/:id/bk", h.bkOrderRecord)
+	engine.POST("/order-records/:id/exception", h.markOrderRecordException)
+	// 批量操作另起路径，避免与 /order-records/:id 的路由参数冲突
+	engine.POST("/order-record-exceptions/batch", h.batchMarkOrderRecordException)
+	engine.POST("/order-record-refunds/batch", h.batchRefundOrderRecords)
+	engine.POST("/order-record-force-finish", h.forceFinishOrderRecords)
+	engine.GET("/refund-batch/tasks", h.listRefundBatchTasks)
+	engine.POST("/refund-batch/import", h.importRefundBatch)
+	engine.POST("/refund-batch/tasks/:id/execute", h.executeRefundBatchTask)
+	engine.GET("/refund-batch/details", h.listRefundBatchDetails)
 	engine.GET("/order-refund-records", h.listOrderRefundRecords)
 	engine.GET("/order-refund-records/:id", h.getOrderRefundRecordByID)
 	engine.POST("/order-refund-records", h.createOrderRefundRecord)

@@ -3,6 +3,7 @@ package auth
 import (
 	commonRouter "common/middleware/routers"
 	"common/middleware/vipper"
+	"log"
 	"strings"
 	authService "suffer/service/auth"
 	"sync"
@@ -35,8 +36,13 @@ func Middleware() gin.HandlerFunc {
 		}
 
 		token := extractToken(c)
-		user, err := service.ValidateToken(token, resolveRequestURL(c))
+		resourceURL := resolveRequestURL(c)
+		user, err := service.ValidateToken(token, resourceURL)
 		if err != nil {
+			log.Printf(
+				"authentication rejected: method=%s requestPath=%q route=%q resource=%q tokenPresent=%t reason=%v",
+				c.Request.Method, c.Request.URL.Path, c.FullPath(), resourceURL, token != "", err,
+			)
 			commonRouter.ToError(c, err.Error())
 			c.Abort()
 			return

@@ -159,7 +159,14 @@ func (s *AccountService) ListAccountDetails(query accountDTO.AccountDetailQueryD
 		dbQuery = dbQuery.Where("account_id = ?", query.AccountID)
 	}
 	if value := strings.TrimSpace(query.Type); value != "" {
-		dbQuery = dbQuery.Where("type = ?", value)
+		types := splitAccountDetailTypes(value)
+		if len(types) == 0 {
+			dbQuery = dbQuery.Where("1 = 0")
+		} else if len(types) == 1 {
+			dbQuery = dbQuery.Where("type = ?", types[0])
+		} else {
+			dbQuery = dbQuery.Where("type IN ?", types)
+		}
 	}
 	if value := strings.TrimSpace(query.BusinessID); value != "" {
 		dbQuery = dbQuery.Where("business_id LIKE ?", "%"+value+"%")
@@ -275,6 +282,24 @@ func (s *AccountService) DeleteAccountDetail(id uint) error {
 	entity.Active = 0
 	_, err = s.accountDetailRepository.SaveOrUpdate(entity)
 	return err
+}
+
+func splitAccountDetailTypes(value string) []string {
+	parts := strings.Split(value, ",")
+	types := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		accountType := strings.ToUpper(strings.TrimSpace(part))
+		if accountType == "" {
+			continue
+		}
+		if _, exists := seen[accountType]; exists {
+			continue
+		}
+		seen[accountType] = struct{}{}
+		types = append(types, accountType)
+	}
+	return types
 }
 
 func defaultDecimal(value string) string {

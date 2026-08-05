@@ -5,38 +5,39 @@ import type { ThemeConfig } from "antd";
  * 不要在业务组件里写死颜色。
  */
 const palette = {
-  primary: "#3b73e5",
-  primaryHover: "#2a5fcc",
-  primaryActive: "#1f4aa6",
-  success: "#15a34a",
-  warning: "#d97706",
+  primary: "#12a150",
+  primaryHover: "#0e8544",
+  primaryActive: "#0b6b37",
+  info: "#0e8ba8",
+  success: "#12a150",
+  warning: "#c07600",
   danger: "#dc2626",
 
-  bg: "#f2f5f9",
+  bg: "#eef1f6",
   surface: "#ffffff",
-  sunken: "#f7f9fc",
-  hover: "#f7f9fc",
+  sunken: "#f2f5f9",
+  hover: "rgba(16, 24, 40, 0.035)",
 
-  border: "#e3e9f1",
-  borderSoft: "#edf1f7",
+  border: "rgba(16, 24, 40, 0.14)",
+  borderSoft: "rgba(16, 24, 40, 0.09)",
 
-  text: "#16213a",
-  textSoft: "#5a6b83",
-  textFaint: "#8896a9",
-  textDisabled: "#aab5c4",
+  text: "#101828",
+  textSoft: "#3d4757",
+  textFaint: "#667085",
+  textDisabled: "rgba(16, 24, 40, 0.3)",
 
-  sidebar: "#18212f",
+  sidebar: "#ffffff",
 } as const;
 
-const radius = { xs: 6, sm: 8, md: 10, lg: 14 } as const;
+const radius = { xs: 8, sm: 8, md: 12, lg: 16 } as const;
 
 const elevation = {
-  low: "0 1px 3px rgba(15, 23, 42, 0.06), 0 4px 12px rgba(15, 23, 42, 0.04)",
-  high: "0 4px 10px rgba(15, 23, 42, 0.08), 0 24px 48px rgba(15, 23, 42, 0.12)",
+  low: "0 1px 2px rgba(16, 24, 40, 0.05), 0 4px 12px -4px rgba(16, 24, 40, 0.1)",
+  high: "0 24px 60px -20px rgba(16, 24, 40, 0.28)",
 } as const;
 
 /** 控件三档高度，全站统一，避免同一行里输入框和按钮不等高 */
-const control = { sm: 32, md: 36, lg: 42 } as const;
+const control = { sm: 28, md: 34, lg: 40 } as const;
 
 export const modernTheme: ThemeConfig = {
   token: {
@@ -44,9 +45,9 @@ export const modernTheme: ThemeConfig = {
     colorSuccess: palette.success,
     colorWarning: palette.warning,
     colorError: palette.danger,
-    colorInfo: palette.primary,
-    fontFamily: `"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","SF Pro Text","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif`,
-    fontSize: 14,
+    colorInfo: palette.info,
+    fontFamily: `"Noto Sans SC","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif`,
+    fontSize: 13,
     lineHeight: 1.5715,
     borderRadius: radius.sm,
     borderRadiusLG: radius.md,
@@ -68,10 +69,10 @@ export const modernTheme: ThemeConfig = {
     colorTextTertiary: palette.textFaint,
     colorTextQuaternary: palette.textDisabled,
     colorTextPlaceholder: palette.textFaint,
-    colorLink: palette.primary,
+    colorLink: palette.info,
     colorLinkHover: palette.primaryHover,
     colorLinkActive: palette.primaryActive,
-    motionEaseInOut: "cubic-bezier(0.22, 1, 0.36, 1)",
+    motionEaseInOut: "cubic-bezier(0.4, 0, 0.2, 1)",
     motionDurationMid: "0.18s",
   },
   components: {
@@ -98,7 +99,7 @@ export const modernTheme: ThemeConfig = {
       paddingBlock: 6,
       activeBorderColor: palette.primary,
       hoverBorderColor: palette.primary,
-      activeShadow: "0 0 0 3px rgba(59, 115, 229, 0.14)",
+      activeShadow: "0 0 0 3px rgba(18, 161, 80, 0.16)",
       colorBgContainer: palette.surface,
     },
     InputNumber: { controlHeight: control.md, controlHeightLG: control.lg },
@@ -107,7 +108,7 @@ export const modernTheme: ThemeConfig = {
       controlHeightLG: control.lg,
       controlHeightSM: control.sm,
       colorBgContainer: palette.surface,
-      optionSelectedBg: "#eef4ff",
+      optionSelectedBg: "rgba(18, 161, 80, 0.1)",
       optionSelectedFontWeight: 600,
       borderRadiusSM: radius.xs,
     },
@@ -133,7 +134,7 @@ export const modernTheme: ThemeConfig = {
       borderRadiusLG: radius.md,
     },
     Notification: { borderRadiusLG: radius.md },
-    Tooltip: { borderRadius: radius.xs, colorBgSpotlight: "#1e293b" },
+    Tooltip: { borderRadius: radius.xs, colorBgSpotlight: "#101828" },
     Tag: {
       borderRadiusSM: 999,
       defaultBg: palette.sunken,
@@ -144,12 +145,12 @@ export const modernTheme: ThemeConfig = {
     Segmented: {
       borderRadius: radius.sm,
       itemSelectedBg: palette.surface,
-      itemSelectedColor: palette.text,
-      trackBg: "#eef2f7",
+      itemSelectedColor: palette.primary,
+      trackBg: palette.sunken,
       trackPadding: 3,
     },
     Layout: {
-      headerBg: palette.bg,
+      headerBg: "rgba(255, 255, 255, 0.72)",
       headerHeight: 64,
       headerPadding: "0",
       siderBg: palette.sidebar,
@@ -169,13 +170,13 @@ export const modernTheme: ThemeConfig = {
       headerBg: palette.sunken,
       headerColor: palette.textSoft,
       headerSplitColor: "transparent",
-      rowHoverBg: "#f6f9fe",
-      rowSelectedBg: "#eef4ff",
-      rowSelectedHoverBg: "#e4edff",
+      rowHoverBg: "rgba(18, 161, 80, 0.035)",
+      rowSelectedBg: "rgba(18, 161, 80, 0.08)",
+      rowSelectedHoverBg: "rgba(18, 161, 80, 0.12)",
       cellPaddingBlock: 13,
       headerBorderRadius: 0,
     },
-    Pagination: { itemActiveBg: "#eef4ff", borderRadius: radius.xs },
+    Pagination: { itemActiveBg: "rgba(18, 161, 80, 0.1)", borderRadius: radius.xs },
     Tabs: { horizontalItemPadding: "10px 0", titleFontSize: 14 },
     Descriptions: { labelBg: palette.sunken },
     Form: { labelColor: palette.textSoft, verticalLabelPadding: "0 0 6px" },

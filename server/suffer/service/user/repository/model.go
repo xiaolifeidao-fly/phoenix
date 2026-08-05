@@ -88,3 +88,11 @@ type UserTenantRow struct {
 	TenantID   uint64 `gorm:"column:tenant_id"`
 	TenantName string `gorm:"column:tenant_name"`
 }
+
+type UserRoleRow struct {
+	ID       int    `gorm:"column:id"`
+	UserID   int    `gorm:"column:user_id"`
+	RoleID   uint64 `gorm:"column:role_id"`
+	RoleName string `gorm:"column:role_name"`
+	RoleCode string `gorm:"column:role_code"`
+}

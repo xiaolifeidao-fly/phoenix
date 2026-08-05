@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircleOutlined,
   EditOutlined,
+  FileSearchOutlined,
   LockOutlined,
   PartitionOutlined,
   PlusOutlined,
@@ -19,16 +20,19 @@ import type { ColumnsType } from "antd/es/table";
 import { WorkspaceDrawer } from "@/components/manager-shell/WorkspaceDrawer";
 import {
   createAccount,
-  createTenantUser,
-  deleteTenantUser,
+  fetchRoleOptions,
   fetchTenantOptions,
+  rechargeAccount,
+  saveUserRoleBindings,
+  saveUserTenantBindings,
   updateAccount,
-  updateTenantUser,
+  type RoleOption,
   type TenantOption,
   type UserPayload,
   type UserRecord,
 } from "../api/user.api";
 import { UserFormModal } from "./UserFormModal";
+import { UserRechargeDetailDrawer } from "./UserRechargeDetailDrawer";
 import { useUserManagement } from "../hooks/useUserManagement";
 
 const { Text } = Typography;
@@ -41,11 +45,12 @@ interface UserActionState {
 }
 
 interface UserActionFormValues {
-  role?: string;
+  roleIds?: number[];
   remark?: string;
   password?: string;
-  tenantId?: number;
+  tenantIds?: number[];
   amount?: number;
+  givenScale?: number;
 }
 
 const roleColors: Record<string, string> = {
@@ -54,6 +59,13 @@ const roleColors: Record<string, string> = {
   auditor: "rgba(201,210,236,0.2)",
   member: "rgba(239,244,251,0.98)",
 };
+
+const defaultRoleOptions = [
+  { label: "管理员", value: "admin" },
+  { label: "经理", value: "manager" },
+  { label: "审计", value: "auditor" },
+  { label: "代理", value: "member" },
+];
 
 const statusColors: Record<string, string> = {
   normal: "rgba(95,198,163,0.14)",
@@ -84,12 +96,16 @@ export function UserManagementDemo() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserRecord | null>(null);
   const [tenantOptions, setTenantOptions] = useState<TenantOption[]>([]);
+  const [roleOptions, setRoleOptions] = useState<RoleOption[]>([]);
   const [actionForm] = Form.useForm<UserActionFormValues>();
   const [actionState, setActionState] = useState<UserActionState | null>(null);
   const [actionSubmitting, setActionSubmitting] = useState(false);
+  const [rechargeDetailUser, setRechargeDetailUser] = useState<UserRecord | null>(null);
+  const rechargeAmount = Form.useWatch("amount", actionForm);
+  const rechargeGivenScale = Form.useWatch("givenScale", actionForm);
 
   const activeCount = users.filter((item) => resolveUserStatus(item) === "normal").length;
-  const boundCount = users.filter((item) => Boolean(item.tenantName?.trim())).length;
+  const boundCount = users.filter((item) => (item.tenants?.length ?? 0) > 0 || Boolean(item.tenantName?.trim())).length;
   const totalBalance = users.reduce((sum, item) => sum + resolveBalance(item), 0);
 
   const heroStats = useMemo(
@@ -103,15 +119,15 @@ export function UserManagementDemo() {
   );
 
   useEffect(() => {
-    const loadTenants = async () => {
-      try {
-        const result = await fetchTenantOptions();
-        setTenantOptions(result.data);
-      } catch {
-        setTenantOptions([]);
-      }
+    const loadBindingOptions = async () => {
+      const [tenantResult, roleResult] = await Promise.allSettled([
+        fetchTenantOptions(),
+        fetchRoleOptions(),
+      ]);
+      setTenantOptions(tenantResult.status === "fulfilled" ? tenantResult.value.data : []);
+      setRoleOptions(roleResult.status === "fulfilled" ? roleResult.value.data : []);
     };
-    void loadTenants();
+    void loadBindingOptions();
   }, []);
 
   const handleCreate = () => {
@@ -133,11 +149,12 @@ export function UserManagementDemo() {
   const openUserActionDrawer = (mode: UserActionMode, record: UserRecord) => {
     setActionState({ mode, record });
     actionForm.setFieldsValue({
-      role: record.role || "member",
+      roleIds: resolveSelectedRoleIds(record, roleOptions),
       remark: record.remark || "",
       password: "",
-      tenantId: record.tenantId || undefined,
+      tenantIds: resolveSelectedTenantIds(record),
       amount: undefined,
+      givenScale: 0,
     });
   };
 
@@ -156,7 +173,8 @@ export function UserManagementDemo() {
     setActionSubmitting(true);
     try {
       if (mode === "role") {
-        await patchUser(record.id, { role: values.role || "member" });
+        await saveUserRoleBindings(record.id, values.roleIds ?? []);
+        await refresh();
         message.success("角色已更新");
       }
       if (mode === "remark") {
@@ -175,16 +193,7 @@ export function UserManagementDemo() {
         message.success("密码已更新");
       }
       if (mode === "tenant") {
-        const nextTenantId = values.tenantId ?? 0;
-        if (!nextTenantId) {
-          if (record.tenantUserId) {
-            await deleteTenantUser(record.tenantUserId);
-          }
-        } else if (record.tenantUserId) {
-          await updateTenantUser(record.tenantUserId, { tenantId: nextTenantId });
-        } else {
-          await createTenantUser({ userId: record.id, tenantId: nextTenantId });
-        }
+        await saveUserTenantBindings(record.id, values.tenantIds ?? []);
         await refresh();
         message.success("租户已更新");
       }
@@ -193,16 +202,14 @@ export function UserManagementDemo() {
         if (amount <= 0) {
           throw new Error("请输入大于 0 的金额");
         }
-        const nextBalance = (resolveBalance(record) + amount).toFixed(2);
-        if (record.accountId) {
-          await updateAccount(record.accountId, { balanceAmount: nextBalance });
-        } else {
-          await createAccount({
-            userId: record.id,
-            accountStatus: "normal",
-            balanceAmount: nextBalance,
-          });
+        if (!record.accountId) {
+          throw new Error("该用户尚未开通 Kakrolot 账户，无法充值");
         }
+        const givenScale = Number(values.givenScale ?? 0);
+        if (!Number.isInteger(givenScale) || givenScale < 0) {
+          throw new Error("赠送比例必须是大于等于 0 的整数");
+        }
+        await rechargeAccount(record.accountId, amount, givenScale);
         await refresh();
         message.success("充值成功");
       }
@@ -271,26 +278,14 @@ export function UserManagementDemo() {
     {
       title: "租户信息",
       key: "tenantInfo",
-      width: 180,
-      render: (_, record) => record.tenantName || "-",
+      width: 220,
+      render: (_, record) => renderTenantBindings(record),
     },
     {
       title: "角色",
-      dataIndex: "role",
       key: "role",
-      width: 110,
-      render: (value: string) => (
-        <Tag
-          style={{
-            width: "fit-content",
-            color: "var(--manager-text)",
-            background: roleColors[value] || "rgba(239,244,251,0.98)",
-            border: "none",
-          }}
-        >
-          {formatRole(value)}
-        </Tag>
-      ),
+      width: 190,
+      render: (_, record) => renderRoleBindings(record),
     },
     {
       title: "余额",
@@ -324,7 +319,7 @@ export function UserManagementDemo() {
     {
       title: "操作",
       key: "actions",
-      width: 288,
+      width: 320,
       fixed: "right",
       render: (_, record) => {
         const frozen = resolveUserStatus(record) === "frozen";
@@ -369,6 +364,14 @@ export function UserManagementDemo() {
                 type="text"
                 icon={<WalletOutlined />}
                 onClick={() => openUserActionDrawer("recharge", record)}
+              />
+            </Tooltip>
+            <Tooltip title="充值明细">
+              <Button
+                size="small"
+                type="text"
+                icon={<FileSearchOutlined />}
+                onClick={() => setRechargeDetailUser(record)}
               />
             </Tooltip>
             <Tooltip title={frozen ? "解冻" : "冻结"}>
@@ -429,12 +432,7 @@ export function UserManagementDemo() {
               placeholder="角色筛选"
               onChange={(value) => void refresh({ pageIndex: 1, role: value ?? "" })}
               style={{ width: 160 }}
-              options={[
-                { label: "管理员", value: "admin" },
-                { label: "经理", value: "manager" },
-                { label: "审计", value: "auditor" },
-                { label: "代理", value: "member" },
-              ]}
+              options={resolveRoleFilterOptions(roleOptions)}
             />
             <Select
               className="manager-filter-input"
@@ -526,14 +524,17 @@ export function UserManagementDemo() {
               <Text type="secondary">{`用户ID ${actionState.record.id}`}</Text>
             </div>
             {actionState.mode === "role" ? (
-              <Form.Item name="role" label="角色" rules={[{ required: true, message: "请选择角色" }]}>
-                <Select
-                  options={[
-                    { label: "管理员", value: "admin" },
-                    { label: "经理", value: "manager" },
-                    { label: "审计", value: "auditor" },
-                    { label: "代理", value: "member" },
-                  ]}
+              <Form.Item name="roleIds" label="角色" rules={[{ required: true, message: "请至少选择一个角色" }]}>
+                <Select<number[]>
+                  mode="multiple"
+                  showSearch
+                  optionFilterProp="label"
+                  maxTagCount="responsive"
+                  placeholder="请选择角色"
+                  options={roleOptions.map((item) => ({
+                    label: item.name || formatRole(item.code),
+                    value: item.id,
+                  }))}
                 />
               </Form.Item>
             ) : null}
@@ -548,10 +549,13 @@ export function UserManagementDemo() {
               </Form.Item>
             ) : null}
             {actionState.mode === "tenant" ? (
-              <Form.Item name="tenantId" label="绑定租户">
-                <Select<number>
-                  allowClear
-                  placeholder="请选择租户，清空则解绑"
+              <Form.Item name="tenantIds" label="绑定租户">
+                <Select<number[]>
+                  mode="multiple"
+                  showSearch
+                  optionFilterProp="label"
+                  maxTagCount="responsive"
+                  placeholder="请选择租户，清空则解绑全部"
                   options={tenantOptions.map((item) => ({
                     label: item.name || item.code,
                     value: item.id,
@@ -560,19 +564,55 @@ export function UserManagementDemo() {
               </Form.Item>
             ) : null}
             {actionState.mode === "recharge" ? (
-              <Form.Item name="amount" label="充值金额" rules={[{ required: true, message: "请输入充值金额" }]}>
-                <InputNumber<number>
-                  min={0}
-                  step={1}
-                  precision={2}
-                  placeholder="请输入充值金额"
-                  style={{ width: "100%" }}
-                />
-              </Form.Item>
+              <>
+                <Form.Item name="amount" label="充值金额" rules={[{ required: true, message: "请输入充值金额" }]}>
+                  <InputNumber<number>
+                    min={0.01}
+                    step={1}
+                    precision={2}
+                    placeholder="请输入充值金额"
+                    style={{ width: "100%" }}
+                  />
+                </Form.Item>
+                <Form.Item
+                  name="givenScale"
+                  label="赠送比例"
+                  rules={[
+                    { required: true, message: "请输入赠送比例" },
+                    {
+                      validator: (_, value) =>
+                        Number.isInteger(Number(value)) && Number(value) >= 0
+                          ? Promise.resolve()
+                          : Promise.reject(new Error("请输入大于等于 0 的整数")),
+                    },
+                  ]}
+                >
+                  <InputNumber<number>
+                    min={0}
+                    step={1}
+                    precision={0}
+                    addonAfter="%"
+                    placeholder="0"
+                    style={{ width: "100%" }}
+                  />
+                </Form.Item>
+                <div className="manager-drawer-record">
+                  <Text type="secondary">赠送金额</Text>
+                  <Text strong>{formatCurrency(calculateGivenAmount(rechargeAmount, rechargeGivenScale))}</Text>
+                  <Text type="secondary">预计到账</Text>
+                  <Text strong>{formatCurrency(calculateRechargeTotal(rechargeAmount, rechargeGivenScale))}</Text>
+                </div>
+              </>
             ) : null}
           </Form>
         ) : null}
       </WorkspaceDrawer>
+
+      <UserRechargeDetailDrawer
+        open={Boolean(rechargeDetailUser)}
+        user={rechargeDetailUser}
+        onClose={() => setRechargeDetailUser(null)}
+      />
     </div>
   );
 }
@@ -582,6 +622,94 @@ function resolveBalance(record: UserRecord) {
     return record.tineBalance;
   }
   return Number(record.balanceAmount || 0);
+}
+
+interface UserBindingTagItem {
+  key: string;
+  label: string;
+  background?: string;
+}
+
+function renderRoleBindings(record: UserRecord) {
+  const items: UserBindingTagItem[] = record.roles?.length
+    ? record.roles.map((item) => ({
+        key: String(item.id || item.roleId),
+        label: item.roleName || formatRole(item.roleCode),
+        background: roleColors[item.roleCode],
+      }))
+    : record.role
+      ? [{ key: `legacy-${record.role}`, label: formatRole(record.role), background: roleColors[record.role] }]
+      : [];
+  return <UserBindingTags items={items} />;
+}
+
+function renderTenantBindings(record: UserRecord) {
+  const items: UserBindingTagItem[] = record.tenants?.length
+    ? record.tenants.map((item) => ({
+        key: String(item.id || item.tenantId),
+        label: item.tenantName || `租户 ${item.tenantId}`,
+      }))
+    : record.tenantName
+      ? [{ key: `legacy-${record.tenantId}`, label: record.tenantName }]
+      : [];
+  return <UserBindingTags items={items} />;
+}
+
+function UserBindingTags({ items }: { items: UserBindingTagItem[] }) {
+  if (items.length === 0) {
+    return <span>-</span>;
+  }
+  const visibleItems = items.slice(0, 2);
+  const hiddenCount = items.length - visibleItems.length;
+  return (
+    <Tooltip title={items.map((item) => item.label).join("、")}>
+      <div className="user-binding-tags" aria-label={items.map((item) => item.label).join("、")}>
+        {visibleItems.map((item) => (
+          <Tag
+            key={item.key}
+            className="user-binding-tag"
+            style={{ background: item.background || "var(--manager-panel)", border: "none" }}
+          >
+            {item.label}
+          </Tag>
+        ))}
+        {hiddenCount > 0 ? <Tag className="user-binding-tag user-binding-tag--more">+{hiddenCount}</Tag> : null}
+      </div>
+    </Tooltip>
+  );
+}
+
+function resolveSelectedRoleIds(record: UserRecord, options: RoleOption[]) {
+  if (record.roles?.length) {
+    return record.roles.map((item) => item.roleId);
+  }
+  const legacyRole = options.find((item) => item.code === record.role);
+  return legacyRole ? [legacyRole.id] : [];
+}
+
+function resolveSelectedTenantIds(record: UserRecord) {
+  if (record.tenants?.length) {
+    return record.tenants.map((item) => item.tenantId);
+  }
+  return record.tenantId ? [record.tenantId] : [];
+}
+
+function resolveRoleFilterOptions(options: RoleOption[]) {
+  if (options.length === 0) {
+    return defaultRoleOptions;
+  }
+  return options.map((item) => ({
+    label: item.name || formatRole(item.code),
+    value: item.code,
+  }));
+}
+
+function calculateGivenAmount(amount?: number, givenScale?: number) {
+  return (Number(amount) || 0) * (Number(givenScale) || 0) / 100;
+}
+
+function calculateRechargeTotal(amount?: number, givenScale?: number) {
+  return (Number(amount) || 0) + calculateGivenAmount(amount, givenScale);
 }
 
 function resolveUserStatus(record: UserRecord) {

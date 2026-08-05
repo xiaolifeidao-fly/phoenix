@@ -14,7 +14,7 @@ import {
   updateUser,
 } from "../api/user.api";
 
-const USER_MANAGEMENT_CACHE_KEY = "phoenix_manager_user_management_cache_v1";
+const USER_MANAGEMENT_CACHE_KEY = "phoenix_manager_user_management_cache_v2";
 
 const defaultStats: UserStats = {
   visibleUsers: 0,

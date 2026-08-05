@@ -128,6 +128,8 @@ export interface ActualCompletedSummary {
   countChange: number;
   countChangeRate: number;
   pendingOrderCount: number;
+  recentUninitiatedOrderCount: number;
+  remainingOrderCount: number;
   pendingCount: number;
   yesterdayPendingCount: number;
   totalPendingCount: number;

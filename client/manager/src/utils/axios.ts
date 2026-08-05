@@ -60,7 +60,7 @@ export function unwrapApiResponse<T>(response: ApiResponse<T>): T {
 export async function getData<T>(
   cls: new () => T,
   url: string,
-  params?: Record<string, string | number | undefined>,
+  params?: Record<string, string | number | boolean | undefined>,
 ): Promise<T> {
   const response = await instance.get<ApiResponse<T>>(url, { params });
   return plainToInstance(cls, unwrapResponse(response.data));
@@ -69,7 +69,7 @@ export async function getData<T>(
 export async function getDataList<T>(
   cls: new () => T,
   url: string,
-  params?: Record<string, string | number | undefined>,
+  params?: Record<string, string | number | boolean | undefined>,
 ): Promise<T[]> {
   const response = await instance.get<ApiResponse<T[]>>(url, { params });
   return plainToInstance(cls, unwrapResponse(response.data) ?? []);
@@ -78,7 +78,7 @@ export async function getDataList<T>(
 export async function getPage<T>(
   cls: new () => T,
   url: string,
-  params?: Record<string, string | number | undefined>,
+  params?: Record<string, string | number | boolean | undefined>,
 ): Promise<PageResult<T>> {
   const response = await instance.get<ApiResponse<PageResult<T>>>(url, { params });
   const page = unwrapResponse(response.data);

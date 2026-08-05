@@ -7,26 +7,49 @@ import (
 
 type UserDTO struct {
 	baseDTO.BaseDTO
-	Name           string    `json:"name"`
-	Username       string    `json:"username"`
-	Email          string    `json:"email"`
-	Phone          string    `json:"phone"`
-	Department     string    `json:"department"`
-	Role           string    `json:"role"`
-	Password       string    `json:"password"`
-	OriginPassword string    `json:"originPassword"`
-	Status         string    `json:"status"`
-	LastLoginTime  time.Time `json:"lastLoginTime"`
-	SecretKey      string    `json:"secretKey"`
-	Remark         string    `json:"remark"`
-	PubToken       string    `json:"pubToken"`
-	BanCount       uint32    `json:"banCount"`
-	AccountID      int       `json:"accountId"`
-	AccountStatus  string    `json:"accountStatus"`
-	BalanceAmount  string    `json:"balanceAmount"`
-	TenantUserID   int       `json:"tenantUserId"`
-	TenantID       uint64    `json:"tenantId"`
-	TenantName     string    `json:"tenantName"`
+	Name           string                 `json:"name"`
+	Username       string                 `json:"username"`
+	Email          string                 `json:"email"`
+	Phone          string                 `json:"phone"`
+	Department     string                 `json:"department"`
+	Role           string                 `json:"role"`
+	Password       string                 `json:"password"`
+	OriginPassword string                 `json:"originPassword"`
+	Status         string                 `json:"status"`
+	LastLoginTime  time.Time              `json:"lastLoginTime"`
+	SecretKey      string                 `json:"secretKey"`
+	Remark         string                 `json:"remark"`
+	PubToken       string                 `json:"pubToken"`
+	BanCount       uint32                 `json:"banCount"`
+	AccountID      int                    `json:"accountId"`
+	AccountStatus  string                 `json:"accountStatus"`
+	BalanceAmount  string                 `json:"balanceAmount"`
+	TenantUserID   int                    `json:"tenantUserId"`
+	TenantID       uint64                 `json:"tenantId"`
+	TenantName     string                 `json:"tenantName"`
+	Roles          []UserRoleBindingDTO   `json:"roles"`
+	Tenants        []UserTenantBindingDTO `json:"tenants"`
+}
+
+type UserRoleBindingDTO struct {
+	ID       int    `json:"id"`
+	RoleID   uint64 `json:"roleId"`
+	RoleName string `json:"roleName"`
+	RoleCode string `json:"roleCode"`
+}
+
+type UserTenantBindingDTO struct {
+	ID         int    `json:"id"`
+	TenantID   uint64 `json:"tenantId"`
+	TenantName string `json:"tenantName"`
+}
+
+type SaveUserRoleBindingsDTO struct {
+	RoleIDs []uint64 `json:"roleIds"`
+}
+
+type SaveUserTenantBindingsDTO struct {
+	TenantIDs []uint64 `json:"tenantIds"`
 }
 
 type CreateUserDTO struct {

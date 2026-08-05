@@ -51,18 +51,20 @@ type SystemBalanceSummaryDetailDTO struct {
 }
 
 type ActualCompletedSummaryDTO struct {
-	Count                 int64                        `json:"count"`
-	YesterdayCount        int64                        `json:"yesterdayCount"`
-	CountChange           int64                        `json:"countChange"`
-	CountChangeRate       float64                      `json:"countChangeRate"`
-	PendingOrderCount     int64                        `json:"pendingOrderCount"`
-	PendingCount          int64                        `json:"pendingCount"`
-	YesterdayPendingCount int64                        `json:"yesterdayPendingCount"`
-	TotalPendingCount     int64                        `json:"totalPendingCount"`
-	TotalOrderCount       int64                        `json:"totalOrderCount"`
-	TotalCount            int64                        `json:"totalCount"`
-	CompletedOrderCount   int64                        `json:"completedOrderCount"`
-	CategoryList          []ActualCompletedCategoryDTO `json:"categoryList"`
+	Count                       int64                        `json:"count"`
+	YesterdayCount              int64                        `json:"yesterdayCount"`
+	CountChange                 int64                        `json:"countChange"`
+	CountChangeRate             float64                      `json:"countChangeRate"`
+	PendingOrderCount           int64                        `json:"pendingOrderCount"`
+	RecentUninitiatedOrderCount int64                        `json:"recentUninitiatedOrderCount"`
+	RemainingOrderCount         int64                        `json:"remainingOrderCount"`
+	PendingCount                int64                        `json:"pendingCount"`
+	YesterdayPendingCount       int64                        `json:"yesterdayPendingCount"`
+	TotalPendingCount           int64                        `json:"totalPendingCount"`
+	TotalOrderCount             int64                        `json:"totalOrderCount"`
+	TotalCount                  int64                        `json:"totalCount"`
+	CompletedOrderCount         int64                        `json:"completedOrderCount"`
+	CategoryList                []ActualCompletedCategoryDTO `json:"categoryList"`
 }
 
 type ActualCompletedCategoryDTO struct {

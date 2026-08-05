@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	permissionRepository "suffer/service/permission/repository"
@@ -142,6 +143,7 @@ func (s *AuthService) ValidateToken(token, requestURL string) (*LoginUser, error
 		return nil, err
 	}
 	if len(roleIDs) == 0 {
+		log.Printf("authorization denied: userId=%d url=%q has no active roles", loginUser.ID, requestURL)
 		return nil, ErrUserNoResource
 	}
 
@@ -231,6 +233,7 @@ func (s *AuthService) hadResource(roleIDs []uint64, resourceURL string) (bool, e
 		return false, err
 	}
 	if resource == nil {
+		log.Printf("authorization resource missing: url=%q roles=%v", resourceURL, roleIDs)
 		return false, nil
 	}
 	if s.roleResourceRepository.Db == nil {
@@ -242,6 +245,9 @@ func (s *AuthService) hadResource(roleIDs []uint64, resourceURL string) (bool, e
 		Where("role_id IN ? AND resource_id = ? AND active = ?", roleIDs, resource.Id, 1).
 		Count(&count).Error; err != nil {
 		return false, err
+	}
+	if count == 0 {
+		log.Printf("authorization resource denied: url=%q resourceId=%d roles=%v", resourceURL, resource.Id, roleIDs)
 	}
 	return count > 0, nil
 }

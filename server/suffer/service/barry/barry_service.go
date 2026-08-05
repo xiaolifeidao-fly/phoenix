@@ -27,6 +27,7 @@ type BarryService struct {
 	ManualTaskStats         *ManualTaskStatisticsService
 	ManualOrderDetails      *ManualOrderDetailService
 	WorkbenchDashboardStats *WorkbenchDashboardStatisticsService
+	OrderAssign             *OrderAssignService
 }
 
 func NewBarryService() *BarryService {
@@ -58,6 +59,7 @@ func NewBarryService() *BarryService {
 		ManualTaskStats:         NewManualTaskStatisticsService(client),
 		ManualOrderDetails:      NewManualOrderDetailService(client),
 		WorkbenchDashboardStats: NewWorkbenchDashboardStatisticsService(client),
+		OrderAssign:             NewOrderAssignService(client),
 	}
 }
 

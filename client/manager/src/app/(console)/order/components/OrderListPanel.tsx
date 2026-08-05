@@ -8,6 +8,7 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   ReloadOutlined,
+  RollbackOutlined,
   SearchOutlined,
   UpOutlined,
 } from "@ant-design/icons";
@@ -239,10 +240,36 @@ export function OrderListPanel() {
                     <span>已提交 {formatNumber(record.orderSubmitNum)}</span>
                   </div>
                   <Progress percent={getProgressPercent(record.orderSubmitNum, record.orderAssignNum)} showInfo={false} size="small" />
-                  <Text className="order-record-cell__meta">提交率 {formatRate(record.orderSubmitNum, record.orderAssignNum)} · 上量率 {formatRate(actualNum, record.orderAssignNum)}</Text>
+                  <Text className="order-record-cell__meta">
+                    提交率 {renderRate(record.orderSubmitNum, record.orderAssignNum)} · 上量率 {renderRate(actualNum, record.orderAssignNum)}
+                  </Text>
                 </div>
               );
             },
+          },
+          {
+            title: "分发轮次",
+            dataIndex: "assignFinishTimes",
+            width: 104,
+            render: (value: number) => <Text strong>{formatNumber(value)}</Text>,
+          },
+          {
+            title: "异常状态",
+            dataIndex: "isAbnormal",
+            width: 104,
+            render: (isAbnormal: boolean) => (
+              <Tag color={isAbnormal ? "error" : "success"}>{isAbnormal ? "异常" : "正常"}</Tag>
+            ),
+          },
+          {
+            title: "异常理由",
+            dataIndex: "exceptionReason",
+            width: 220,
+            render: (reason: string) => (
+              <Tooltip title={reason || "无异常理由"}>
+                <Text className="order-record-cell__meta" ellipsis>{reason || "-"}</Text>
+              </Tooltip>
+            ),
           },
         ],
       },
@@ -280,18 +307,42 @@ export function OrderListPanel() {
             ),
           },
           {
-            title: "来源与时间",
+            title: "时间",
             key: "sourceTime",
-            width: 238,
+            width: 188,
             render: (_, record) => (
               <div className="order-record-cell">
-                <Text className="order-record-cell__primary">渠道：{record.channel || "-"}</Text>
-                <Tooltip title={record.tinyUrl}>
-                  <Text className="order-record-cell__meta" ellipsis>短链：{record.tinyUrl || "-"}</Text>
-                </Tooltip>
-                <Text className="order-record-cell__meta">创建：{record.createdTime || "-"}</Text>
-                <Text className="order-record-cell__meta">更新：{record.updatedTime || "-"}</Text>
+                <Text className="order-record-cell__meta">创建：{formatDateTime(record.createdTime)}</Text>
+                <Text className="order-record-cell__meta">更新：{formatDateTime(record.updatedTime)}</Text>
               </div>
+            ),
+          },
+        ],
+      },
+      {
+        title: "操作",
+        key: "actions",
+        fixed: "right",
+        children: [
+          {
+            title: "退单",
+            key: "refund",
+            width: 96,
+            fixed: "right",
+            align: "center",
+            render: () => (
+              <Tooltip title="退单接口待接入">
+                <Button
+                  type="text"
+                  size="small"
+                  className="order-record-action"
+                  icon={<RollbackOutlined />}
+                  disabled
+                  aria-label="退单接口待接入"
+                >
+                  退单
+                </Button>
+              </Tooltip>
             ),
           },
         ],
@@ -453,7 +504,8 @@ export function OrderListPanel() {
               loading={ordersLoading}
               columns={columns}
               dataSource={orders}
-              scroll={{ x: 1598 }}
+              tableLayout="fixed"
+              scroll={{ x: 1984 }}
               locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前筛选条件下暂无订单" /> }}
               pagination={{
                 current: pageIndex,
@@ -484,11 +536,15 @@ function formatNumber(value: number): string {
   return Number(value || 0).toLocaleString("zh-CN");
 }
 
-function formatRate(numerator: number, denominator: number): string {
-  if (!denominator || denominator <= 0) {
-    return "0.00%";
-  }
-  return `${((Number(numerator || 0) / denominator) * 100).toFixed(2)}%`;
+function formatDateTime(value: string): string {
+  const dateTime = dayjs(value);
+  return value && dateTime.isValid() ? dateTime.format("YYYY-MM-DD HH:mm:ss") : "-";
+}
+
+function renderRate(numerator: number, denominator: number) {
+  const rate = denominator > 0 ? (Number(numerator || 0) / denominator) * 100 : 0;
+  const rateClassName = rate < 30 ? "order-rate order-rate--critical" : rate < 50 ? "order-rate order-rate--warning" : "order-rate";
+  return <span className={rateClassName}>{`${rate.toFixed(2)}%`}</span>;
 }
 
 function getProgressPercent(value: number, total: number): number {

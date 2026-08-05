@@ -148,6 +148,19 @@ func (s *DashboardService) TodayActualCompleted(shopCategoryIDs []uint64) (*dash
 	if err != nil {
 		return nil, err
 	}
+	uninitiatedOrderCount, err := s.repository.UninitiatedOrderCount(shopCategoryIDs)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	recentUninitiatedOrderCount, err := s.repository.RecentUninitiatedOrderCount(now.Add(-3*time.Minute), now, shopCategoryIDs)
+	if err != nil {
+		return nil, err
+	}
+	remainingOrderCount, err := s.repository.RemainingOrderCount(shopCategoryIDs)
+	if err != nil {
+		return nil, err
+	}
 	yesterdayPendingRows, err := s.repository.YesterdayPendingByCategory(todayStart, shopCategoryIDs)
 	if err != nil {
 		return nil, err
@@ -177,12 +190,14 @@ func (s *DashboardService) TodayActualCompleted(shopCategoryIDs []uint64) (*dash
 		}
 		result.Count += category.Count
 		result.YesterdayCount += row.YesterdaySameCount
-		result.PendingOrderCount += row.PendingOrderCount
 		result.PendingCount += row.PendingCount
 		result.TotalOrderCount += row.TotalOrderCount
 		result.TotalCount += row.TotalCount
 		result.CompletedOrderCount += row.CompletedOrderCount
 	}
+	result.PendingOrderCount = uninitiatedOrderCount
+	result.RecentUninitiatedOrderCount = recentUninitiatedOrderCount
+	result.RemainingOrderCount = remainingOrderCount
 	for _, row := range yesterdayPendingRows {
 		result.YesterdayPendingCount += row.Count
 		category, exists := counts[row.ShopCategoryID]

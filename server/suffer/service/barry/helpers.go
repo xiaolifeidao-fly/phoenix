@@ -71,6 +71,7 @@ const (
 	barryInnerUserWithdrawAccountPath                         = "barry.url.inner.point.user.withdraw.account.suffix"
 	barryInnerUserWithdrawFinishPath                          = "barry.url.inner.point.user.withdraw.finish.suffix"
 	barryInnerUserWithdrawCancelPath                          = "barry.url.inner.point.user.withdraw.cancel.suffix"
+	barryInnerOrderStopAssignPath                             = "barry.url.inner.order.stop.assign.suffix"
 )
 
 func servicePath(configKey string) string {

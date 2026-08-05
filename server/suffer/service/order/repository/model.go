@@ -52,6 +52,8 @@ type OrderRecord struct {
 	OrderSubmitNum        int    `gorm:"column:order_submit_num;type:int"`
 	BusinessKey           string `gorm:"column:business_key;type:varchar(128)"`
 	AssignFinishTimes     int    `gorm:"column:assign_finish_times;type:int"`
+	IsAbnormal            bool   `gorm:"column:exception_flag;type:tinyint(1)"`
+	ExceptionReason       string `gorm:"column:exception_reason;type:varchar(2000)"`
 }
 
 func (o *OrderRecord) TableName() string { return "order_record" }

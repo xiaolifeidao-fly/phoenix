@@ -33,6 +33,8 @@ func (h *UserHandler) RegisterHandler(engine *gin.RouterGroup) {
 	engine.POST("/users", h.createUser)
 	engine.PUT("/users/:id", h.updateUser)
 	engine.DELETE("/users/:id", h.deleteUser)
+	engine.PUT("/users/:id/roles", h.saveUserRoleBindings)
+	engine.PUT("/users/:id/tenants", h.saveUserTenantBindings)
 
 	engine.GET("/user-login-records", h.listUserLoginRecords)
 	engine.GET("/user-login-records/:id", h.getUserLoginRecordByID)
@@ -120,6 +122,34 @@ func (h *UserHandler) deleteUser(context *gin.Context) {
 		return
 	}
 	commonRouter.ToJson(context, gin.H{"deleted": true}, err)
+}
+
+func (h *UserHandler) saveUserRoleBindings(context *gin.Context) {
+	id, ok := parseUserID(context)
+	if !ok {
+		return
+	}
+	var req userDTO.SaveUserRoleBindingsDTO
+	if err := context.ShouldBindJSON(&req); err != nil {
+		commonRouter.ToError(context, "参数错误")
+		return
+	}
+	result, err := h.userService.SaveUserRoleBindings(id, &req)
+	commonRouter.ToJson(context, result, err)
+}
+
+func (h *UserHandler) saveUserTenantBindings(context *gin.Context) {
+	id, ok := parseUserID(context)
+	if !ok {
+		return
+	}
+	var req userDTO.SaveUserTenantBindingsDTO
+	if err := context.ShouldBindJSON(&req); err != nil {
+		commonRouter.ToError(context, "参数错误")
+		return
+	}
+	result, err := h.userService.SaveUserTenantBindings(id, &req)
+	commonRouter.ToJson(context, result, err)
 }
 
 func (h *UserHandler) listUserLoginRecords(context *gin.Context) {
