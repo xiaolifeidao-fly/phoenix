@@ -708,6 +708,7 @@ export function OrderManagementPanel() {
     selectedRowKeys: selectedOrderIds,
     onChange: (keys) => setSelectedOrderIds(keys.map((key) => Number(key))),
     columnWidth: 44,
+    fixed: "left",
     getCheckboxProps: (record: OrderRecord) => ({
       // 可批量退单或可批量打标的订单都允许勾选，具体可执行的操作由按钮各自判断
       disabled:

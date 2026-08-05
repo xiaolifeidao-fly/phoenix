@@ -1891,6 +1891,21 @@ select {
   white-space: nowrap;
 }
 
+/* 横向滚动时，表头全选框和订单信息标题与左侧固定列保持同步。 */
+.order-records-table .ant-table-thead > tr > th.ant-table-cell-fix-left {
+  position: sticky !important;
+  z-index: 5;
+}
+
+.order-records-table .ant-table-thead > tr > th.ant-table-selection-column.ant-table-cell-fix-left {
+  left: 0 !important;
+  z-index: 6;
+}
+
+.order-records-table .ant-table-thead > tr > th.ant-table-cell-fix-left-last {
+  left: 44px !important;
+}
+
 .order-records-table .ant-table-tbody > tr.order-record-row:hover > td {
   background: var(--manager-primary-50) !important;
 }
