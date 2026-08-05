@@ -30,14 +30,14 @@ ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs \
     && adduser --system --uid 1001 nextjs
 
-RUN chown nextjs:nodejs /app
+RUN mkdir -p /app/configs \
+    && chown nextjs:nodejs /app /app/configs
 
 COPY --chown=nextjs:nodejs package.json pnpm-lock.yaml ./
 COPY --from=dependencies --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/next.config.mjs ./next.config.mjs
-COPY --from=builder --chown=nextjs:nodejs /app/configs ./configs
 
 USER nextjs
 EXPOSE 9901
