@@ -61,7 +61,8 @@ func (h *BarryHandler) listUserWhitelists(c *gin.Context) {
 
 func (h *BarryHandler) saveUserWhitelist(c *gin.Context) {
 	var req barryDTO.SaveUserWhitelistDTO
-	if c.ShouldBindJSON(&req) != nil || req.UserID <= 0 || req.ShopCategoryID <= 0 {
+	if c.ShouldBindJSON(&req) != nil || req.UserID <= 0 || req.ShopCategoryID <= 0 ||
+		(req.FetchTaskLoopNum != nil && *req.FetchTaskLoopNum <= 0) {
 		commonRouter.ToError(c, "参数错误")
 		return
 	}

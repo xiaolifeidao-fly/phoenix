@@ -249,6 +249,15 @@ type ProductTypeDTO struct {
 	ShopGroupID  int64  `json:"shopGroupId,omitempty"`
 }
 
+// ShopGroupDTO is the active subgroup record returned by Barry Inner Gateway.
+// It is intentionally lightweight because the dashboard only needs a stable
+// id plus a human-readable name/code for its selector and detail labels.
+type ShopGroupDTO struct {
+	BarryBaseDTO
+	Name string `json:"name"`
+	Code string `json:"code"`
+}
+
 type ProductTypeQueryDTO struct {
 	PageQueryDTO
 	RequestDTO
@@ -741,6 +750,7 @@ type UserWhitelistDTO struct {
 	MinRecentApprovalRate  *float64 `json:"minRecentApprovalRate,omitempty"`
 	RecentApprovalRateDays *int     `json:"recentApprovalRateDays,omitempty"`
 	DailyAssignTimeRanges  string   `json:"dailyAssignTimeRanges,omitempty"`
+	FetchTaskLoopNum       *int     `json:"fetchTaskLoopNum,omitempty"`
 }
 
 type UserWhitelistQueryDTO struct {
@@ -771,6 +781,7 @@ type SaveUserWhitelistDTO struct {
 	MinRecentApprovalRate  *float64 `json:"minRecentApprovalRate,omitempty"`
 	RecentApprovalRateDays *int     `json:"recentApprovalRateDays,omitempty"`
 	DailyAssignTimeRanges  *string  `json:"dailyAssignTimeRanges,omitempty"`
+	FetchTaskLoopNum       *int     `json:"fetchTaskLoopNum,omitempty"`
 }
 
 type PaymentMethodDTO struct {
@@ -1067,6 +1078,47 @@ type WorkbenchDashboardMetricQueryDTO struct {
 	ShopCategoryIDs   string `json:"shopCategoryIds,omitempty" form:"shopCategoryIds"`
 	ShopCategoryCodes string `json:"shopCategoryCodes,omitempty" form:"shopCategoryCodes"`
 	WindowSeconds     int    `json:"windowSeconds,omitempty" form:"windowSeconds"`
+}
+
+type BridgeDailyStatisticQueryDTO struct {
+	StartDate    string `json:"startDate,omitempty" form:"startDate"`
+	EndDate      string `json:"endDate,omitempty" form:"endDate"`
+	ShopGroupIDs string `json:"shopGroupIds,omitempty" form:"shopGroupIds"`
+	BridgeType   string `json:"bridgeType,omitempty" form:"bridgeType"`
+}
+
+type BridgeDailyStatisticDetailDTO struct {
+	StatDate         string  `json:"statDate"`
+	BridgeID         int64   `json:"bridgeId"`
+	BridgeCode       string  `json:"bridgeCode"`
+	BridgeName       string  `json:"bridgeName"`
+	BridgeCategoryID int64   `json:"bridgeCategoryId"`
+	BridgeType       string  `json:"bridgeType"`
+	ShopGroupIDs     []int64 `json:"shopGroupIds"`
+	TotalNum         int64   `json:"totalNum"`
+	SuccessNum       int64   `json:"successNum"`
+	FailNum          int64   `json:"failNum"`
+	ErrorNum         int64   `json:"errorNum"`
+	NotGetDataNum    int64   `json:"notGetDataNum"`
+	DeleteNum        int64   `json:"deleteNum"`
+	SecretNum        int64   `json:"secretNum"`
+	UnAuthorizeNum   int64   `json:"unAuthorizeNum"`
+}
+
+type BridgeDailyStatisticSummaryDTO struct {
+	StartDate            string                           `json:"startDate"`
+	EndDate              string                           `json:"endDate"`
+	TotalNum             int64                            `json:"totalNum"`
+	SuccessNum           int64                            `json:"successNum"`
+	FailNum              int64                            `json:"failNum"`
+	ErrorNum             int64                            `json:"errorNum"`
+	NotGetDataNum        int64                            `json:"notGetDataNum"`
+	DeleteNum            int64                            `json:"deleteNum"`
+	SecretNum            int64                            `json:"secretNum"`
+	UnAuthorizeNum       int64                            `json:"unAuthorizeNum"`
+	BridgeCount          int                              `json:"bridgeCount"`
+	UnmappedShopGroupIDs []int64                          `json:"unmappedShopGroupIds"`
+	DetailList           []*BridgeDailyStatisticDetailDTO `json:"detailList"`
 }
 
 type WorkbenchDashboardCategoryMetricDTO struct {

@@ -22,6 +22,8 @@ func (h *BarryHandler) registerTransactionRoutes(engine *gin.RouterGroup) {
 	engine.GET("/barry/workbench-dashboard/manual-speed", h.getWorkbenchManualSpeed)
 	engine.GET("/barry/workbench-dashboard/manual-submitted-comparison", h.getWorkbenchManualSubmittedComparison)
 	engine.GET("/barry/workbench-dashboard/actual-completed", h.getWorkbenchActualCompleted)
+	engine.GET("/barry/workbench-dashboard/bridge-daily-statistics", h.getWorkbenchBridgeDailyStatistics)
+	engine.GET("/barry/workbench-dashboard/bridge-types", h.listWorkbenchBridgeTypes)
 	engine.GET("/barry/manual-task-statistics/users", h.listManualTaskStatisticUsers)
 }
 
@@ -165,6 +167,21 @@ func (h *BarryHandler) getWorkbenchManualSubmittedComparison(c *gin.Context) {
 
 func (h *BarryHandler) getWorkbenchActualCompleted(c *gin.Context) {
 	h.getWorkbenchMetric(c, h.barryService.WorkbenchDashboardStats.ActualCompleted)
+}
+
+func (h *BarryHandler) getWorkbenchBridgeDailyStatistics(c *gin.Context) {
+	var q barryDTO.BridgeDailyStatisticQueryDTO
+	if c.ShouldBindQuery(&q) != nil {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := h.barryService.WorkbenchDashboardStats.BridgeDailyStatistics(c.Request.Context(), q)
+	commonRouter.ToJson(c, response, err)
+}
+
+func (h *BarryHandler) listWorkbenchBridgeTypes(c *gin.Context) {
+	response, err := h.barryService.WorkbenchDashboardStats.BridgeTypes(c.Request.Context())
+	commonRouter.ToJson(c, response, err)
 }
 
 func (h *BarryHandler) getWorkbenchMetric(c *gin.Context, getter func(context.Context, barryDTO.WorkbenchDashboardMetricQueryDTO) (*barryDTO.WorkbenchDashboardMetricDTO, error)) {

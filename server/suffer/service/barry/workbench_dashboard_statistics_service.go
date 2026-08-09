@@ -84,6 +84,46 @@ func (s *WorkbenchDashboardStatisticsService) ActualCompleted(ctx context.Contex
 	return s.metric(ctx, barryInnerWorkbenchDashboardActualCompletedPath, query)
 }
 
+// BridgeDailyStatistics resolves one configured 商品分组 + BridgeType scope in
+// Barry, then aggregates its related Bridge configurations by calendar day.
+func (s *WorkbenchDashboardStatisticsService) BridgeDailyStatistics(ctx context.Context, query barryDTO.BridgeDailyStatisticQueryDTO) (*barryDTO.BridgeDailyStatisticSummaryDTO, error) {
+	response := &barryDTO.DetailResponseDTO[barryDTO.BridgeDailyStatisticSummaryDTO]{}
+	err := s.client.GetAbsolute(ctx, innerServicePath(barryInnerWorkbenchDashboardBridgeDailyStatisticsPath), buildValues(
+		"startDate", query.StartDate,
+		"endDate", query.EndDate,
+		"shopGroupIds", query.ShopGroupIDs,
+		"bridgeType", query.BridgeType,
+	), response)
+	if err != nil {
+		return nil, err
+	}
+	if !response.Success || response.Data == nil {
+		return nil, responseError(response.Message, "barry workbench bridge daily statistics response is empty")
+	}
+	return response.Data, nil
+}
+
+// BridgeTypes returns Barry's authoritative BridgeType enum values for the
+// workbench selector. Phoenix deliberately does not duplicate the enum.
+func (s *WorkbenchDashboardStatisticsService) BridgeTypes(ctx context.Context) ([]string, error) {
+	response := &barryDTO.ListResponseDTO[string]{}
+	if err := s.client.GetAbsolute(ctx, innerServicePath(barryInnerWorkbenchDashboardBridgeTypesPath), nil, response); err != nil {
+		return nil, err
+	}
+	if !response.Success {
+		return nil, responseError(response.Message, "barry bridge types response is empty")
+	}
+
+	bridgeTypes := make([]string, 0, len(response.Data))
+	for _, bridgeType := range response.Data {
+		if bridgeType == nil || strings.TrimSpace(*bridgeType) == "" {
+			continue
+		}
+		bridgeTypes = append(bridgeTypes, strings.TrimSpace(*bridgeType))
+	}
+	return bridgeTypes, nil
+}
+
 func (s *WorkbenchDashboardStatisticsService) metric(ctx context.Context, configPath string, query barryDTO.WorkbenchDashboardMetricQueryDTO) (*barryDTO.WorkbenchDashboardMetricDTO, error) {
 	response := &barryDTO.DetailResponseDTO[barryDTO.WorkbenchDashboardMetricDTO]{}
 	err := s.client.GetAbsolute(ctx, innerServicePath(configPath), buildValues(

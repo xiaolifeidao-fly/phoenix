@@ -10,6 +10,7 @@ import (
 
 func (h *BarryHandler) registerProductRoutes(engine *gin.RouterGroup) {
 	engine.GET("/barry/product-types", h.listProductTypes)
+	engine.GET("/barry/shop-groups", h.listShopGroups)
 	engine.GET("/barry/product-categories", h.listProductCategories)
 	engine.POST("/barry/product-categories", h.createProductCategory)
 	engine.PUT("/barry/product-categories/:id", h.updateProductCategory)
@@ -52,6 +53,11 @@ func (h *BarryHandler) listProductTypes(c *gin.Context) {
 		return
 	}
 	commonRouter.ToJson(c, response.Data, nil)
+}
+
+func (h *BarryHandler) listShopGroups(c *gin.Context) {
+	response, err := h.barryService.ShopGroup.List(c.Request.Context())
+	commonRouter.ToJson(c, response, err)
 }
 
 func (h *BarryHandler) listProductCategories(c *gin.Context) {

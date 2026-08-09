@@ -3,10 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AppstoreOutlined,
+  ArrowDownOutlined,
+  ArrowUpOutlined,
   ClockCircleOutlined,
+  DeleteOutlined,
   EditOutlined,
   FundOutlined,
   PayCircleOutlined,
+  PlusOutlined,
   ShopOutlined,
   TeamOutlined,
   WalletOutlined,
@@ -25,6 +29,9 @@ import {
 import { fetchManualProducts, type ManualProductRecord } from "../../manual/api/product.api";
 import { fetchUserStats, fetchUsers, UserStats, type UserRecord } from "../../user/api/user.api";
 import {
+  fetchBarryBridgeTypes,
+  fetchBarryShopGroups,
+  fetchWorkbenchBridgeDailyStatistics,
   fetchActualCompleted,
   fetchManualSpeed,
   fetchSystemBalance,
@@ -33,6 +40,9 @@ import {
   fetchWorkbenchDashboardStatisticsWithComparison,
   fetchWorkbenchUserOverview,
   type ActualCompletedSummary,
+  type BarryShopGroup,
+  type BridgeDailyStatisticDetail,
+  type BridgeDailyStatisticSummary,
   type DashboardStatistics,
   type ManualSpeedSummary,
   type WorkbenchDashboardStatistics,
@@ -43,6 +53,7 @@ const { Paragraph, Text } = Typography;
 
 type DashboardCardId =
   | "productCount"
+  | "bridgeDailyStatistic"
   | "todayConsume"
   | "todayRecharge"
   | "systemBalance"
@@ -72,8 +83,16 @@ const DASHBOARD_METRIC_IDS = Object.keys(DASHBOARD_METRIC_FETCHERS) as Dashboard
 interface DashboardCardConfig {
   visible: boolean;
   categoryIds: number[];
+  /** 仅用于升级旧版 localStorage 配置；新配置使用 bridgeStatisticScopes。 */
+  shopGroupIds?: number[];
+  bridgeStatisticScopes?: BridgeStatisticScope[];
   barryWindowSeconds?: number;
   userOverviewWindowSeconds?: number;
+}
+
+interface BridgeStatisticScope {
+  shopGroupId: number;
+  bridgeType: string;
 }
 
 interface DashboardConfigStore {
@@ -147,7 +166,7 @@ interface DashboardComparison {
 }
 
 const DASHBOARD_STORAGE_KEY = "phoenix_manager_dashboard_config_v1";
-const DASHBOARD_CONFIG_VERSION = 9;
+const DASHBOARD_CONFIG_VERSION = 12;
 const DASHBOARD_SPEED_STORAGE_KEY = "phoenix_manager_dashboard_speed_history_v1";
 const DASHBOARD_DATA_CACHE_KEY = "phoenix_manager_dashboard_data_cache_v1";
 const DASHBOARD_SPEED_WINDOW_MS = 48 * 60 * 60 * 1000;
@@ -155,8 +174,32 @@ const DASHBOARD_SPEED_WINDOW_MS = 48 * 60 * 60 * 1000;
 const DASHBOARD_SPEED_CHART_WINDOW_MS = 24 * 60 * 60 * 1000;
 const DASHBOARD_SPEED_REPLACE_THRESHOLD_MS = 60 * 1000;
 const DASHBOARD_REFRESH_INTERVAL_MS = 10 * 1000;
+const DASHBOARD_BRIDGE_STATISTIC_REFRESH_INTERVAL_MS = 60 * 1000;
+const MAX_BRIDGE_STATISTIC_REQUEST_CONCURRENCY = 3;
 const MIN_BARRY_WINDOW_SECONDS = 1;
 const MAX_BARRY_WINDOW_SECONDS = 3600;
+// Barry BridgeType 的完整当前枚举。枚举接口暂不可用（例如后端尚未发布）时，
+// 配置抽屉仍可展示和选择全部类型；接口返回的新值会在下方一并合并。
+const BARRY_BRIDGE_TYPE_FALLBACK = [
+  "GET_ITEM_FROM_WEB",
+  "GET_ITEM_LIST_FROM_WEB",
+  "GET_ITEM",
+  "GET_USER_ITEM",
+  "USER_FANS",
+  "GET_USER_ITEM_FROM_WEB",
+  "GET_ITEM_LIST",
+  "FOLLOW_LIST",
+  "HS_FOLLOW_LIST",
+  "CONVERT_UID",
+  "CONVERT",
+  "CONVERT_UID_BY_URL",
+  "CHECK_USER",
+] as const;
+const DEFAULT_BRIDGE_TYPE = "GET_ITEM_FROM_WEB";
+const DEFAULT_BRIDGE_STATISTIC_SCOPES: BridgeStatisticScope[] = [
+  { shopGroupId: 1, bridgeType: DEFAULT_BRIDGE_TYPE },
+  { shopGroupId: 1, bridgeType: "GET_ITEM_LIST_FROM_WEB" },
+];
 
 interface DashboardDataCache {
   products: ShopRecord[];
@@ -172,8 +215,8 @@ interface DashboardDataCache {
 // `averageSpeed` is intentionally omitted here — 速度概览 renders as a full-width
 // trend chart at the very bottom of the dashboard instead of a grid card.
 const DASHBOARD_LAYOUT: DashboardCardId[][] = [
-  ["todayConsume", "todayRecharge", "systemBalance"],
-  ["actualCompleted", "manualSubmitted", "taskRemaining"],
+  ["productCount", "bridgeDailyStatistic", "todayConsume", "todayRecharge"],
+  ["systemBalance", "actualCompleted", "manualSubmitted", "taskRemaining"],
 ];
 const DASHBOARD_WORKLOAD_CARD_IDS: DashboardCardId[] = ["realActualCompleted", "lowPriceActualCompleted"];
 const LOW_PRICE_MANUAL_PRODUCT_IDS = [15];
@@ -181,6 +224,7 @@ const LOW_PRICE_UPSTREAM_CATEGORY_IDS = [8, 10];
 
 const DASHBOARD_TITLES: Record<DashboardCardId, string> = {
   productCount: "上号情况",
+  bridgeDailyStatistic: "商品桥接器情况",
   todayConsume: "今日消费",
   todayRecharge: "今日充值",
   systemBalance: "系统余额",
@@ -196,6 +240,7 @@ const DASHBOARD_TITLES: Record<DashboardCardId, string> = {
 
 const DASHBOARD_DEFAULT_CONFIG: Record<DashboardCardId, DashboardCardConfig> = {
   productCount: { visible: true, categoryIds: [], userOverviewWindowSeconds: 120 },
+  bridgeDailyStatistic: { visible: true, categoryIds: [], bridgeStatisticScopes: DEFAULT_BRIDGE_STATISTIC_SCOPES },
   todayConsume: { visible: true, categoryIds: [] },
   todayRecharge: { visible: true, categoryIds: [] },
   systemBalance: { visible: true, categoryIds: [] },
@@ -234,6 +279,9 @@ export function ManagerDashboardPanel() {
   const [workbenchStatistics, setWorkbenchStatistics] = useState<WorkbenchDashboardStatistics | null>(null);
   const [realManualSubmittedStatistics, setRealManualSubmittedStatistics] = useState<WorkbenchDashboardStatistics | null>(null);
   const [lowPriceManualSubmittedStatistics, setLowPriceManualSubmittedStatistics] = useState<WorkbenchDashboardStatistics | null>(null);
+  const [bridgeDailyStatistics, setBridgeDailyStatistics] = useState<Record<string, BridgeDailyStatisticSummary>>({});
+  const [shopGroups, setShopGroups] = useState<BarryShopGroup[]>([]);
+  const [bridgeTypes, setBridgeTypes] = useState<string[]>([]);
   const [lowPriceActualCompleted, setLowPriceActualCompleted] = useState<ActualCompletedSummary | null>(null);
   const [manualSpeed, setManualSpeed] = useState<ManualSpeedSummary | null>(null);
   const [realManualSpeed, setRealManualSpeed] = useState<ManualSpeedSummary | null>(null);
@@ -250,6 +298,7 @@ export function ManagerDashboardPanel() {
   const [loading, setLoading] = useState(true);
   const [skipInitialFetch, setSkipInitialFetch] = useState(false);
   const [detailCardId, setDetailCardId] = useState<DashboardCardId | null>(null);
+  const [bridgeStatisticDetailOpen, setBridgeStatisticDetailOpen] = useState(false);
   const [editingCardId, setEditingCardId] = useState<DashboardCardId | null>(null);
   const actualSpeedSampleRef = useRef<Record<"total" | "real", { count: number; timestamp: number } | undefined>>({
     total: undefined,
@@ -539,6 +588,29 @@ export function ManagerDashboardPanel() {
       return;
     }
 
+    let disposed = false;
+    void Promise.allSettled([fetchBarryShopGroups(), fetchBarryBridgeTypes()])
+      .then(([shopGroupResult, bridgeTypeResult]) => {
+        if (disposed) {
+          return;
+        }
+        if (shopGroupResult.status === "fulfilled") {
+          setShopGroups(shopGroupResult.value);
+        }
+        if (bridgeTypeResult.status === "fulfilled") {
+          setBridgeTypes(bridgeTypeResult.value);
+        }
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [ready]);
+
+  useEffect(() => {
+    if (!ready) {
+      return;
+    }
+
     const loadLowPriceStatistics = () => {
       void fetchWorkbenchDashboardStatisticsWithComparison(
         lowPriceManualProductIdsKey ? { shopCategoryIds: lowPriceManualProductIdsKey } : undefined,
@@ -560,6 +632,61 @@ export function ManagerDashboardPanel() {
     const timer = window.setInterval(loadLowPriceStatistics, DASHBOARD_REFRESH_INTERVAL_MS);
     return () => window.clearInterval(timer);
   }, [ready, lowPriceManualProductIdsKey, lowPriceUpstreamCategoryIdsKey]);
+
+  const bridgeStatisticScopes = useMemo(
+    () => normalizeBridgeStatisticScopes(
+      configMap.bridgeDailyStatistic?.bridgeStatisticScopes ?? DEFAULT_BRIDGE_STATISTIC_SCOPES,
+    ),
+    [configMap.bridgeDailyStatistic?.bridgeStatisticScopes],
+  );
+  const bridgeDailyStatisticVisible = configMap.bridgeDailyStatistic?.visible ?? true;
+  const defaultBridgeStatisticScope = bridgeStatisticScopes[0];
+  const defaultBridgeDailyStatistic = defaultBridgeStatisticScope
+    ? bridgeDailyStatistics[bridgeStatisticScopeKey(defaultBridgeStatisticScope)] ?? null
+    : null;
+
+  useEffect(() => {
+    if (!ready || !bridgeDailyStatisticVisible || bridgeStatisticScopes.length === 0) {
+      setBridgeDailyStatistics({});
+      return;
+    }
+
+    let disposed = false;
+    let loadingBridgeDailyStatistics = false;
+    setBridgeDailyStatistics({});
+    const loadBridgeDailyStatistics = () => {
+      if (loadingBridgeDailyStatistics) {
+        return;
+      }
+      loadingBridgeDailyStatistics = true;
+      void fetchBridgeStatisticScopes(bridgeStatisticScopes)
+        .then((results) => {
+          if (disposed) {
+            return;
+          }
+          setBridgeDailyStatistics((current) => {
+            const next = { ...current };
+            results.forEach((statistic, index) => {
+              const scope = bridgeStatisticScopes[index];
+              if (statistic && scope) {
+                next[bridgeStatisticScopeKey(scope)] = statistic;
+              }
+            });
+            return next;
+          });
+        })
+        .finally(() => {
+          loadingBridgeDailyStatistics = false;
+        });
+    };
+
+    loadBridgeDailyStatistics();
+    const timer = window.setInterval(loadBridgeDailyStatistics, DASHBOARD_BRIDGE_STATISTIC_REFRESH_INTERVAL_MS);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
+  }, [bridgeDailyStatisticVisible, bridgeStatisticScopes, ready]);
 
   const barryWindowSeconds = clampBarryWindowSeconds(
     configMap.averageSpeed?.barryWindowSeconds,
@@ -612,6 +739,32 @@ export function ManagerDashboardPanel() {
         value: item.id,
       })),
     [manualProducts],
+  );
+
+  const shopGroupOptions = useMemo(
+    () =>
+      [...shopGroups]
+        .sort((left, right) => left.id - right.id)
+        .map((item) => ({
+          label: formatShopGroupLabel(item),
+          value: item.id,
+        })),
+    [shopGroups],
+  );
+
+  const bridgeTypeOptions = useMemo(
+    () => Array.from(new Set([
+      ...BARRY_BRIDGE_TYPE_FALLBACK,
+      ...bridgeTypes,
+      ...bridgeStatisticScopes.map((scope) => scope.bridgeType),
+    ]))
+      .map((bridgeType) => ({ label: formatBridgeType(bridgeType), value: bridgeType })),
+    [bridgeStatisticScopes, bridgeTypes],
+  );
+
+  const shopGroupLabelMap = useMemo(
+    () => new Map(shopGroups.map((item) => [item.id, formatShopGroupLabel(item)])),
+    [shopGroups],
   );
 
   const categoryLabelMap = useMemo(
@@ -738,11 +891,10 @@ export function ManagerDashboardPanel() {
       ),
     [configMap],
   );
-  const visibleMetricCardIds = useMemo(
+  const visibleTopCardIds = useMemo(
     () => DASHBOARD_LAYOUT.flat().filter((cardId) => configMap[cardId]?.visible),
     [configMap],
   );
-  const isAccountStatusVisible = configMap.productCount?.visible;
   const visibleWorkloadCardIds = useMemo(
     () => DASHBOARD_WORKLOAD_CARD_IDS.filter((cardId) => configMap[cardId]?.visible),
     [configMap],
@@ -754,6 +906,9 @@ export function ManagerDashboardPanel() {
     form.setFieldsValue({
       visible: nextConfig.visible,
       categoryIds: nextConfig.categoryIds,
+      bridgeStatisticScopes: normalizeBridgeStatisticScopes(
+        nextConfig.bridgeStatisticScopes ?? DEFAULT_BRIDGE_STATISTIC_SCOPES,
+      ),
       barryWindowSeconds: clampBarryWindowSeconds(nextConfig.barryWindowSeconds),
       userOverviewWindowSeconds: clampBarryWindowSeconds(nextConfig.userOverviewWindowSeconds),
     });
@@ -772,6 +927,9 @@ export function ManagerDashboardPanel() {
           ? true
           : Boolean(values.visible),
         categoryIds: values.categoryIds ?? [],
+        bridgeStatisticScopes: editingCardId === "bridgeDailyStatistic"
+          ? normalizeBridgeStatisticScopes(values.bridgeStatisticScopes)
+          : current[editingCardId].bridgeStatisticScopes,
         barryWindowSeconds: editingCardId === "averageSpeed"
           ? clampBarryWindowSeconds(values.barryWindowSeconds)
           : current[editingCardId].barryWindowSeconds,
@@ -784,6 +942,10 @@ export function ManagerDashboardPanel() {
   };
 
   const detailCard = detailCardId ? cardViews[detailCardId] : null;
+  const bridgeStatisticDetails = bridgeStatisticScopes.map((scope) => ({
+    scope,
+    statistic: bridgeDailyStatistics[bridgeStatisticScopeKey(scope)] ?? null,
+  }));
   return (
     <>
       <div className="manager-page-stack">
@@ -806,30 +968,26 @@ export function ManagerDashboardPanel() {
               </section>
             ) : null}
 
-            {isAccountStatusVisible || visibleMetricCardIds.length > 0 || visibleWorkloadCardIds.length > 0 ? (
+            {visibleTopCardIds.length > 0 || visibleWorkloadCardIds.length > 0 ? (
               <>
-                {isAccountStatusVisible || visibleMetricCardIds.length > 0 ? (
-                  <section
-                    className={`manager-stats-grid manager-dashboard-layout${isAccountStatusVisible ? " manager-dashboard-layout--with-left-card" : ""}`}
-                    style={{ gridTemplateColumns: isAccountStatusVisible ? undefined : "repeat(3, minmax(0, 1fr))" }}
-                  >
-                    {isAccountStatusVisible ? (
-                      <div className="manager-dashboard-layout__left-card">
-                        {renderDashboardCard({
-                          cardId: "productCount",
-                          view: cardViews.productCount,
+                {visibleTopCardIds.length > 0 ? (
+                  <section className="manager-stats-grid manager-dashboard-layout">
+                    {visibleTopCardIds.map((cardId) =>
+                      cardId === "bridgeDailyStatistic"
+                        ? renderBridgeDailyStatisticCard({
+                          statistic: defaultBridgeDailyStatistic,
+                          scope: defaultBridgeStatisticScope,
+                          scopeCount: bridgeStatisticScopes.length,
+                          shopGroupLabelMap,
+                          onEdit: () => openEditModal(cardId),
+                          onOpenDetail: () => setBridgeStatisticDetailOpen(true),
+                        })
+                        : renderDashboardCard({
+                          cardId,
+                          view: cardViews[cardId],
                           onEdit: openEditModal,
                           onOpenDetail: setDetailCardId,
-                        })}
-                      </div>
-                    ) : null}
-                    {visibleMetricCardIds.map((cardId) =>
-                      renderDashboardCard({
-                        cardId,
-                        view: cardViews[cardId],
-                        onEdit: openEditModal,
-                        onOpenDetail: setDetailCardId,
-                      }),
+                        }),
                     )}
                   </section>
                 ) : null}
@@ -847,6 +1005,7 @@ export function ManagerDashboardPanel() {
                     )}
                   </section>
                 ) : null}
+
               </>
             ) : (
               <section className="manager-data-card">
@@ -927,6 +1086,83 @@ export function ManagerDashboardPanel() {
       </Drawer>
 
       <Drawer
+        title="商品桥接器情况"
+        placement="right"
+        width={860}
+        open={bridgeStatisticDetailOpen}
+        onClose={() => setBridgeStatisticDetailOpen(false)}
+        className="manager-dashboard-drawer"
+      >
+        {bridgeStatisticDetails.length > 0 ? (
+          <div className="manager-page-stack">
+            <section className="manager-data-card">
+              <div className="manager-section-label">已配置 {bridgeStatisticDetails.length} 个商品分组 + BridgeType 组合</div>
+              <Text style={{ display: "block", marginTop: 12, color: "var(--manager-text-soft)" }}>
+                首项是卡片默认展示项；可在编辑中通过上下移动调整默认项和展示顺序。
+              </Text>
+              <Text style={{ display: "block", marginTop: 6, color: "var(--manager-text-soft)" }}>
+                按 Bridge 调用完成日期汇总；统计采用 Redis 批量刷库，页面数据可能有约 5 分钟延迟。
+              </Text>
+            </section>
+
+            {bridgeStatisticDetails.map(({ scope, statistic }, index) => (
+              <section key={bridgeStatisticScopeKey(scope)} className="manager-data-card manager-table">
+                <Space
+                  wrap
+                  size={10}
+                  style={{ width: "100%", justifyContent: "space-between", marginBottom: 18 }}
+                >
+                  <Space wrap size={8}>
+                    <Tag color={index === 0 ? "blue" : "default"}>{index === 0 ? "默认展示" : `展示项 ${index + 1}`}</Tag>
+                    <Text className="manager-value">{formatBridgeStatisticScope(scope, shopGroupLabelMap)}</Text>
+                  </Space>
+                  {statistic ? (
+                    <Tag className="manager-dashboard-tag">Bridge {statistic.bridgeCount}</Tag>
+                  ) : null}
+                </Space>
+
+                {statistic ? (
+                  <>
+                    <div className="manager-dashboard-bridge-statistic__drawer-metrics">
+                      {buildBridgeDailyStatisticMetrics(statistic, true).map((metric) => (
+                        <div key={metric.label} className="manager-dashboard-card__metric">
+                          <div className="manager-dashboard-card__metric-label">{metric.label}</div>
+                          <div className="manager-dashboard-card__metric-value">{metric.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <Text style={{ display: "block", marginTop: 14, color: "var(--manager-text-soft)" }}>
+                      统计日期：{formatStatisticDateRange(statistic.startDate, statistic.endDate)}
+                    </Text>
+                    {statistic.unmappedShopGroupIds.length > 0 ? (
+                      <Text style={{ display: "block", marginTop: 6, color: "var(--manager-warning)" }}>
+                        未关联 Bridge 的商品分组：{formatShopGroupLabels(statistic.unmappedShopGroupIds, shopGroupLabelMap)}
+                      </Text>
+                    ) : null}
+                    <Table<BridgeDailyStatisticDetail>
+                      style={{ marginTop: 18 }}
+                      rowKey={(record) => `${bridgeStatisticScopeKey(scope)}-${record.statDate}-${record.bridgeId}-${record.bridgeType}`}
+                      pagination={false}
+                      scroll={{ x: 1060 }}
+                      dataSource={statistic.detailList}
+                      columns={buildBridgeDailyStatisticColumns(shopGroupLabelMap)}
+                      locale={{ emptyText: "当前组合暂未关联可统计的 Bridge" }}
+                    />
+                  </>
+                ) : (
+                  <div className="manager-dashboard-bridge-statistic__loading"><Spin size="small" /> 正在加载此组合的统计数据</div>
+                )}
+              </section>
+            ))}
+          </div>
+        ) : (
+          <section className="manager-data-card" style={{ minHeight: 180, display: "grid", placeItems: "center" }}>
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未配置商品分组和 BridgeType 组合" />
+          </section>
+        )}
+      </Drawer>
+
+      <Drawer
         title={editingCardId ? `编辑 ${DASHBOARD_TITLES[editingCardId]}` : "编辑 dashboard"}
         placement="right"
         width={420}
@@ -949,7 +1185,7 @@ export function ManagerDashboardPanel() {
             </Form.Item>
           ) : null}
 
-          {editingCardId && !isUpstreamUserMetric(editingCardId) && editingCardId !== "actualCompleted" && editingCardId !== "averageSpeed" && editingCardId !== "productCount" ? (
+          {editingCardId && !isUpstreamUserMetric(editingCardId) && editingCardId !== "actualCompleted" && editingCardId !== "averageSpeed" && editingCardId !== "productCount" && editingCardId !== "bridgeDailyStatistic" ? (
             <Form.Item
               label={getEditSelectorConfig(editingCardId).label}
               name="categoryIds"
@@ -963,6 +1199,116 @@ export function ManagerDashboardPanel() {
                 options={isManualProductMetric(editingCardId) ? manualProductOptions : categoryOptions}
               />
             </Form.Item>
+          ) : null}
+
+          {editingCardId === "bridgeDailyStatistic" ? (
+            <Form.List
+              name="bridgeStatisticScopes"
+              rules={[
+                {
+                  validator: async (_, scopes: BridgeStatisticScope[] | undefined) => {
+                    if (!Array.isArray(scopes) || scopes.length === 0) {
+                      throw new Error("请至少配置一个商品分组 + BridgeType 组合");
+                    }
+                    const keys = scopes.map((scope) => bridgeStatisticScopeKey(scope));
+                    if (new Set(keys).size !== keys.length) {
+                      throw new Error("商品分组 + BridgeType 组合不能重复");
+                    }
+                  },
+                },
+              ]}
+            >
+              {(fields, { add, move, remove }, { errors }) => (
+                <>
+                  <Text style={{ display: "block", marginBottom: 8, color: "var(--manager-text)" }}>
+                    展示组合
+                  </Text>
+                  <Text style={{ display: "block", marginBottom: 14, color: "var(--manager-text-soft)" }}>
+                    第一项为卡片默认展示项；点击卡片可查看全部组合的每日统计。
+                  </Text>
+                  {fields.map((field, index) => (
+                    <section
+                      key={field.key}
+                      className="manager-data-card"
+                      style={{ padding: 14, marginBottom: 12 }}
+                    >
+                      <Space style={{ width: "100%", justifyContent: "space-between", marginBottom: 12 }}>
+                        <Tag color={index === 0 ? "blue" : "default"}>
+                          {index === 0 ? "默认展示" : `展示项 ${index + 1}`}
+                        </Tag>
+                        <Space size={2}>
+                          <Tooltip title="上移，设为默认展示">
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<ArrowUpOutlined />}
+                              disabled={index === 0}
+                              onClick={() => move(index, index - 1)}
+                            />
+                          </Tooltip>
+                          <Tooltip title="下移">
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<ArrowDownOutlined />}
+                              disabled={index === fields.length - 1}
+                              onClick={() => move(index, index + 1)}
+                            />
+                          </Tooltip>
+                          <Tooltip title="删除此组合">
+                            <Button
+                              danger
+                              type="text"
+                              size="small"
+                              icon={<DeleteOutlined />}
+                              disabled={fields.length <= 1}
+                              onClick={() => remove(field.name)}
+                            />
+                          </Tooltip>
+                        </Space>
+                      </Space>
+                      <Form.Item
+                        {...field}
+                        label="商品分组"
+                        name={[field.name, "shopGroupId"]}
+                        rules={[{ required: true, message: "请选择商品分组" }]}
+                      >
+                        <Select
+                          allowClear
+                          placeholder="请选择商品分组"
+                          options={shopGroupOptions}
+                        />
+                      </Form.Item>
+                      <Form.Item
+                        {...field}
+                        label="BridgeType"
+                        name={[field.name, "bridgeType"]}
+                        rules={[{ required: true, message: "请选择 BridgeType" }]}
+                        style={{ marginBottom: 0 }}
+                      >
+                        <Select
+                          allowClear
+                          placeholder="请选择 BridgeType"
+                          options={bridgeTypeOptions}
+                        />
+                      </Form.Item>
+                    </section>
+                  ))}
+                  <Button
+                    block
+                    type="dashed"
+                    icon={<PlusOutlined />}
+                    onClick={() => add({
+                      shopGroupId: shopGroupOptions[0]?.value ?? 1,
+                      bridgeType: bridgeTypeOptions[0]?.value ?? DEFAULT_BRIDGE_TYPE,
+                    })}
+                  >
+                    添加商品分组 + BridgeType
+                  </Button>
+                  <Form.ErrorList errors={errors} />
+                </>
+              )}
+            </Form.List>
           ) : null}
 
           {editingCardId === "averageSpeed" ? (
@@ -1036,6 +1382,11 @@ function mergeDashboardConfig(
           ? true
           : (config?.visible ?? current[cardId].visible),
         categoryIds: Array.isArray(config?.categoryIds) ? config?.categoryIds : current[cardId].categoryIds,
+        bridgeStatisticScopes: cardId === "bridgeDailyStatistic"
+          ? (Array.isArray(config?.bridgeStatisticScopes)
+            ? normalizeBridgeStatisticScopes(config.bridgeStatisticScopes)
+            : current[cardId].bridgeStatisticScopes)
+          : current[cardId].bridgeStatisticScopes,
         barryWindowSeconds: clampBarryWindowSeconds(
           config?.barryWindowSeconds ?? current[cardId].barryWindowSeconds,
         ),
@@ -1061,6 +1412,11 @@ function applyDashboardConfigPresets(
     productCount: cards.productCount
       ? { ...cards.productCount, userOverviewWindowSeconds: 120 }
       : undefined,
+    bridgeDailyStatistic: {
+      visible: cards.bridgeDailyStatistic?.visible ?? true,
+      categoryIds: [],
+      bridgeStatisticScopes: resolveBridgeStatisticScopes(cards.bridgeDailyStatistic),
+    },
     realManualSubmitted: cards.realManualSubmitted
       ? { ...cards.realManualSubmitted, categoryIds: [2, 18] }
       : undefined,
@@ -1369,6 +1725,109 @@ function renderDashboardCard({
       </div>
     </article>
   );
+}
+
+function renderBridgeDailyStatisticCard({
+  statistic,
+  scope,
+  scopeCount,
+  shopGroupLabelMap,
+  onEdit,
+  onOpenDetail,
+}: {
+  statistic: BridgeDailyStatisticSummary | null;
+  scope?: BridgeStatisticScope;
+  scopeCount: number;
+  shopGroupLabelMap: Map<number, string>;
+  onEdit: () => void;
+  onOpenDetail: () => void;
+}) {
+  const hasScope = Boolean(scope);
+  const statisticDate = statistic
+    ? formatStatisticDateRange(statistic.startDate, statistic.endDate)
+    : "今日";
+  return (
+    <article
+      key="bridgeDailyStatistic"
+      className="manager-dashboard-card manager-dashboard-card--bridge-daily"
+      onClick={hasScope ? onOpenDetail : onEdit}
+    >
+      <div className="manager-dashboard-card__backdrop" style={{ background: "linear-gradient(135deg, rgba(14,116,144,0.1), rgba(255,255,255,0))" }} />
+      <div className="manager-dashboard-card__content">
+        <div className="manager-dashboard-bridge-statistic__header">
+          <div>
+            <div className="manager-section-label">
+              商品桥接器情况 <Text className="manager-dashboard-bridge-statistic__date">{statisticDate}</Text>
+            </div>
+          </div>
+          <Space size={4}>
+            <Tag className="manager-dashboard-tag">{scopeCount} 个组合</Tag>
+            <Tooltip title="编辑展示组合">
+              <Button
+                type="text"
+                size="small"
+                icon={<EditOutlined />}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onEdit();
+                }}
+              />
+            </Tooltip>
+          </Space>
+        </div>
+
+        {hasScope ? (
+          statistic ? (
+            <>
+              <div className="manager-dashboard-bridge-statistic__metrics">
+                {buildBridgeDailyStatisticMetrics(statistic).map((metric) => (
+                  <div key={metric.label} className="manager-dashboard-card__metric">
+                    <div className="manager-dashboard-card__metric-label">{metric.label}</div>
+                    <div className="manager-dashboard-card__metric-value">{metric.value}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="manager-dashboard-bridge-statistic__footer">
+                Bridge {statistic.bridgeCount} · {scope ? formatBridgeStatisticScope(scope, shopGroupLabelMap) : "-"}
+                {statistic.unmappedShopGroupIds.length > 0 ? ` · ${statistic.unmappedShopGroupIds.length} 个未映射` : ""}
+              </div>
+            </>
+          ) : (
+            <div className="manager-dashboard-bridge-statistic__loading"><Spin size="small" /> 正在加载商品桥接器情况</div>
+          )
+        ) : (
+          <div className="manager-dashboard-bridge-statistic__loading">尚未配置商品分组和 BridgeType，点击卡片或编辑图标配置</div>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function buildBridgeDailyStatisticMetrics(statistic: BridgeDailyStatisticSummary, includeDetailMetrics = false) {
+  const primaryMetrics = [
+    { label: "发送", value: formatCount(statistic.totalNum) },
+    { label: "成功", value: formatCount(statistic.successNum) },
+    { label: "成功率", value: formatPercent(safeDivide(statistic.successNum, statistic.totalNum)) },
+    { label: "失败", value: formatCount(statistic.failNum) },
+    { label: "获取不到", value: formatCount(statistic.notGetDataNum) },
+    { label: "视频删除", value: formatCount(statistic.deleteNum) },
+  ];
+  if (!includeDetailMetrics) {
+    return primaryMetrics;
+  }
+  return [
+    ...primaryMetrics,
+    { label: "异常", value: formatCount(statistic.errorNum) },
+    { label: "私密", value: formatCount(statistic.secretNum) },
+    { label: "未授权", value: formatCount(statistic.unAuthorizeNum) },
+  ];
+}
+
+function formatStatisticDateRange(startDate: string, endDate: string) {
+  if (!startDate) {
+    return "今日";
+  }
+  return startDate === endDate || !endDate ? startDate : `${startDate} 至 ${endDate}`;
 }
 
 function DashboardComparisonSummary({ comparison }: { comparison: DashboardComparison }) {
@@ -2138,6 +2597,172 @@ function buildManualProductDetailColumns(): ColumnsType<DerivedCategoryDetail> {
       render: (value: string) => <Tag color={value === "激活" ? "green" : "default"}>{value}</Tag>,
     },
   ];
+}
+
+function buildBridgeDailyStatisticColumns(
+  shopGroupLabelMap: Map<number, string>,
+): ColumnsType<BridgeDailyStatisticDetail> {
+  return [
+    {
+      title: "统计日期",
+      dataIndex: "statDate",
+      width: 110,
+      defaultSortOrder: "descend",
+      sorter: (left, right) => String(left.statDate).localeCompare(String(right.statDate)),
+      render: (value: string) => <span className="manager-value">{value || "-"}</span>,
+    },
+    {
+      title: "商品分组",
+      dataIndex: "shopGroupIds",
+      width: 210,
+      render: (value: number[]) => formatShopGroupLabels(value, shopGroupLabelMap),
+    },
+    {
+      title: "BridgeType",
+      dataIndex: "bridgeType",
+      width: 170,
+      render: (value: string) => <span className="manager-value">{formatBridgeType(value)}</span>,
+    },
+    {
+      title: "Bridge",
+      key: "bridge",
+      width: 170,
+      render: (_, record) => (
+        <div>
+          <div className="manager-value">{record.bridgeName || record.bridgeCode || `Bridge#${record.bridgeId}`}</div>
+          {record.bridgeCode && record.bridgeName ? (
+            <div style={{ color: "var(--manager-text-soft)", marginTop: 3 }}>{record.bridgeCode}</div>
+          ) : null}
+        </div>
+      ),
+    },
+    { title: "发送", dataIndex: "totalNum", width: 100, render: (value: number) => formatCount(value) },
+    { title: "成功", dataIndex: "successNum", width: 100, render: (value: number) => formatCount(value) },
+    { title: "失败", dataIndex: "failNum", width: 100, render: (value: number) => formatCount(value) },
+    { title: "获取不到", dataIndex: "notGetDataNum", width: 110, render: (value: number) => formatCount(value) },
+    { title: "视频删除", dataIndex: "deleteNum", width: 110, render: (value: number) => formatCount(value) },
+    { title: "异常", dataIndex: "errorNum", width: 100, render: (value: number) => formatCount(value) },
+    { title: "私密", dataIndex: "secretNum", width: 100, render: (value: number) => formatCount(value) },
+    { title: "未授权", dataIndex: "unAuthorizeNum", width: 100, render: (value: number) => formatCount(value) },
+  ];
+}
+
+function formatShopGroupLabel(shopGroup: BarryShopGroup) {
+  const name = shopGroup.name || shopGroup.code || `商品分组 #${shopGroup.id}`;
+  const codeSuffix = shopGroup.code && shopGroup.code !== name ? ` · ${shopGroup.code}` : "";
+  return `${name}${codeSuffix}（商品分组 #${shopGroup.id}）`;
+}
+
+function formatShopGroupLabels(shopGroupIds: number[] | undefined, shopGroupLabelMap: Map<number, string>) {
+  if (!shopGroupIds || shopGroupIds.length === 0) {
+    return "-";
+  }
+  return shopGroupIds
+    .map((shopGroupId) => shopGroupLabelMap.get(shopGroupId) || `商品分组 #${shopGroupId}`)
+    .join("、");
+}
+
+function normalizeShopGroupIds(value: unknown): number[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return Array.from(
+    new Set(
+      value
+        .map((item) => Number(item))
+        .filter((item) => Number.isSafeInteger(item) && item > 0),
+    ),
+  ).sort((left, right) => left - right);
+}
+
+function resolveBridgeStatisticScopes(config?: DashboardCardConfig): BridgeStatisticScope[] {
+  const configuredScopes = normalizeBridgeStatisticScopes(config?.bridgeStatisticScopes);
+  if (configuredScopes.length > 0 && !isPreviousBridgeStatisticDefault(configuredScopes)) {
+    return configuredScopes;
+  }
+  const legacyShopGroupIds = normalizeShopGroupIds(config?.shopGroupIds);
+  if (legacyShopGroupIds.length === 0 || (legacyShopGroupIds.length === 1 && legacyShopGroupIds[0] === 1)) {
+    return DEFAULT_BRIDGE_STATISTIC_SCOPES.map((scope) => ({ ...scope }));
+  }
+  return (legacyShopGroupIds.length > 0 ? legacyShopGroupIds : [1]).map((shopGroupId) => ({
+    shopGroupId,
+    bridgeType: DEFAULT_BRIDGE_TYPE,
+  }));
+}
+
+function isPreviousBridgeStatisticDefault(scopes: BridgeStatisticScope[]) {
+  return scopes.length === 1
+    && scopes[0].shopGroupId === 1
+    && scopes[0].bridgeType === "GET_ITEM";
+}
+
+function normalizeBridgeStatisticScopes(value: unknown): BridgeStatisticScope[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const scopes: BridgeStatisticScope[] = [];
+  const scopeKeys = new Set<string>();
+  for (const item of value) {
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+    const scope = item as Partial<BridgeStatisticScope>;
+    const shopGroupId = Number(scope.shopGroupId);
+    const bridgeType = typeof scope.bridgeType === "string" ? scope.bridgeType.trim().toUpperCase() : "";
+    if (!Number.isSafeInteger(shopGroupId) || shopGroupId <= 0 || !bridgeType) {
+      continue;
+    }
+    const key = bridgeStatisticScopeKey({ shopGroupId, bridgeType });
+    if (scopeKeys.has(key)) {
+      continue;
+    }
+    scopeKeys.add(key);
+    scopes.push({ shopGroupId, bridgeType });
+  }
+  return scopes;
+}
+
+function bridgeStatisticScopeKey(scope?: Partial<BridgeStatisticScope>) {
+  const shopGroupId = Number(scope?.shopGroupId);
+  const bridgeType = typeof scope?.bridgeType === "string" ? scope.bridgeType.trim().toUpperCase() : "";
+  return `${Number.isSafeInteger(shopGroupId) && shopGroupId > 0 ? shopGroupId : 0}:${bridgeType}`;
+}
+
+function formatBridgeType(bridgeType: string | undefined) {
+  return bridgeType?.trim() || "-";
+}
+
+function formatBridgeStatisticScope(scope: BridgeStatisticScope, shopGroupLabelMap: Map<number, string>) {
+  return `${shopGroupLabelMap.get(scope.shopGroupId) || `商品分组 #${scope.shopGroupId}`} · BridgeType：${formatBridgeType(scope.bridgeType)}`;
+}
+
+// A dashboard can show several combinations. Limit its fan-out so adding more
+// cards does not create an unbounded burst of requests against Barry/Phoenix.
+async function fetchBridgeStatisticScopes(scopes: BridgeStatisticScope[]) {
+  const statistics = new Array<BridgeDailyStatisticSummary | null>(scopes.length).fill(null);
+  let nextScopeIndex = 0;
+  const worker = async () => {
+    while (nextScopeIndex < scopes.length) {
+      const scopeIndex = nextScopeIndex;
+      nextScopeIndex += 1;
+      const scope = scopes[scopeIndex];
+      try {
+        statistics[scopeIndex] = await fetchWorkbenchBridgeDailyStatistics({
+          shopGroupIds: String(scope.shopGroupId),
+          bridgeType: scope.bridgeType,
+        });
+      } catch {
+        // Keep the previous successful snapshot for this scope on a transient failure.
+      }
+    }
+  };
+  await Promise.all(
+    Array.from(
+      { length: Math.min(MAX_BRIDGE_STATISTIC_REQUEST_CONCURRENCY, scopes.length) },
+      () => worker(),
+    ),
+  );
+  return statistics;
 }
 
 // 上游商品类目 (upstream product category) completion breakdown — 实际完成总量 / 真人实际完成 detail.

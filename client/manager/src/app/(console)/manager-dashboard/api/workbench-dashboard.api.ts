@@ -10,6 +10,54 @@ export interface WorkbenchDashboardStatisticsQuery {
   windowSeconds?: number;
 }
 
+export interface BridgeDailyStatisticQuery {
+  startDate?: string;
+  endDate?: string;
+  shopGroupIds?: string;
+  bridgeType?: string;
+}
+
+export interface BarryShopGroup {
+  id: number;
+  name: string;
+  code: string;
+  active: boolean;
+}
+
+export interface BridgeDailyStatisticDetail {
+  statDate: string;
+  bridgeId: number;
+  bridgeCode: string;
+  bridgeName: string;
+  bridgeCategoryId: number;
+  bridgeType: string;
+  shopGroupIds: number[];
+  totalNum: number;
+  successNum: number;
+  failNum: number;
+  errorNum: number;
+  notGetDataNum: number;
+  deleteNum: number;
+  secretNum: number;
+  unAuthorizeNum: number;
+}
+
+export interface BridgeDailyStatisticSummary {
+  startDate: string;
+  endDate: string;
+  totalNum: number;
+  successNum: number;
+  failNum: number;
+  errorNum: number;
+  notGetDataNum: number;
+  deleteNum: number;
+  secretNum: number;
+  unAuthorizeNum: number;
+  bridgeCount: number;
+  unmappedShopGroupIds: number[];
+  detailList: BridgeDailyStatisticDetail[];
+}
+
 export interface ManualSpeedCategory {
   shopCategoryId: number;
   categoryName: string;
@@ -245,6 +293,24 @@ export async function fetchManualSpeed(
     "/barry/workbench-dashboard/manual-speed",
     { params: query },
   );
+  return unwrapApiResponse(response.data);
+}
+
+export async function fetchWorkbenchBridgeDailyStatistics(query?: BridgeDailyStatisticQuery) {
+  const response = await instance.get<ApiResponse<BridgeDailyStatisticSummary>>(
+    "/barry/workbench-dashboard/bridge-daily-statistics",
+    { params: query },
+  );
+  return unwrapApiResponse(response.data);
+}
+
+export async function fetchBarryShopGroups() {
+  const response = await instance.get<ApiResponse<BarryShopGroup[]>>("/barry/shop-groups");
+  return unwrapApiResponse(response.data);
+}
+
+export async function fetchBarryBridgeTypes() {
+  const response = await instance.get<ApiResponse<string[]>>("/barry/workbench-dashboard/bridge-types");
   return unwrapApiResponse(response.data);
 }
 

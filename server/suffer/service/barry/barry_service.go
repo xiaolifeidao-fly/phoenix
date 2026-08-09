@@ -4,6 +4,7 @@ type BarryService struct {
 	client *Client
 
 	ProductType             *ProductTypeService
+	ShopGroup               *ShopGroupService
 	ProductCategory         *ProductCategoryService
 	AssignConfig            *AssignConfigService
 	JudgeConfig             *JudgeConfigService
@@ -36,6 +37,7 @@ func NewBarryService() *BarryService {
 	return &BarryService{
 		client:                  client,
 		ProductType:             NewProductTypeService(client),
+		ShopGroup:               NewShopGroupService(client),
 		ProductCategory:         NewProductCategoryService(client),
 		AssignConfig:            NewAssignConfigService(client),
 		JudgeConfig:             NewJudgeConfigService(client),

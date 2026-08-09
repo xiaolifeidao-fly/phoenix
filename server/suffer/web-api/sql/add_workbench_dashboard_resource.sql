@@ -18,6 +18,12 @@ FROM (
          '/barry/workbench-dashboard/manual-submitted'
   UNION ALL SELECT '工作台人工速度', 'workbenchManualSpeed',
          '/barry/workbench-dashboard/manual-speed'
+  UNION ALL SELECT '工作台商品桥接器情况', 'workbenchBridgeDailyStatistics',
+         '/barry/workbench-dashboard/bridge-daily-statistics'
+  UNION ALL SELECT '工作台桥接器类型', 'workbenchBridgeTypes',
+         '/barry/workbench-dashboard/bridge-types'
+  UNION ALL SELECT '工作台商品分组', 'workbenchBridgeShopGroups',
+         '/barry/shop-groups'
   UNION ALL SELECT '工作台实际完成数量', 'workbenchActualCompleted',
          '/dashboard/actual-completed'
   UNION ALL SELECT '工作台今日消费', 'workbenchTodayConsume',
@@ -32,6 +38,14 @@ WHERE NOT EXISTS (
   WHERE r.resource_url = source.resource_url AND r.active = 1
 );
 
+-- 兼容已部署过“商品分组成功率统计”旧文案的环境。
+UPDATE resource_new
+SET name = '工作台商品桥接器情况',
+    code = 'workbenchBridgeDailyStatistics',
+    updated_time = NOW()
+WHERE resource_url = '/barry/workbench-dashboard/bridge-daily-statistics'
+  AND active = 1;
+
 INSERT INTO role_resource_new (
   active, created_time, updated_time, role_id, resource_id
 )
@@ -43,6 +57,9 @@ WHERE r.resource_url IN (
   '/barry/workbench-dashboard/task-remaining',
   '/barry/workbench-dashboard/manual-submitted',
   '/barry/workbench-dashboard/manual-speed',
+  '/barry/workbench-dashboard/bridge-daily-statistics',
+  '/barry/workbench-dashboard/bridge-types',
+  '/barry/shop-groups',
   '/dashboard/actual-completed',
   '/dashboard/today-consume',
   '/dashboard/today-recharge',

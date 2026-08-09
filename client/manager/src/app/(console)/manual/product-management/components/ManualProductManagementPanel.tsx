@@ -179,6 +179,7 @@ interface WhitelistUserRecord {
   minRecentApprovalRate?: number;
   recentApprovalRateDays?: number;
   dailyAssignTimeRanges: string;
+  fetchTaskLoopNum?: number;
 }
 
 interface VideoUserStrategyRecord {
@@ -321,6 +322,7 @@ export function ManualProductManagementPanel() {
   const [editingWhitelistUser, setEditingWhitelistUser] = useState<WhitelistUserRecord | null>(null);
   const [whitelistPolicyRate, setWhitelistPolicyRate] = useState<number | null>(null);
   const [whitelistPolicyRateDays, setWhitelistPolicyRateDays] = useState<number | null>(null);
+  const [whitelistPolicyLoopNum, setWhitelistPolicyLoopNum] = useState<number | null>(null);
   const [whitelistPolicyTimeRanges, setWhitelistPolicyTimeRanges] = useState<string[]>([]);
   const [selectedWhitelistGroup, setSelectedWhitelistGroup] = useState<WhitelistGroup>("BIG_CUSTOMER");
   const [batchWhitelistModalOpen, setBatchWhitelistModalOpen] = useState(false);
@@ -983,6 +985,7 @@ export function ManualProductManagementPanel() {
         minRecentApprovalRate: user.minRecentApprovalRate ?? undefined,
         recentApprovalRateDays: user.recentApprovalRateDays ?? undefined,
         dailyAssignTimeRanges: user.dailyAssignTimeRanges || "",
+        fetchTaskLoopNum: user.fetchTaskLoopNum ?? undefined,
       }));
       setWhitelistUsers(rows);
       setWhitelistTotal(page.total ?? rows.length);
@@ -1493,6 +1496,7 @@ export function ManualProductManagementPanel() {
         minRecentApprovalRate: whitelistPolicyRate === null ? undefined : whitelistPolicyRate / 100,
         recentApprovalRateDays: whitelistPolicyRateDays === null ? undefined : whitelistPolicyRateDays,
         dailyAssignTimeRanges: formatTimeRanges(whitelistPolicyTimeRanges) || undefined,
+        fetchTaskLoopNum: whitelistPolicyLoopNum === null ? undefined : whitelistPolicyLoopNum,
       });
       message.success("白名单用户策略已保存");
       setEditingWhitelistUser(null);
@@ -2586,6 +2590,7 @@ export function ManualProductManagementPanel() {
                         </th>
                         <th style={strategyStyles.th}>近几日通过率</th>
                         <th style={strategyStyles.th}>允许接单时间段</th>
+                        <th style={strategyStyles.th}>轮询次数</th>
                         <th style={strategyStyles.th}>策略</th>
                       </tr>
                     </thead>
@@ -2623,6 +2628,7 @@ export function ManualProductManagementPanel() {
                             <td style={{ ...strategyStyles.td, maxWidth: 180 }}>
                               {user.dailyAssignTimeRanges ? <Tooltip title={user.dailyAssignTimeRanges}><span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.dailyAssignTimeRanges}</span></Tooltip> : "-"}
                             </td>
+                            <td style={strategyStyles.td}>{user.fetchTaskLoopNum ?? "默认"}</td>
                             <td style={strategyStyles.td}>
                               <Button
                                 size="small"
@@ -2631,6 +2637,7 @@ export function ManualProductManagementPanel() {
                                   setWhitelistPolicyRate(user.minRecentApprovalRate == null ? null : user.minRecentApprovalRate * 100);
                                   setWhitelistPolicyRateDays(user.recentApprovalRateDays ?? null);
                                   setWhitelistPolicyTimeRanges(parseTimeRanges(user.dailyAssignTimeRanges));
+                                  setWhitelistPolicyLoopNum(user.fetchTaskLoopNum ?? null);
                                 }}
                               >
                                 编辑
@@ -2640,7 +2647,7 @@ export function ManualProductManagementPanel() {
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={8} style={strategyStyles.emptyCell}>
+                          <td colSpan={9} style={strategyStyles.emptyCell}>
                             白名单为空，点上方「添加」加入。
                           </td>
                         </tr>
@@ -3114,6 +3121,16 @@ export function ManualProductManagementPanel() {
         </Space>
         <div style={{ marginBottom: 8 }}>允许每日接单时间段</div>
         <TimeRangeEditor value={whitelistPolicyTimeRanges} onChange={setWhitelistPolicyTimeRanges} />
+        <div style={{ marginTop: 18, marginBottom: 8 }}>获取任务轮询次数（留空使用系统默认次数）</div>
+        <InputNumber
+          value={whitelistPolicyLoopNum}
+          min={1}
+          precision={0}
+          addonAfter="次"
+          placeholder="默认次数"
+          style={{ width: 180 }}
+          onChange={(value) => setWhitelistPolicyLoopNum(value === null ? null : Number(value))}
+        />
       </Modal>
 
       <Modal

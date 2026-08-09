@@ -10,6 +10,7 @@ import (
 const (
 	barryInnerPrefixPath                     = "barry.url.inner.prefix"
 	barryInnerShopSuffixPath                 = "barry.url.inner.shop.suffix"
+	barryInnerShopGroupListPath              = "barry.url.inner.shop.groups.suffix"
 	barryInnerManualListSuffixPath           = "barry.url.inner.manual.list.suffix"
 	barryInnerManualSaveSuffixPath           = "barry.url.inner.manual.save.suffix"
 	barryInnerManualDeleteSuffixPath         = "barry.url.inner.manual.delete.suffix"
@@ -66,6 +67,8 @@ const (
 	barryInnerWorkbenchDashboardManualSubmittedComparisonPath = "barry.url.inner.workbench.dashboard.manual.submitted.comparison.suffix"
 	barryInnerWorkbenchDashboardManualSpeedPath               = "barry.url.inner.workbench.dashboard.manual.speed.suffix"
 	barryInnerWorkbenchDashboardActualCompletedPath           = "barry.url.inner.workbench.dashboard.actual.completed.suffix"
+	barryInnerWorkbenchDashboardBridgeDailyStatisticsPath     = "barry.url.inner.workbench.dashboard.bridge.daily.statistics.suffix"
+	barryInnerWorkbenchDashboardBridgeTypesPath               = "barry.url.inner.workbench.dashboard.bridge.types.suffix"
 	barryInnerManualTaskStatisticsUsersPath                   = "barry.url.inner.manual.task.statistics.users.suffix"
 	barryInnerUserWithdrawRecordPath                          = "barry.url.inner.point.user.withdraw.record.suffix"
 	barryInnerUserWithdrawAccountPath                         = "barry.url.inner.point.user.withdraw.account.suffix"

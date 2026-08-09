@@ -82,6 +82,8 @@ export class BarryUserWhitelistRecord {
   recentApprovalRateDays?: number;
 
   dailyAssignTimeRanges = "";
+
+  fetchTaskLoopNum?: number;
 }
 
 export interface ManualUserListQuery {
@@ -121,6 +123,7 @@ export interface BarryUserWhitelistPayload {
   minRecentApprovalRate?: number;
   recentApprovalRateDays?: number;
   dailyAssignTimeRanges?: string;
+  fetchTaskLoopNum?: number;
 }
 
 export interface CreateManualUserPayload {
