@@ -8,6 +8,7 @@ import {
   ControlOutlined,
   DashboardOutlined,
   FileDoneOutlined,
+  LinkOutlined,
   ProfileOutlined,
   ReconciliationOutlined,
   RetweetOutlined,
@@ -93,6 +94,11 @@ export const navTree: NavNode[] = [
         key: "/manual/product-management",
         icon: <ShopOutlined />,
         label: "人工商品管理",
+      },
+      {
+        key: "/manual/product-group-management",
+        icon: <LinkOutlined />,
+        label: "商品分组管理",
       },
       {
         key: "/manual/channel-management",

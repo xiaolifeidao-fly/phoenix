@@ -8,7 +8,7 @@ import (
 	barryDTO "suffer/service/barry/dto"
 )
 
-// ShopGroupService exposes Barry's active subgroup list to Phoenix consumers.
+// ShopGroupService exposes Barry's complete product-group list to Phoenix consumers.
 // The source of truth remains Barry; Phoenix only adapts the Inner Gateway
 // response to its authenticated management API.
 type ShopGroupService struct {
@@ -21,7 +21,7 @@ func NewShopGroupService(client *Client) *ShopGroupService {
 
 func (s *ShopGroupService) List(ctx context.Context) ([]*barryDTO.ShopGroupDTO, error) {
 	response := &barryDTO.ListResponseDTO[barryDTO.ShopGroupDTO]{}
-	if err := s.client.GetAbsolute(ctx, innerServicePath(barryInnerShopGroupListPath), nil, response); err != nil {
+	if err := s.client.GetAbsolute(ctx, innerServicePath(barryInnerAllShopGroupListPath), nil, response); err != nil {
 		return nil, err
 	}
 	if response.Success {

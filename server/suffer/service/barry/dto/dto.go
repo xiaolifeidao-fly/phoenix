@@ -258,6 +258,33 @@ type ShopGroupDTO struct {
 	Code string `json:"code"`
 }
 
+// BridgeConfigDTO is a Bridge endpoint configuration. Its bridge category is
+// resolved from the selected 商品分组 by Barry, not supplied by the manager.
+type BridgeConfigDTO struct {
+	BarryBaseDTO
+	BridgeCategoryID int64   `json:"bridgeCategoryId,omitempty"`
+	Alias            string  `json:"alias,omitempty"`
+	MapperURL        string  `json:"mapperUrl"`
+	Method           string  `json:"method"`
+	Header           string  `json:"header,omitempty"`
+	Weight           float64 `json:"weight,omitempty"`
+	BridgeType       string  `json:"bridgeType"`
+	Status           string  `json:"status,omitempty"`
+	LoadBalanceFlag  *bool   `json:"loadBalanceFlag,omitempty"`
+	BodyParams       string  `json:"bodyParams,omitempty"`
+	AnalysisName     string  `json:"analysisName,omitempty"`
+	RateOfSuccess    float64 `json:"rateOfSuccess,omitempty"`
+	SuccessNum       int64   `json:"successNum,omitempty"`
+	ErrorNum         int64   `json:"errorNum,omitempty"`
+	DeleteNum        int64   `json:"deleteNum,omitempty"`
+	Source           string  `json:"source,omitempty"`
+	ContentType      string  `json:"contentType,omitempty"`
+	FetchType        string  `json:"fetchType,omitempty"`
+	FetchAnalysis    string  `json:"fetchAnalysis,omitempty"`
+	NotGetDataNum    int64   `json:"notGetDataNum,omitempty"`
+	FetchProxyURL    string  `json:"fetchProxyUrl,omitempty"`
+}
+
 type ProductTypeQueryDTO struct {
 	PageQueryDTO
 	RequestDTO

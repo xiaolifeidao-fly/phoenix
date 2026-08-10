@@ -3,6 +3,7 @@ package barry
 import (
 	commonRouter "common/middleware/routers"
 	"strconv"
+
 	barryDTO "suffer/service/barry/dto"
 
 	"github.com/gin-gonic/gin"
@@ -11,6 +12,12 @@ import (
 func (h *BarryHandler) registerProductRoutes(engine *gin.RouterGroup) {
 	engine.GET("/barry/product-types", h.listProductTypes)
 	engine.GET("/barry/shop-groups", h.listShopGroups)
+	engine.GET("/barry/shop-groups/:shopGroupId/bridge-configs", h.listBridgeConfigs)
+	engine.POST("/barry/shop-groups/:shopGroupId/bridge-configs", h.createBridgeConfig)
+	engine.PUT("/barry/shop-groups/:shopGroupId/bridge-configs/:bridgeConfigId", h.updateBridgeConfig)
+	engine.DELETE("/barry/shop-groups/:shopGroupId/bridge-configs/:bridgeConfigId", h.deleteBridgeConfig)
+	engine.PUT("/barry/shop-groups/:shopGroupId/bridge-configs/:bridgeConfigId/active", h.activateBridgeConfig)
+	engine.PUT("/barry/shop-groups/:shopGroupId/bridge-configs/:bridgeConfigId/disable", h.disableBridgeConfig)
 	engine.GET("/barry/product-categories", h.listProductCategories)
 	engine.POST("/barry/product-categories", h.createProductCategory)
 	engine.PUT("/barry/product-categories/:id", h.updateProductCategory)
@@ -58,6 +65,86 @@ func (h *BarryHandler) listProductTypes(c *gin.Context) {
 func (h *BarryHandler) listShopGroups(c *gin.Context) {
 	response, err := h.barryService.ShopGroup.List(c.Request.Context())
 	commonRouter.ToJson(c, response, err)
+}
+
+func (h *BarryHandler) listBridgeConfigs(c *gin.Context) {
+	shopGroupID, ok := parseBarryPositiveID(c, "shopGroupId")
+	if !ok {
+		return
+	}
+	response, err := h.barryService.BridgeConfig.List(c.Request.Context(), shopGroupID)
+	commonRouter.ToJson(c, response, err)
+}
+
+func (h *BarryHandler) createBridgeConfig(c *gin.Context) {
+	shopGroupID, ok := parseBarryPositiveID(c, "shopGroupId")
+	if !ok {
+		return
+	}
+	var request barryDTO.BridgeConfigDTO
+	if c.ShouldBindJSON(&request) != nil {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := h.barryService.BridgeConfig.Save(c.Request.Context(), shopGroupID, &request)
+	commonRouter.ToJson(c, response, err)
+}
+
+func (h *BarryHandler) updateBridgeConfig(c *gin.Context) {
+	shopGroupID, ok := parseBarryPositiveID(c, "shopGroupId")
+	if !ok {
+		return
+	}
+	bridgeConfigID, ok := parseBarryPositiveID(c, "bridgeConfigId")
+	if !ok {
+		return
+	}
+	var request barryDTO.BridgeConfigDTO
+	if c.ShouldBindJSON(&request) != nil {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	request.ID = int(bridgeConfigID)
+	response, err := h.barryService.BridgeConfig.Save(c.Request.Context(), shopGroupID, &request)
+	commonRouter.ToJson(c, response, err)
+}
+
+func (h *BarryHandler) deleteBridgeConfig(c *gin.Context) {
+	shopGroupID, ok := parseBarryPositiveID(c, "shopGroupId")
+	if !ok {
+		return
+	}
+	bridgeConfigID, ok := parseBarryPositiveID(c, "bridgeConfigId")
+	if !ok {
+		return
+	}
+	err := h.barryService.BridgeConfig.Delete(c.Request.Context(), shopGroupID, bridgeConfigID)
+	commonRouter.ToJson(c, map[string]bool{"deleted": err == nil}, err)
+}
+
+func (h *BarryHandler) activateBridgeConfig(c *gin.Context) {
+	h.changeBridgeConfigStatus(c, true)
+}
+
+func (h *BarryHandler) disableBridgeConfig(c *gin.Context) {
+	h.changeBridgeConfigStatus(c, false)
+}
+
+func (h *BarryHandler) changeBridgeConfigStatus(c *gin.Context, active bool) {
+	if _, ok := parseBarryPositiveID(c, "shopGroupId"); !ok {
+		return
+	}
+	bridgeConfigID, ok := parseBarryPositiveID(c, "bridgeConfigId")
+	if !ok {
+		return
+	}
+	var err error
+	if active {
+		err = h.barryService.BridgeConfig.Active(c.Request.Context(), bridgeConfigID)
+	} else {
+		err = h.barryService.BridgeConfig.Disable(c.Request.Context(), bridgeConfigID)
+	}
+	commonRouter.ToJson(c, map[string]bool{"updated": err == nil}, err)
 }
 
 func (h *BarryHandler) listProductCategories(c *gin.Context) {
@@ -159,7 +246,15 @@ func (h *BarryHandler) operateProductCategory(c *gin.Context, fallbackMessage st
 }
 
 func parseBarryProductCategoryID(c *gin.Context) (int, bool) {
-	id, err := strconv.Atoi(c.Param("id"))
+	id, ok := parseBarryPositiveID(c, "id")
+	if !ok {
+		return 0, false
+	}
+	return int(id), true
+}
+
+func parseBarryPositiveID(c *gin.Context, name string) (int64, bool) {
+	id, err := strconv.ParseInt(c.Param(name), 10, 64)
 	if err != nil || id <= 0 {
 		commonRouter.ToError(c, "参数错误")
 		return 0, false

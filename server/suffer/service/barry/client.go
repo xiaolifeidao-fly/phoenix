@@ -78,6 +78,14 @@ func (c *Client) PostAbsolute(ctx context.Context, requestURL string, requestBod
 	return c.do(ctx, http.MethodPost, requestURL, requestBody, response)
 }
 
+func (c *Client) DeleteAbsolute(ctx context.Context, requestURL string, response any) error {
+	requestURL, err := c.buildAbsoluteURL(requestURL, nil)
+	if err != nil {
+		return err
+	}
+	return c.do(ctx, http.MethodDelete, requestURL, nil, response)
+}
+
 func (c *Client) buildURL(path string, query url.Values) (string, error) {
 	if !c.IsConfigured() {
 		return "", fmt.Errorf("barry base url is not configured")
