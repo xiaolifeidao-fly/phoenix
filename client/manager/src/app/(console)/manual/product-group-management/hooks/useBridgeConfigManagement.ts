@@ -7,6 +7,7 @@ import {
   deleteBridgeConfig,
   disableBridgeConfig,
   fetchBridgeConfigs,
+  resetBridgeConfigStatistics,
   updateBridgeConfig,
   type BridgeConfigPayload,
   type BridgeConfigRecord,
@@ -70,9 +71,14 @@ export function useBridgeConfigManagement(shopGroupId: number | null) {
     [execute],
   );
 
+  const resetStatistics = useCallback(
+    async (bridgeConfigId: number) => execute((groupId) => resetBridgeConfigStatistics(groupId, bridgeConfigId)),
+    [execute],
+  );
+
   useEffect(() => {
     void refresh().catch(() => undefined);
   }, [refresh]);
 
-  return { configs, loading, submitting, refresh, save, remove, setActive };
+  return { configs, loading, submitting, refresh, save, remove, setActive, resetStatistics };
 }

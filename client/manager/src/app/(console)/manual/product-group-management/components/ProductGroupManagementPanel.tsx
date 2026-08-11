@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  ClearOutlined,
   DeleteOutlined,
   EditOutlined,
   LinkOutlined,
@@ -103,6 +104,7 @@ export function ProductGroupManagementPanel() {
     refresh: refreshConfigs,
     save,
     remove,
+    resetStatistics,
     setActive,
   } = useBridgeConfigManagement(selectedGroup?.id ?? null);
 
@@ -293,7 +295,7 @@ export function ProductGroupManagementPanel() {
       title: "操作",
       key: "actions",
       fixed: "right",
-      width: 246,
+      width: 294,
       render: (_, record) => {
         const active = isBridgeConfigActive(record.status);
         const degraded = isBridgeConfigDegraded(record.mapperUrl);
@@ -331,6 +333,25 @@ export function ProductGroupManagementPanel() {
               }}
             >
               <Button type="link" danger={active} disabled={submitting}>{active ? "下线" : "上线"}</Button>
+            </Popconfirm>
+            <Popconfirm
+              title="确认重置桥接器统计吗？"
+              description="将清空桥接器配置中的实时数量，以及今天的成功、失败等统计数据。"
+              okText="重置"
+              cancelText="取消"
+              okButtonProps={{ danger: true }}
+              onConfirm={async () => {
+                try {
+                  await resetStatistics(record.id);
+                  message.success("桥接器当天统计已重置");
+                } catch (error) {
+                  message.error(error instanceof Error ? error.message : "重置桥接器统计失败");
+                }
+              }}
+            >
+              <Tooltip title="重置当天统计">
+                <Button type="text" danger icon={<ClearOutlined />} disabled={submitting} />
+              </Tooltip>
             </Popconfirm>
             <Popconfirm
               title="确认删除这个桥接器配置吗？"
@@ -451,7 +472,7 @@ export function ProductGroupManagementPanel() {
                 dataSource={sortedConfigs}
                 columns={bridgeColumns}
                 pagination={false}
-                scroll={{ x: 1560 }}
+                scroll={{ x: 1610 }}
                 expandable={{
                   expandedRowRender: (record) => <BridgeConfigDetails record={record} />,
                   rowExpandable: (record) => record.id > 0,
@@ -540,7 +561,7 @@ function BridgeConfigDetails({ record }: { record: BridgeConfigRecord }) {
   return (
     <Descriptions size="small" bordered column={{ xs: 1, lg: 2 }}>
       <Descriptions.Item label="Bridge 分类 ID">{record.bridgeCategoryId || "-"}</Descriptions.Item>
-      <Descriptions.Item label="成功率">{record.rateOfSuccess ? `${record.rateOfSuccess}%` : "-"}</Descriptions.Item>
+      <Descriptions.Item label="成功率">{formatBridgeConfigRate(record.rateOfSuccess)}</Descriptions.Item>
       <Descriptions.Item label="成功次数">{record.successNum || 0}</Descriptions.Item>
       <Descriptions.Item label="错误次数">{record.errorNum || 0}</Descriptions.Item>
       <Descriptions.Item label="删除 / 无数据次数">{`${record.deleteNum || 0} / ${record.notGetDataNum || 0}`}</Descriptions.Item>
@@ -553,6 +574,11 @@ function BridgeConfigDetails({ record }: { record: BridgeConfigRecord }) {
       <Descriptions.Item label="拉取代理地址">{record.fetchProxyUrl || "-"}</Descriptions.Item>
     </Descriptions>
   );
+}
+
+function formatBridgeConfigRate(value: number) {
+  const rate = Number(value);
+  return Number.isFinite(rate) && rate >= 0 ? `${(rate * 100).toFixed(2).replace(/\.00$/, "")}%` : "-";
 }
 
 function JsonValue({ value }: { value: string }) {

@@ -249,13 +249,13 @@ type ProductTypeDTO struct {
 	ShopGroupID  int64  `json:"shopGroupId,omitempty"`
 }
 
-// ShopGroupDTO is the active subgroup record returned by Barry Inner Gateway.
-// It is intentionally lightweight because the dashboard only needs a stable
-// id plus a human-readable name/code for its selector and detail labels.
+// ShopGroupDTO is the product-group record returned by Barry Inner Gateway.
+// The management API lists all groups so operators can edit or retire them.
 type ShopGroupDTO struct {
 	BarryBaseDTO
-	Name string `json:"name"`
-	Code string `json:"code"`
+	Name   string `json:"name"`
+	Code   string `json:"code"`
+	Status string `json:"status,omitempty"`
 }
 
 // BridgeConfigDTO is a Bridge endpoint configuration. Its bridge category is

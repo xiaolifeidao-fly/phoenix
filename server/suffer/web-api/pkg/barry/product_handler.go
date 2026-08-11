@@ -12,12 +12,16 @@ import (
 func (h *BarryHandler) registerProductRoutes(engine *gin.RouterGroup) {
 	engine.GET("/barry/product-types", h.listProductTypes)
 	engine.GET("/barry/shop-groups", h.listShopGroups)
+	engine.POST("/barry/shop-groups", h.createShopGroup)
+	engine.PUT("/barry/shop-groups/:shopGroupId", h.updateShopGroup)
+	engine.DELETE("/barry/shop-groups/:shopGroupId", h.deleteShopGroup)
 	engine.GET("/barry/shop-groups/:shopGroupId/bridge-configs", h.listBridgeConfigs)
 	engine.POST("/barry/shop-groups/:shopGroupId/bridge-configs", h.createBridgeConfig)
 	engine.PUT("/barry/shop-groups/:shopGroupId/bridge-configs/:bridgeConfigId", h.updateBridgeConfig)
 	engine.DELETE("/barry/shop-groups/:shopGroupId/bridge-configs/:bridgeConfigId", h.deleteBridgeConfig)
 	engine.PUT("/barry/shop-groups/:shopGroupId/bridge-configs/:bridgeConfigId/active", h.activateBridgeConfig)
 	engine.PUT("/barry/shop-groups/:shopGroupId/bridge-configs/:bridgeConfigId/disable", h.disableBridgeConfig)
+	engine.POST("/barry/shop-groups/:shopGroupId/bridge-configs/:bridgeConfigId/reset-statistics", h.resetBridgeConfigStatistics)
 	engine.GET("/barry/product-categories", h.listProductCategories)
 	engine.POST("/barry/product-categories", h.createProductCategory)
 	engine.PUT("/barry/product-categories/:id", h.updateProductCategory)
@@ -65,6 +69,38 @@ func (h *BarryHandler) listProductTypes(c *gin.Context) {
 func (h *BarryHandler) listShopGroups(c *gin.Context) {
 	response, err := h.barryService.ShopGroup.List(c.Request.Context())
 	commonRouter.ToJson(c, response, err)
+}
+
+func (h *BarryHandler) createShopGroup(c *gin.Context) {
+	h.saveShopGroup(c, 0)
+}
+
+func (h *BarryHandler) updateShopGroup(c *gin.Context) {
+	shopGroupID, ok := parseBarryPositiveID(c, "shopGroupId")
+	if !ok {
+		return
+	}
+	h.saveShopGroup(c, int(shopGroupID))
+}
+
+func (h *BarryHandler) saveShopGroup(c *gin.Context, shopGroupID int) {
+	var request barryDTO.ShopGroupDTO
+	if c.ShouldBindJSON(&request) != nil || request.Name == "" || request.Code == "" {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	request.ID = shopGroupID
+	response, err := h.barryService.ShopGroup.Save(c.Request.Context(), &request)
+	commonRouter.ToJson(c, response, err)
+}
+
+func (h *BarryHandler) deleteShopGroup(c *gin.Context) {
+	shopGroupID, ok := parseBarryPositiveID(c, "shopGroupId")
+	if !ok {
+		return
+	}
+	err := h.barryService.ShopGroup.Delete(c.Request.Context(), shopGroupID)
+	commonRouter.ToJson(c, map[string]bool{"deleted": err == nil}, err)
 }
 
 func (h *BarryHandler) listBridgeConfigs(c *gin.Context) {
@@ -128,6 +164,18 @@ func (h *BarryHandler) activateBridgeConfig(c *gin.Context) {
 
 func (h *BarryHandler) disableBridgeConfig(c *gin.Context) {
 	h.changeBridgeConfigStatus(c, false)
+}
+
+func (h *BarryHandler) resetBridgeConfigStatistics(c *gin.Context) {
+	if _, ok := parseBarryPositiveID(c, "shopGroupId"); !ok {
+		return
+	}
+	bridgeConfigID, ok := parseBarryPositiveID(c, "bridgeConfigId")
+	if !ok {
+		return
+	}
+	err := h.barryService.BridgeConfig.ResetStatistics(c.Request.Context(), bridgeConfigID)
+	commonRouter.ToJson(c, map[string]bool{"reset": err == nil}, err)
 }
 
 func (h *BarryHandler) changeBridgeConfigStatus(c *gin.Context, active bool) {

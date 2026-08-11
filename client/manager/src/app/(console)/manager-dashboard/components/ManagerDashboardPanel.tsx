@@ -13,6 +13,7 @@ import {
   PlusOutlined,
   ShopOutlined,
   TeamOutlined,
+  WarningOutlined,
   WalletOutlined,
 } from "@ant-design/icons";
 import { App, Button, Drawer, Empty, Form, InputNumber, Select, Space, Spin, Switch, Table, Tag, Tooltip, Typography } from "antd";
@@ -196,6 +197,7 @@ const BARRY_BRIDGE_TYPE_FALLBACK = [
   "CHECK_USER",
 ] as const;
 const DEFAULT_BRIDGE_TYPE = "GET_ITEM_FROM_WEB";
+const BRIDGE_SUCCESS_RATE_ALERT_THRESHOLD = 0.5;
 const DEFAULT_BRIDGE_STATISTIC_SCOPES: BridgeStatisticScope[] = [
   { shopGroupId: 1, bridgeType: DEFAULT_BRIDGE_TYPE },
   { shopGroupId: 1, bridgeType: "GET_ITEM_LIST_FROM_WEB" },
@@ -1746,6 +1748,7 @@ function renderBridgeDailyStatisticCard({
   const statisticDate = statistic
     ? formatStatisticDateRange(statistic.startDate, statistic.endDate)
     : "今日";
+  const requiresManualIntervention = Boolean(statistic && isBridgeDailyStatisticAbnormal(statistic));
   return (
     <article
       key="bridgeDailyStatistic"
@@ -1761,6 +1764,9 @@ function renderBridgeDailyStatisticCard({
             </div>
           </div>
           <Space size={4}>
+            {requiresManualIntervention ? (
+              <Tag color="error" icon={<WarningOutlined />}>异常，人工介入</Tag>
+            ) : null}
             <Tag className="manager-dashboard-tag">{scopeCount} 个组合</Tag>
             <Tooltip title="编辑展示组合">
               <Button
@@ -1791,6 +1797,11 @@ function renderBridgeDailyStatisticCard({
                 Bridge {statistic.bridgeCount} · {scope ? formatBridgeStatisticScope(scope, shopGroupLabelMap) : "-"}
                 {statistic.unmappedShopGroupIds.length > 0 ? ` · ${statistic.unmappedShopGroupIds.length} 个未映射` : ""}
               </div>
+              {requiresManualIntervention ? (
+                <div className="manager-dashboard-bridge-statistic__alert">
+                  成功率低于 50%，请人工介入
+                </div>
+              ) : null}
             </>
           ) : (
             <div className="manager-dashboard-bridge-statistic__loading"><Spin size="small" /> 正在加载商品桥接器情况</div>
@@ -1821,6 +1832,11 @@ function buildBridgeDailyStatisticMetrics(statistic: BridgeDailyStatisticSummary
     { label: "私密", value: formatCount(statistic.secretNum) },
     { label: "未授权", value: formatCount(statistic.unAuthorizeNum) },
   ];
+}
+
+function isBridgeDailyStatisticAbnormal(statistic: BridgeDailyStatisticSummary) {
+  return statistic.totalNum > 0
+    && safeDivide(statistic.successNum, statistic.totalNum) < BRIDGE_SUCCESS_RATE_ALERT_THRESHOLD;
 }
 
 function formatStatisticDateRange(startDate: string, endDate: string) {

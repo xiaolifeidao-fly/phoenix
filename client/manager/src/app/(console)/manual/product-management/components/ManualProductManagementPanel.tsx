@@ -55,6 +55,14 @@ import {
   type ManualProductTypeRecord,
 } from "../../api/product.api";
 import {
+  createShopGroup,
+  deleteShopGroup,
+  fetchShopGroups,
+  updateShopGroup,
+  type ShopGroupPayload,
+  type ShopGroupRecord,
+} from "../../product-group-management/api/product-group.api";
+import {
   fetchBarryAppUsers,
   fetchBarryUserWhitelists,
   saveBarryUserWhitelist,
@@ -69,7 +77,13 @@ interface ProductFormValues {
   name: string;
   code: string;
   score: number;
+  shopGroupId: number;
   shopTypeCodes: string[];
+}
+
+interface ShopGroupFormValues {
+  name: string;
+  code: string;
 }
 
 interface AssignConfigPreviewRecord {
@@ -226,6 +240,7 @@ interface ApprovalRateRuleState {
 }
 
 const defaultInteractRate = 0.02;
+const SHOP_GROUP_PAGE_SIZE = 8;
 
 const emptyUidRule: UidRuleState = {
   minFansNum: 0,
@@ -272,12 +287,19 @@ const videoUrlKeywordOptions = [
 
 export function ManualProductManagementPanel() {
   const [form] = Form.useForm<ProductFormValues>();
+  const [shopGroupForm] = Form.useForm<ShopGroupFormValues>();
   const [assignConfigForm] = Form.useForm<AssignConfigPreviewRecord>();
   const [judgeConfigForm] = Form.useForm<JudgeConfigPreviewRecord>();
   const [products, setProducts] = useState<ManualProductRecord[]>([]);
   const [productTypes, setProductTypes] = useState<ManualProductTypeRecord[]>([]);
+  const [shopGroups, setShopGroups] = useState<ShopGroupRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [shopGroupSubmitting, setShopGroupSubmitting] = useState(false);
+  const [selectedShopGroupId, setSelectedShopGroupId] = useState<number | null>(null);
+  const [shopGroupPageIndex, setShopGroupPageIndex] = useState(1);
+  const [shopGroupModalOpen, setShopGroupModalOpen] = useState(false);
+  const [editingShopGroup, setEditingShopGroup] = useState<ShopGroupRecord | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [assignConfigModalOpen, setAssignConfigModalOpen] = useState(false);
   const [assignConfigModalMode, setAssignConfigModalMode] = useState<AssignConfigModalMode>("edit");
@@ -361,19 +383,24 @@ export function ManualProductManagementPanel() {
     shopTypeCode: "",
   });
 
+  const selectedFormShopGroupId = Form.useWatch("shopGroupId", form);
+
   const loadData = async () => {
     setLoading(true);
     try {
-      const [productList, typeList] = await Promise.all([
+      const [productList, typeList, groupList] = await Promise.all([
         fetchManualProducts(),
         fetchManualProductTypes(),
+        fetchShopGroups(),
       ]);
       setProducts(sortProducts(productList));
       setProductTypes(typeList);
+      setShopGroups(groupList);
     } catch (error) {
       message.error(error instanceof Error ? error.message : "加载人工商品失败");
       setProducts([]);
       setProductTypes([]);
+      setShopGroups([]);
     } finally {
       setLoading(false);
     }
@@ -394,9 +421,10 @@ export function ManualProductManagementPanel() {
       const matchType =
         !filters.shopTypeCode ||
         (item.shopTypeModelList ?? []).some((type) => type.code === filters.shopTypeCode);
-      return matchKeyword && matchStatus && matchType;
+      const matchShopGroup = !selectedShopGroupId || item.shopGroupId === selectedShopGroupId;
+      return matchKeyword && matchStatus && matchType && matchShopGroup;
     });
-  }, [filters, products]);
+  }, [filters, products, selectedShopGroupId]);
 
   const sortedWhitelistUsers = useMemo(() => {
     if (!whitelistStatusSortOrder && !whitelistGroupSortOrder) {
@@ -427,6 +455,46 @@ export function ManualProductManagementPanel() {
       })),
     [productTypes],
   );
+
+  const activeShopGroups = useMemo(
+    () => shopGroups.filter((group) => group.active !== false && resolveStatus(group.status || "ACTIVE") === "ACTIVE"),
+    [shopGroups],
+  );
+
+  const selectedShopGroup = useMemo(
+    () => activeShopGroups.find((group) => group.id === selectedShopGroupId) ?? null,
+    [activeShopGroups, selectedShopGroupId],
+  );
+
+  const pagedShopGroups = useMemo(() => {
+    const offset = (shopGroupPageIndex - 1) * SHOP_GROUP_PAGE_SIZE;
+    return activeShopGroups.slice(offset, offset + SHOP_GROUP_PAGE_SIZE);
+  }, [activeShopGroups, shopGroupPageIndex]);
+
+  const formProductTypeOptions = useMemo(
+    () => productTypes
+      .filter((item) => !selectedFormShopGroupId || item.shopGroupId === Number(selectedFormShopGroupId))
+      .map((item) => ({
+        label: item.name?.trim() ? `${item.name.trim()} (${item.code.trim()})` : item.code.trim(),
+        value: item.code,
+      })),
+    [productTypes, selectedFormShopGroupId],
+  );
+
+  const shopGroupLabelMap = useMemo(
+    () => new Map(shopGroups.map((group) => [group.id, formatShopGroupLabel(group)])),
+    [shopGroups],
+  );
+
+  useEffect(() => {
+    const lastPage = Math.max(1, Math.ceil(activeShopGroups.length / SHOP_GROUP_PAGE_SIZE));
+    if (shopGroupPageIndex > lastPage) {
+      setShopGroupPageIndex(lastPage);
+    }
+    if (selectedShopGroupId && !activeShopGroups.some((group) => group.id === selectedShopGroupId)) {
+      setSelectedShopGroupId(null);
+    }
+  }, [activeShopGroups, selectedShopGroupId, shopGroupPageIndex]);
 
   const appUserSelectOptions = useMemo(
     () =>
@@ -459,9 +527,58 @@ export function ManualProductManagementPanel() {
       name: "",
       code: "",
       score: 0,
+      shopGroupId: selectedShopGroupId ?? activeShopGroups[0]?.id,
       shopTypeCodes: [],
     });
     setModalOpen(true);
+  };
+
+  const openShopGroupModal = (record?: ShopGroupRecord) => {
+    setEditingShopGroup(record ?? null);
+    shopGroupForm.setFieldsValue({
+      name: record?.name ?? "",
+      code: record?.code ?? "",
+    });
+    setShopGroupModalOpen(true);
+  };
+
+  const handleShopGroupSubmit = async () => {
+    const values = await shopGroupForm.validateFields();
+    const payload: ShopGroupPayload = {
+      name: values.name.trim(),
+      code: values.code.trim(),
+    };
+    setShopGroupSubmitting(true);
+    try {
+      const saved = editingShopGroup
+        ? await updateShopGroup(editingShopGroup.id, payload)
+        : await createShopGroup(payload);
+      message.success(editingShopGroup ? "商品分组已更新" : "商品分组已创建");
+      setShopGroupModalOpen(false);
+      setEditingShopGroup(null);
+      setSelectedShopGroupId(saved.id || selectedShopGroupId);
+      await loadData();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "保存商品分组失败");
+    } finally {
+      setShopGroupSubmitting(false);
+    }
+  };
+
+  const handleDeleteShopGroup = async (record: ShopGroupRecord) => {
+    setShopGroupSubmitting(true);
+    try {
+      await deleteShopGroup(record.id);
+      if (selectedShopGroupId === record.id) {
+        setSelectedShopGroupId(null);
+      }
+      message.success("商品分组已删除");
+      await loadData();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "删除商品分组失败");
+    } finally {
+      setShopGroupSubmitting(false);
+    }
   };
 
   const openStrategyDrawer = (record: ManualProductRecord) => {
@@ -715,6 +832,7 @@ export function ManualProductManagementPanel() {
       name: record.name,
       code: record.code,
       score: record.score,
+      shopGroupId: record.shopGroupId,
       shopTypeCodes: (record.shopTypeModelList ?? []).map((item) => item.code).filter(Boolean),
     });
     setModalOpen(true);
@@ -722,12 +840,18 @@ export function ManualProductManagementPanel() {
 
   const handleSubmit = async () => {
     const values = await form.validateFields();
-    const selectedProductType = productTypes.find((item) => item.code === values.shopTypeCodes[0]);
+    const shopGroupId = Number(values.shopGroupId);
+    const selectedProductTypes = productTypes.filter((item) => values.shopTypeCodes.includes(item.code));
+    if (!shopGroupId || selectedProductTypes.length !== values.shopTypeCodes.length
+      || selectedProductTypes.some((item) => item.shopGroupId !== shopGroupId)) {
+      message.error("商品类型必须属于所选商品分组");
+      return;
+    }
     const payload: ManualProductPayload = {
       name: values.name.trim(),
       code: values.code.trim(),
       score: Number(values.score || 0),
-      shopGroupId: selectedProductType?.shopGroupId || editingProduct?.shopGroupId || 0,
+      shopGroupId,
       shopTypeCodeList: values.shopTypeCodes ?? [],
       status: editingProduct ? resolveStatus(editingProduct.status) : "ACTIVE",
     };
@@ -1748,6 +1872,12 @@ export function ManualProductManagementPanel() {
       render: (value: number) => value ?? 0,
     },
     {
+      title: "商品分组",
+      dataIndex: "shopGroupId",
+      width: 210,
+      render: (value: number) => shopGroupLabelMap.get(Number(value)) || `分组 #${value || "-"}`,
+    },
+    {
       title: "商品类型",
       dataIndex: "shopTypeModelList",
       width: 320,
@@ -1862,62 +1992,136 @@ export function ManualProductManagementPanel() {
 
   return (
     <div className="manager-page-stack">
-      <section className="manager-data-card">
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "space-between" }}>
-          <Space wrap size={12}>
-            <Input
-              className="manager-filter-input"
-              placeholder="搜索名称或编码"
-              prefix={<SearchOutlined />}
-              value={filters.keyword}
-              onChange={(event) => setFilters((current) => ({ ...current, keyword: event.target.value }))}
-              style={{ width: 260, maxWidth: "100%", height: 44 }}
-            />
-            <Select
-              allowClear
-              placeholder="筛选状态"
-              value={filters.status || undefined}
-              onChange={(value) => setFilters((current) => ({ ...current, status: value ?? "" }))}
-              options={[
-                { label: "启用", value: "ACTIVE" },
-                { label: "失效", value: "EXPIRE" },
-              ]}
-              style={{ width: 160 }}
-            />
-            <Select
-              allowClear
-              showSearch
-              placeholder="筛选商品类型"
-              value={filters.shopTypeCode || undefined}
-              onChange={(value) => setFilters((current) => ({ ...current, shopTypeCode: value ?? "" }))}
-              options={productTypeOptions}
-              style={{ width: 240 }}
-              optionFilterProp="label"
-            />
-            <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void loadData()}>
-              刷新
-            </Button>
-          </Space>
+      <section className="manual-product-workbench">
+        <aside className="manager-data-card manual-product-group-panel">
+          <div className="manual-product-group-panel__header">
+            <div>
+              <div className="manager-section-label">商品分组</div>
+              <Text style={{ color: "var(--manager-text-soft)", fontSize: 12 }}>{activeShopGroups.length} 个分组</Text>
+            </div>
+            <Space size={2}>
+              <Tooltip title="刷新商品分组">
+                <Button type="text" icon={<ReloadOutlined />} loading={loading} onClick={() => void loadData()} />
+              </Tooltip>
+              <Tooltip title="新建商品分组">
+                <Button type="text" icon={<PlusOutlined />} onClick={() => openShopGroupModal()} />
+              </Tooltip>
+            </Space>
+          </div>
 
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
-            新建人工商品
-          </Button>
-        </div>
-      </section>
+          <div className="manual-product-group-list">
+            <div
+              className={`manual-product-group-list__item${selectedShopGroupId === null ? " manual-product-group-list__item--selected" : ""}`}
+              onClick={() => setSelectedShopGroupId(null)}
+            >
+              <span className="manual-product-group-list__code">全部</span>
+              <span className="manual-product-group-list__name">人工商品</span>
+            </div>
+            {pagedShopGroups.map((group) => (
+              <div
+                key={group.id}
+                className={`manual-product-group-list__item${selectedShopGroupId === group.id ? " manual-product-group-list__item--selected" : ""}`}
+                onClick={() => setSelectedShopGroupId(group.id)}
+              >
+                <div className="manual-product-group-list__value">
+                  <span className="manual-product-group-list__code">{group.code || "-"}</span>
+                  <span className="manual-product-group-list__name">{group.name || "-"}</span>
+                </div>
+                <Space size={0} className="manual-product-group-list__actions" onClick={(event) => event.stopPropagation()}>
+                  <Tooltip title="编辑商品分组">
+                    <Button type="text" size="small" icon={<EditOutlined />} onClick={() => openShopGroupModal(group)} />
+                  </Tooltip>
+                  <Popconfirm
+                    title="确认删除这个商品分组吗？"
+                    description="删除后该分组不再用于人工商品筛选。"
+                    okText="删除"
+                    cancelText="取消"
+                    okButtonProps={{ danger: true }}
+                    onConfirm={() => handleDeleteShopGroup(group)}
+                  >
+                    <Tooltip title="删除商品分组">
+                      <Button type="text" size="small" danger icon={<DeleteOutlined />} disabled={shopGroupSubmitting} />
+                    </Tooltip>
+                  </Popconfirm>
+                </Space>
+              </div>
+            ))}
+          </div>
 
-      <section className="manager-data-card manager-table">
-        <Table<ManualProductRecord>
-          rowKey="id"
-          loading={loading}
-          dataSource={filteredProducts}
-          columns={columns}
-          pagination={{
-            pageSize: 10,
-            showSizeChanger: false,
-          }}
-          scroll={{ x: 1230 }}
-          locale={{ emptyText: "暂无人工商品数据" }}
-        />
+          <Pagination
+            className="manual-product-group-panel__pagination"
+            size="small"
+            current={shopGroupPageIndex}
+            pageSize={SHOP_GROUP_PAGE_SIZE}
+            total={activeShopGroups.length}
+            showSizeChanger={false}
+            hideOnSinglePage
+            onChange={setShopGroupPageIndex}
+          />
+        </aside>
+
+        <main className="manual-product-content">
+          <section className="manager-data-card manager-toolbar-panel">
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "space-between" }}>
+              <Space wrap size={12}>
+                <Input
+                  className="manager-filter-input"
+                  placeholder="搜索名称或编码"
+                  prefix={<SearchOutlined />}
+                  value={filters.keyword}
+                  onChange={(event) => setFilters((current) => ({ ...current, keyword: event.target.value }))}
+                  style={{ width: 260, maxWidth: "100%", height: 44 }}
+                />
+                <Select
+                  allowClear
+                  placeholder="筛选状态"
+                  value={filters.status || undefined}
+                  onChange={(value) => setFilters((current) => ({ ...current, status: value ?? "" }))}
+                  options={[
+                    { label: "启用", value: "ACTIVE" },
+                    { label: "失效", value: "EXPIRE" },
+                  ]}
+                  style={{ width: 160 }}
+                />
+                <Select
+                  allowClear
+                  showSearch
+                  placeholder="筛选商品类型"
+                  value={filters.shopTypeCode || undefined}
+                  onChange={(value) => setFilters((current) => ({ ...current, shopTypeCode: value ?? "" }))}
+                  options={productTypeOptions}
+                  style={{ width: 240 }}
+                  optionFilterProp="label"
+                />
+                {selectedShopGroup ? (
+                  <Tag closable onClose={() => setSelectedShopGroupId(null)}>{formatShopGroupLabel(selectedShopGroup)}</Tag>
+                ) : null}
+                <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void loadData()}>
+                  刷新
+                </Button>
+              </Space>
+
+              <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
+                新建人工商品
+              </Button>
+            </div>
+          </section>
+
+          <section className="manager-data-card manager-table">
+            <Table<ManualProductRecord>
+              rowKey="id"
+              loading={loading}
+              dataSource={filteredProducts}
+              columns={columns}
+              pagination={{
+                pageSize: 10,
+                showSizeChanger: false,
+              }}
+              scroll={{ x: 1440 }}
+              locale={{ emptyText: "暂无人工商品数据" }}
+            />
+          </section>
+        </main>
       </section>
 
       <WorkspaceDrawer
@@ -1942,15 +2146,47 @@ export function ManualProductManagementPanel() {
           <Form.Item name="score" label="积分" rules={[{ required: true, message: "请输入积分" }]} initialValue={0}>
             <InputNumber min={0} precision={0} style={{ width: "100%" }} />
           </Form.Item>
+          <Form.Item name="shopGroupId" label="商品分组" rules={[{ required: true, message: "请选择商品分组" }]}>
+            <Select
+              allowClear
+              showSearch
+              placeholder="请选择商品分组"
+              options={activeShopGroups.map((group) => ({ label: formatShopGroupLabel(group), value: group.id }))}
+              optionFilterProp="label"
+              onChange={() => form.setFieldValue("shopTypeCodes", [])}
+            />
+          </Form.Item>
           <Form.Item name="shopTypeCodes" label="商品类型" rules={[{ required: true, message: "请选择关联商品类型" }]}>
             <Select
               mode="multiple"
               allowClear
               showSearch
               placeholder="请选择关联商品类型"
-              options={productTypeOptions}
+              options={formProductTypeOptions}
               optionFilterProp="label"
             />
+          </Form.Item>
+        </Form>
+      </WorkspaceDrawer>
+
+      <WorkspaceDrawer
+        title={editingShopGroup ? "编辑商品分组" : "新建商品分组"}
+        open={shopGroupModalOpen}
+        onClose={() => {
+          setShopGroupModalOpen(false);
+          setEditingShopGroup(null);
+        }}
+        onSubmit={handleShopGroupSubmit}
+        okText={editingShopGroup ? "保存分组" : "创建分组"}
+        submitting={shopGroupSubmitting}
+        width={460}
+      >
+        <Form<ShopGroupFormValues> className="manager-form-skin" form={shopGroupForm} layout="vertical" preserve={false}>
+          <Form.Item name="code" label="分组编码" rules={[{ required: true, message: "请输入分组编码" }]}>
+            <Input placeholder="例如：MANUAL_VIDEO" />
+          </Form.Item>
+          <Form.Item name="name" label="分组名称" rules={[{ required: true, message: "请输入分组名称" }]}>
+            <Input placeholder="例如：人工视频商品" />
           </Form.Item>
         </Form>
       </WorkspaceDrawer>
@@ -3297,6 +3533,12 @@ export function ManualProductManagementPanel() {
 
 function resolveStatus(value?: string) {
   return value?.trim().toUpperCase() === "EXPIRE" ? "EXPIRE" : "ACTIVE";
+}
+
+function formatShopGroupLabel(group: Pick<ShopGroupRecord, "code" | "name">) {
+  const code = group.code?.trim() || "-";
+  const name = group.name?.trim() || "-";
+  return `${code} · ${name}`;
 }
 
 function sortProducts(products: ManualProductRecord[]) {

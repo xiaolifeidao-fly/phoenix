@@ -87,8 +87,28 @@ export interface BridgeConfigPayload {
   fetchProxyUrl?: string;
 }
 
+export interface ShopGroupPayload {
+  name: string;
+  code: string;
+}
+
 export async function fetchShopGroups() {
   return getDataList(ShopGroupRecord, "/barry/shop-groups");
+}
+
+export async function createShopGroup(payload: ShopGroupPayload) {
+  const response = await instance.post<ApiResponse<ShopGroupRecord>>("/barry/shop-groups", payload);
+  return unwrapApiResponse(response.data);
+}
+
+export async function updateShopGroup(shopGroupId: number, payload: ShopGroupPayload) {
+  const response = await instance.put<ApiResponse<ShopGroupRecord>>(`/barry/shop-groups/${shopGroupId}`, payload);
+  return unwrapApiResponse(response.data);
+}
+
+export async function deleteShopGroup(shopGroupId: number) {
+  const response = await instance.delete<ApiResponse<{ deleted: boolean }>>(`/barry/shop-groups/${shopGroupId}`);
+  return unwrapApiResponse(response.data);
 }
 
 export async function fetchBridgeConfigs(shopGroupId: number) {
@@ -133,6 +153,13 @@ export async function activateBridgeConfig(shopGroupId: number, bridgeConfigId: 
 export async function disableBridgeConfig(shopGroupId: number, bridgeConfigId: number) {
   const response = await instance.put<ApiResponse<{ updated: boolean }>>(
     `/barry/shop-groups/${shopGroupId}/bridge-configs/${bridgeConfigId}/disable`,
+  );
+  return unwrapApiResponse(response.data);
+}
+
+export async function resetBridgeConfigStatistics(shopGroupId: number, bridgeConfigId: number) {
+  const response = await instance.post<ApiResponse<{ reset: boolean }>>(
+    `/barry/shop-groups/${shopGroupId}/bridge-configs/${bridgeConfigId}/reset-statistics`,
   );
   return unwrapApiResponse(response.data);
 }

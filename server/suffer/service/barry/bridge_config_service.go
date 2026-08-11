@@ -63,6 +63,17 @@ func (s *BridgeConfigService) Disable(ctx context.Context, bridgeConfigID int64)
 	return s.changeStatus(ctx, barryInnerBridgeConfigDisablePath, bridgeConfigID, "下线")
 }
 
+func (s *BridgeConfigService) ResetStatistics(ctx context.Context, bridgeConfigID int64) error {
+	response := &barryDTO.DetailResponseDTO[barryDTO.BridgeConfigDTO]{}
+	if err := s.client.PostAbsolute(ctx, bridgeConfigPath(barryInnerBridgeConfigResetPath, 0, bridgeConfigID), nil, response); err != nil {
+		return err
+	}
+	if !response.Success || response.Data == nil {
+		return responseError(response.Message, "barry bridge configuration reset failed")
+	}
+	return nil
+}
+
 func (s *BridgeConfigService) changeStatus(ctx context.Context, configPath string, bridgeConfigID int64, action string) error {
 	response := &barryDTO.ActionResponseDTO{}
 	if err := s.client.GetAbsolute(ctx, bridgeConfigPath(configPath, 0, bridgeConfigID), nil, response); err != nil {

@@ -346,6 +346,113 @@ select {
   gap: 14px;
 }
 
+.manual-product-workbench {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) minmax(0, 8fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.manual-product-group-panel {
+  display: flex;
+  min-height: 516px;
+  flex-direction: column;
+  padding: 14px;
+}
+
+.manual-product-group-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 2px 12px;
+  border-bottom: 1px solid var(--manager-border-soft);
+}
+
+.manual-product-group-list {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 10px;
+}
+
+.manual-product-group-list__item {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.manual-product-group-list__item:hover {
+  background: var(--manager-panel);
+}
+
+.manual-product-group-list__item--selected {
+  border-color: var(--manager-info-border);
+  background: var(--manager-info-bg);
+}
+
+.manual-product-group-list__value {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.manual-product-group-list__code {
+  overflow: hidden;
+  color: var(--manager-primary-deep);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manual-product-group-list__name {
+  overflow: hidden;
+  color: var(--manager-text);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manual-product-group-list__actions {
+  flex: 0 0 auto;
+}
+
+.manual-product-group-panel__pagination {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid var(--manager-border-soft);
+}
+
+.manual-product-content {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 14px;
+}
+
+@media (max-width: 1100px) {
+  .manual-product-workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .manual-product-group-panel {
+    min-height: 0;
+  }
+}
+
 .order-query-fields {
   display: grid;
   grid-template-columns: 150px minmax(150px, 0.9fr) 150px 140px minmax(300px, 1.4fr);
@@ -2553,6 +2660,16 @@ select {
   overflow: hidden;
   color: var(--manager-text-soft);
   font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manager-dashboard-bridge-statistic__alert {
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--manager-danger);
+  font-size: 11px;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

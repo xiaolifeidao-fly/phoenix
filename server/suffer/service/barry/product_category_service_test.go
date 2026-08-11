@@ -29,3 +29,19 @@ func TestResolveSelectedProductTypesRejectsMissingAndEmptySelections(t *testing.
 		t.Fatal("resolveSelectedProductTypes() error = nil, want a missing-type error")
 	}
 }
+
+func TestValidateProductTypesShopGroup(t *testing.T) {
+	productTypes := []*barryDTO.ProductTypeDTO{
+		{Code: "MI_FOLLOW", ShopGroupID: 1},
+		{Code: "MI_LIKE", ShopGroupID: 1},
+	}
+	if err := validateProductTypesShopGroup(1, productTypes); err != nil {
+		t.Fatalf("validateProductTypesShopGroup() error = %v", err)
+	}
+	if err := validateProductTypesShopGroup(0, productTypes); err == nil {
+		t.Fatal("validateProductTypesShopGroup() error = nil, want missing group error")
+	}
+	if err := validateProductTypesShopGroup(2, productTypes); err == nil {
+		t.Fatal("validateProductTypesShopGroup() error = nil, want mismatched group error")
+	}
+}

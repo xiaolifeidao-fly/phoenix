@@ -44,6 +44,9 @@ func (s *ProductCategoryService) Save(ctx context.Context, req *barryDTO.SavePro
 	if err != nil {
 		return nil, err
 	}
+	if err := validateProductTypesShopGroup(req.ShopGroupID, productTypes); err != nil {
+		return nil, err
+	}
 	req.ShopTypeModelList = productTypes
 	response := &barryDTO.ProductCategoryActionResultDTO{}
 	err = s.client.PostAbsolute(ctx, innerServicePath(barryInnerManualSaveSuffixPath), req, response)
@@ -104,6 +107,20 @@ func resolveSelectedProductTypes(codes []string, available []*barryDTO.ProductTy
 		return nil, fmt.Errorf("商品类型不存在: %s", strings.Join(missingCodes, ", "))
 	}
 	return productTypes, nil
+}
+
+// validateProductTypesShopGroup keeps the product group chosen by the manager
+// consistent with Barry's legacy type-to-group mapping before saving.
+func validateProductTypesShopGroup(shopGroupID int64, productTypes []*barryDTO.ProductTypeDTO) error {
+	if shopGroupID <= 0 {
+		return fmt.Errorf("请选择商品分组")
+	}
+	for _, productType := range productTypes {
+		if productType == nil || productType.ShopGroupID != shopGroupID {
+			return fmt.Errorf("商品类型必须属于所选商品分组")
+		}
+	}
+	return nil
 }
 
 func (s *ProductCategoryService) Delete(ctx context.Context, req *barryDTO.ProductCategoryOperateDTO) (*barryDTO.ProductCategoryActionResultDTO, error) {
