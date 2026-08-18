@@ -34,6 +34,7 @@ import {
   fetchBarryShopGroups,
   fetchWorkbenchBridgeDailyStatistics,
   fetchActualCompleted,
+  fetchDelayAssignmentCount,
   fetchManualSpeed,
   fetchSystemBalance,
   fetchTodayConsume,
@@ -45,6 +46,7 @@ import {
   type BridgeDailyStatisticDetail,
   type BridgeDailyStatisticSummary,
   type DashboardStatistics,
+  type DelayAssignmentCountSummary,
   type ManualSpeedSummary,
   type WorkbenchDashboardStatistics,
   type WorkbenchUserOverview,
@@ -130,6 +132,7 @@ interface DerivedCategoryDetail {
   taskRemaining: number;
   manualSubmitted: number;
   actualCompleted: number;
+  delayAssignmentCount: number;
   userCoverage: number;
   completionRate: number;
   manualSpeedPerSecond: number;
@@ -285,6 +288,8 @@ export function ManagerDashboardPanel() {
   const [shopGroups, setShopGroups] = useState<BarryShopGroup[]>([]);
   const [bridgeTypes, setBridgeTypes] = useState<string[]>([]);
   const [lowPriceActualCompleted, setLowPriceActualCompleted] = useState<ActualCompletedSummary | null>(null);
+  const [realDelayAssignmentCount, setRealDelayAssignmentCount] = useState<DelayAssignmentCountSummary | null>(null);
+  const [lowPriceDelayAssignmentCount, setLowPriceDelayAssignmentCount] = useState<DelayAssignmentCountSummary | null>(null);
   const [manualSpeed, setManualSpeed] = useState<ManualSpeedSummary | null>(null);
   const [realManualSpeed, setRealManualSpeed] = useState<ManualSpeedSummary | null>(null);
   const [actualSpeedPerSecond, setActualSpeedPerSecond] = useState(0);
@@ -550,6 +555,13 @@ export function ManagerDashboardPanel() {
         .catch(() => {
           // Keep the previous snapshot so a temporary polling failure does not reset the speed.
         });
+      void fetchDelayAssignmentCount(
+        realActualCategoryIds.length > 0 ? { shopCategoryIds: realActualCategoryIdsKey } : undefined,
+      )
+        .then(setRealDelayAssignmentCount)
+        .catch(() => {
+          setRealDelayAssignmentCount(null);
+        });
     };
 
     loadRealActualCompleted();
@@ -627,6 +639,13 @@ export function ManagerDashboardPanel() {
         .then(setLowPriceActualCompleted)
         .catch(() => {
           // Keep the most recent low-price completion data while a refresh is unavailable.
+        });
+      void fetchDelayAssignmentCount(
+        lowPriceUpstreamCategoryIdsKey ? { shopCategoryIds: lowPriceUpstreamCategoryIdsKey } : undefined,
+      )
+        .then(setLowPriceDelayAssignmentCount)
+        .catch(() => {
+          setLowPriceDelayAssignmentCount(null);
         });
     };
 
@@ -865,6 +884,8 @@ export function ManagerDashboardPanel() {
             workbenchUserOverview,
             dashboardStatistics,
             lowPriceActualCompleted,
+            realDelayAssignmentCount,
+            lowPriceDelayAssignmentCount,
             formatCategoryScopeLabel(
               config.categoryIds,
               isManualProduct ? manualProducts.length : categories.length,
@@ -883,7 +904,7 @@ export function ManagerDashboardPanel() {
           return [cardId, view];
         }),
       ) as Record<DashboardCardId, DashboardCardView>,
-    [categories.length, categoryDetailsWithSpeed, configMap, dashboardMetricLoading, dashboardStatistics, derivedManualProductDetails, lowPriceActualCompleted, lowPriceManualProductDetails, lowPriceManualSubmittedStatistics, manualProducts.length, products, realManualSubmittedStatistics, users, userStats, workbenchStatistics, workbenchUserOverview],
+    [categories.length, categoryDetailsWithSpeed, configMap, dashboardMetricLoading, dashboardStatistics, derivedManualProductDetails, lowPriceActualCompleted, lowPriceDelayAssignmentCount, lowPriceManualProductDetails, lowPriceManualSubmittedStatistics, manualProducts.length, products, realDelayAssignmentCount, realManualSubmittedStatistics, users, userStats, workbenchStatistics, workbenchUserOverview],
   );
 
   const hiddenCardIds = useMemo(
@@ -1953,6 +1974,7 @@ function buildDerivedCategoryDetails(
       taskRemaining,
       manualSubmitted,
       actualCompleted,
+      delayAssignmentCount: 0,
       userCoverage,
       completionRate,
       manualSpeedPerSecond: 0,
@@ -1993,6 +2015,7 @@ function buildDerivedManualProductDetails(
       taskRemaining: categoryStatistics?.pendingNum ?? 0,
       manualSubmitted,
       actualCompleted,
+      delayAssignmentCount: 0,
       userCoverage: 0,
       completionRate: manualSubmitted === 0 ? 0 : Math.min(actualCompleted / manualSubmitted, 1),
       manualSpeedPerSecond: 0,
@@ -2023,6 +2046,7 @@ function toBaseDashboardDetail(key: number, username: string, remark: string): D
     taskRemaining: 0,
     manualSubmitted: 0,
     actualCompleted: 0,
+    delayAssignmentCount: 0,
     userCoverage: 0,
     completionRate: 0,
     manualSpeedPerSecond: 0,
@@ -2073,6 +2097,8 @@ function buildDashboardCardView(
   workbenchUserOverview: WorkbenchUserOverview | null,
   dashboardStatistics: DashboardStatistics | null,
   lowPriceActualCompleted: ActualCompletedSummary | null,
+  realDelayAssignmentCount: DelayAssignmentCountSummary | null,
+  lowPriceDelayAssignmentCount: DelayAssignmentCountSummary | null,
   scopeLabel: string,
 ): DashboardCardView {
   const currencyTotal = detailRows.reduce((sum, item) => sum + item.todayConsume, 0);
@@ -2290,9 +2316,13 @@ function buildDashboardCardView(
       const completedByCategory = new Map(
         (realActualCompleted?.categoryList ?? []).map((item) => [item.shopCategoryId, item.count]),
       );
+      const delayAssignmentByCategory = new Map(
+        (realDelayAssignmentCount?.categoryList ?? []).map((item) => [item.shopCategoryId, item.count]),
+      );
       const realActualDetailRows = detailRows.map((item) => ({
         ...item,
         actualCompleted: completedByCategory.get(item.id) ?? 0,
+        delayAssignmentCount: delayAssignmentByCategory.get(item.id) ?? 0,
       }));
       return {
         title: DASHBOARD_TITLES[cardId],
@@ -2327,6 +2357,7 @@ function buildDashboardCardView(
           { label: "今日新增总单量", value: formatCount(realActualCompleted?.totalOrderCount ?? 0) },
           { label: "今日新增总量", value: formatCount(realActualCompleted?.totalCount ?? 0) },
           { label: "完成单量", value: formatCount(realActualCompleted?.completedOrderCount ?? 0) },
+          { label: "休眠延迟中", value: formatCount(realDelayAssignmentCount?.total ?? 0) },
         ],
         detailRows: realActualDetailRows,
         compact: true,
@@ -2337,9 +2368,13 @@ function buildDashboardCardView(
       const completedByCategory = new Map(
         (lowPriceActualCompleted?.categoryList ?? []).map((item) => [item.shopCategoryId, item.count]),
       );
+      const delayAssignmentByCategory = new Map(
+        (lowPriceDelayAssignmentCount?.categoryList ?? []).map((item) => [item.shopCategoryId, item.count]),
+      );
       const actualDetailRows = detailRows.map((item) => ({
         ...item,
         actualCompleted: completedByCategory.get(item.id) ?? 0,
+        delayAssignmentCount: delayAssignmentByCategory.get(item.id) ?? 0,
       }));
       return {
         title: DASHBOARD_TITLES[cardId],
@@ -2374,6 +2409,7 @@ function buildDashboardCardView(
           { label: "今日新增总单量", value: formatCount(lowPriceActualCompleted?.totalOrderCount ?? 0) },
           { label: "今日新增总量", value: formatCount(lowPriceActualCompleted?.totalCount ?? 0) },
           { label: "完成单量", value: formatCount(lowPriceActualCompleted?.completedOrderCount ?? 0) },
+          { label: "休眠延迟中", value: formatCount(lowPriceDelayAssignmentCount?.total ?? 0) },
         ],
         detailRows: actualDetailRows,
         compact: true,
@@ -2466,7 +2502,7 @@ function buildDetailColumns(cardId: DashboardCardId | null): ColumnsType<Derived
     return buildManualProductDetailColumns();
   }
   if (isUpstreamCategoryMetric(cardId)) {
-    return buildUpstreamCategoryDetailColumns();
+    return buildUpstreamCategoryDetailColumns(cardId);
   }
   const valueColumnTitle = getDetailValueTitle(cardId);
   return [
@@ -2783,7 +2819,7 @@ async function fetchBridgeStatisticScopes(scopes: BridgeStatisticScope[]) {
 
 // 上游商品类目 (upstream product category) completion breakdown — 实际完成总量 / 真人实际完成 detail.
 // Only the product category is listed, per requirement.
-function buildUpstreamCategoryDetailColumns(): ColumnsType<DerivedCategoryDetail> {
+function buildUpstreamCategoryDetailColumns(cardId: DashboardCardId): ColumnsType<DerivedCategoryDetail> {
   return [
     {
       title: "商品类目",
@@ -2803,6 +2839,18 @@ function buildUpstreamCategoryDetailColumns(): ColumnsType<DerivedCategoryDetail
         </span>
       ),
     },
+    ...(cardId === "realActualCompleted" || cardId === "lowPriceActualCompleted"
+      ? [{
+        title: "休眠延迟中",
+        dataIndex: "delayAssignmentCount" as const,
+        width: 140,
+        render: (value: number) => (
+          <span className="manager-value" style={{ color: "var(--manager-text)" }}>
+            {formatCount(value)}
+          </span>
+        ),
+      }]
+      : []),
     {
       title: "状态",
       dataIndex: "status",
@@ -2822,7 +2870,9 @@ function isManualProductMetric(cardId: DashboardCardId | null): boolean {
 }
 
 // Completion cards are viewed along the 上游商品类目 (upstream product category) dimension.
-function isUpstreamCategoryMetric(cardId: DashboardCardId | null): boolean {
+function isUpstreamCategoryMetric(
+  cardId: DashboardCardId | null,
+): cardId is "actualCompleted" | "realActualCompleted" | "lowPriceActualCompleted" {
   return cardId === "actualCompleted" || cardId === "realActualCompleted" || cardId === "lowPriceActualCompleted";
 }
 

@@ -193,6 +193,16 @@ export interface ActualCompletedSummary {
   }>;
 }
 
+export interface DelayAssignmentCountSummary {
+  total: number;
+  categoryList: Array<{
+    shopCategoryId: number;
+    categoryName: string;
+    categoryCode: string;
+    count: number;
+  }>;
+}
+
 export interface ManualSubmittedComparison {
   count: number;
   yesterdayCount: number;
@@ -334,6 +344,14 @@ export async function fetchSystemBalance() {
 
 export async function fetchActualCompleted(query?: Pick<WorkbenchDashboardStatisticsQuery, "shopCategoryIds">) {
   const response = await instance.get<ApiResponse<ActualCompletedSummary>>("/dashboard/actual-completed", { params: query });
+  return unwrapApiResponse(response.data);
+}
+
+export async function fetchDelayAssignmentCount(query?: Pick<WorkbenchDashboardStatisticsQuery, "shopCategoryIds">) {
+  const response = await instance.get<ApiResponse<DelayAssignmentCountSummary>>(
+    "/barry/workbench-dashboard/delay-assignment-count",
+    { params: query },
+  );
   return unwrapApiResponse(response.data);
 }
 

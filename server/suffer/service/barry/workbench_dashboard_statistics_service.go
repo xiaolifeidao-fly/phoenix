@@ -63,6 +63,20 @@ func (s *WorkbenchDashboardStatisticsService) ManualSpeed(ctx context.Context, q
 	return response.Data, nil
 }
 
+func (s *WorkbenchDashboardStatisticsService) DelayAssignmentCount(ctx context.Context, query barryDTO.WorkbenchDashboardMetricQueryDTO) (*barryDTO.WorkbenchDashboardDelayAssignmentCountDTO, error) {
+	response := &barryDTO.DetailResponseDTO[barryDTO.WorkbenchDashboardDelayAssignmentCountDTO]{}
+	err := s.client.GetAbsolute(ctx, innerServicePath(barryInnerWorkbenchDashboardDelayAssignmentCountPath), buildValues(
+		"shopCategoryIds", query.ShopCategoryIDs,
+	), response)
+	if err != nil {
+		return nil, err
+	}
+	if !response.Success || response.Data == nil {
+		return nil, responseError(response.Message, "barry workbench delay assignment count response is empty")
+	}
+	return response.Data, nil
+}
+
 // ManualSubmittedComparison delegates the selected categories to Barry. Barry reads
 // today's order summary and yesterday's same-time data from order_minute_sum_record.
 func (s *WorkbenchDashboardStatisticsService) ManualSubmittedComparison(ctx context.Context, query barryDTO.WorkbenchDashboardMetricQueryDTO) (*barryDTO.WorkbenchDashboardManualSubmittedComparisonDTO, error) {

@@ -1182,6 +1182,18 @@ type WorkbenchDashboardManualSpeedDTO struct {
 	CategoryList         []*WorkbenchDashboardManualSpeedCategoryDTO `json:"categoryList"`
 }
 
+type WorkbenchDashboardDelayAssignmentCountCategoryDTO struct {
+	ShopCategoryID int64  `json:"shopCategoryId"`
+	CategoryName   string `json:"categoryName"`
+	CategoryCode   string `json:"categoryCode"`
+	Count          int64  `json:"count"`
+}
+
+type WorkbenchDashboardDelayAssignmentCountDTO struct {
+	Total        int64                                                `json:"total"`
+	CategoryList []*WorkbenchDashboardDelayAssignmentCountCategoryDTO `json:"categoryList"`
+}
+
 type OrderStatusStatisticDTO struct {
 	OrderStatus string `json:"order_status"`
 	Count       int64  `json:"count"`
