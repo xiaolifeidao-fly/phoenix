@@ -1017,14 +1017,18 @@ type OrderFetchMonitorUIDsQueryDTO struct {
 }
 
 type OrderFetchMonitorDTO struct {
-	UserID         int64   `json:"userId"`
-	UID            string  `json:"uid,omitempty"`
-	HitNum         int64   `json:"hitNum"`
-	MissNum        int64   `json:"missNum"`
-	WindowSeconds  int     `json:"windowSeconds"`
-	ElapsedSeconds int     `json:"elapsedSeconds"`
-	HitSpeed       float64 `json:"hitSpeed"`
-	MissSpeed      float64 `json:"missSpeed"`
+	UserID               int64   `json:"userId"`
+	UID                  string  `json:"uid,omitempty"`
+	HitNum               int64   `json:"hitNum"`
+	MissNum              int64   `json:"missNum"`
+	WindowSeconds        int     `json:"windowSeconds"`
+	HitRemainingSeconds  int64   `json:"hitRemainingSeconds"`
+	MissRemainingSeconds int64   `json:"missRemainingSeconds"`
+	HitElapsedSeconds    int     `json:"hitElapsedSeconds"`
+	MissElapsedSeconds   int     `json:"missElapsedSeconds"`
+	ElapsedSeconds       int     `json:"elapsedSeconds"`
+	HitSpeed             float64 `json:"hitSpeed"`
+	MissSpeed            float64 `json:"missSpeed"`
 }
 
 type ManualOrderDetailQueryDTO struct {

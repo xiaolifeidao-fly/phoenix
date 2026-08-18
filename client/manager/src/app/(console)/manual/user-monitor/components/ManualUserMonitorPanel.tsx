@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
-import { Button, Empty, Input, Space, Table, Tag, Typography } from "antd";
+import { Button, Empty, Input, Space, Table, Tag, Tooltip, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { message } from "@/utils/notify";
 import {
@@ -64,6 +64,16 @@ export function ManualUserMonitorPanel() {
     { title: "取单速度", dataIndex: ["monitor", "hitSpeed"], width: 140, render: formatSpeed },
     { title: "无任务速度", dataIndex: ["monitor", "missSpeed"], width: 140, render: formatSpeed },
     { title: "统计窗口", dataIndex: ["monitor", "windowSeconds"], width: 130, render: formatWindow },
+    {
+      title: "已持续时间",
+      dataIndex: ["monitor", "elapsedSeconds"],
+      width: 140,
+      render: (value, record) => (
+        <Tooltip title={formatRemainingTooltip(record.monitor.hitRemainingSeconds, record.monitor.missRemainingSeconds)}>
+          {formatElapsed(value)}
+        </Tooltip>
+      ),
+    },
   ];
 
   const search = () => {
@@ -112,4 +122,19 @@ function formatSpeed(value?: number) {
 
 function formatWindow(value?: number) {
   return Number(value || 0) > 0 ? `${value} 秒` : "-";
+}
+
+function formatElapsed(value?: number) {
+  const seconds = Math.max(0, Math.floor(Number(value || 0)));
+  if (seconds < 60) return `${seconds} 秒`;
+  return `${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒`;
+}
+
+function formatRemainingTooltip(hitRemainingSeconds?: number, missRemainingSeconds?: number) {
+  return (
+    <Space direction="vertical" size={2}>
+      <span>取单剩余有效期：{formatWindow(hitRemainingSeconds)}</span>
+      <span>无任务剩余有效期：{formatWindow(missRemainingSeconds)}</span>
+    </Space>
+  );
 }

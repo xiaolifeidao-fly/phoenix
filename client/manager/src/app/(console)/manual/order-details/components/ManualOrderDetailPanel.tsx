@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dayjs, { type Dayjs } from "dayjs";
 import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
-import { Button, DatePicker, Empty, Input, InputNumber, Select, Space, Switch, Table, Tag, Typography } from "antd";
+import { Button, DatePicker, Empty, Input, InputNumber, Select, Space, Switch, Table, Tag, Tooltip, Typography } from "antd";
 import type { TableProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { TablePaginationConfig } from "antd/es/table/interface";
@@ -183,16 +183,35 @@ export function ManualOrderDetailPanel() {
       render: (_, record) => formatMonitorCount(orderFetchMonitors.get(getOrderFetchMonitorKey(record.userId, record.uid))?.missNum),
     },
     {
-      title: "速度（次/分钟）",
+      title: "取单速度",
       key: "hitSpeed",
       width: 140,
       render: (_, record) => formatMonitorSpeed(orderFetchMonitors.get(getOrderFetchMonitorKey(record.userId, record.uid))?.hitSpeed),
+    },
+    {
+      title: "无任务速度",
+      key: "missSpeed",
+      width: 140,
+      render: (_, record) => formatMonitorSpeed(orderFetchMonitors.get(getOrderFetchMonitorKey(record.userId, record.uid))?.missSpeed),
     },
     {
       title: "统计窗口",
       key: "windowSeconds",
       width: 110,
       render: (_, record) => formatMonitorWindow(orderFetchMonitors.get(getOrderFetchMonitorKey(record.userId, record.uid))?.windowSeconds),
+    },
+    {
+      title: "已持续时间",
+      key: "elapsedSeconds",
+      width: 140,
+      render: (_, record) => {
+        const monitor = orderFetchMonitors.get(getOrderFetchMonitorKey(record.userId, record.uid));
+        return (
+          <Tooltip title={formatRemainingTooltip(monitor?.hitRemainingSeconds, monitor?.missRemainingSeconds)}>
+            {formatMonitorElapsed(monitor?.elapsedSeconds)}
+          </Tooltip>
+        );
+      },
     },
     {
       title: "粉丝数",
@@ -335,3 +354,17 @@ function formatPercent(value?: number) { return `${(Number(value || 0) * 100).to
 function formatMonitorCount(value?: number) { return value === undefined ? "-" : formatCount(value); }
 function formatMonitorSpeed(value?: number) { return value === undefined ? "-" : Number(value).toFixed(2); }
 function formatMonitorWindow(value?: number) { return value === undefined ? "-" : `${value} 秒`; }
+function formatMonitorElapsed(value?: number) {
+  if (value === undefined) return "-";
+  const seconds = Math.max(0, Math.floor(value));
+  if (seconds < 60) return `${seconds} 秒`;
+  return `${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒`;
+}
+function formatRemainingTooltip(hitRemainingSeconds?: number, missRemainingSeconds?: number) {
+  return (
+    <Space direction="vertical" size={2}>
+      <span>取单剩余有效期：{formatMonitorWindow(hitRemainingSeconds)}</span>
+      <span>无任务剩余有效期：{formatMonitorWindow(missRemainingSeconds)}</span>
+    </Space>
+  );
+}

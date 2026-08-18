@@ -53,6 +53,10 @@ export interface ManualOrderFetchMonitor {
   hitNum: number;
   missNum: number;
   windowSeconds: number;
+  hitRemainingSeconds: number;
+  missRemainingSeconds: number;
+  hitElapsedSeconds: number;
+  missElapsedSeconds: number;
   elapsedSeconds: number;
   hitSpeed: number;
   missSpeed: number;

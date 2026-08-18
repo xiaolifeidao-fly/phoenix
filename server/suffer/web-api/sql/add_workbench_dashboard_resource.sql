@@ -18,6 +18,8 @@ FROM (
          '/barry/workbench-dashboard/manual-submitted'
   UNION ALL SELECT '工作台人工速度', 'workbenchManualSpeed',
          '/barry/workbench-dashboard/manual-speed'
+  UNION ALL SELECT '工作台休眠延迟单量', 'workbenchDelayAssignmentCount',
+         '/barry/workbench-dashboard/delay-assignment-count'
   UNION ALL SELECT '工作台商品桥接器情况', 'workbenchBridgeDailyStatistics',
          '/barry/workbench-dashboard/bridge-daily-statistics'
   UNION ALL SELECT '工作台桥接器类型', 'workbenchBridgeTypes',
@@ -57,6 +59,7 @@ WHERE r.resource_url IN (
   '/barry/workbench-dashboard/task-remaining',
   '/barry/workbench-dashboard/manual-submitted',
   '/barry/workbench-dashboard/manual-speed',
+  '/barry/workbench-dashboard/delay-assignment-count',
   '/barry/workbench-dashboard/bridge-daily-statistics',
   '/barry/workbench-dashboard/bridge-types',
   '/barry/shop-groups',

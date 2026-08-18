@@ -12,6 +12,14 @@ export class OrderFetchMonitorRecord {
 
   windowSeconds = 0;
 
+  hitRemainingSeconds = 0;
+
+  missRemainingSeconds = 0;
+
+  hitElapsedSeconds = 0;
+
+  missElapsedSeconds = 0;
+
   elapsedSeconds = 0;
 
   hitSpeed = 0;
