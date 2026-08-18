@@ -67,6 +67,11 @@ export const routeRegistry: Record<string, ComponentType<any>> = {
       (m) => ({ default: m.ManualTaskStatisticsPanel }),
     ),
   ),
+  "/manual/user-monitor": lazyPanel(() =>
+    import("@/app/(console)/manual/user-monitor/components/ManualUserMonitorPanel").then((m) => ({
+      default: m.ManualUserMonitorPanel,
+    })),
+  ),
   "/manual/order-details": lazyPanel(() =>
     import("@/app/(console)/manual/order-details/components/ManualOrderDetailPanel").then((m) => ({
       default: m.ManualOrderDetailPanel,

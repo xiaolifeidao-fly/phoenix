@@ -41,7 +41,7 @@ func (h *BarryHandler) listUsers(c *gin.Context) {
 		commonRouter.ToJson(c, nil, err)
 		return
 	}
-	commonRouter.ToJson(c, response.Data, nil)
+	commonRouter.ToJson(c, baseDTO.BuildPage(response.Total, response.Data), nil)
 }
 
 func (h *BarryHandler) listUserWhitelists(c *gin.Context) {

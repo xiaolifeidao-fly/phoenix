@@ -96,6 +96,7 @@ export interface ManualUserListQuery {
 export interface BarryAppUserListQuery {
   pageIndex?: number;
   pageSize?: number;
+  userId?: string | number;
   username?: string;
   name?: string;
   phone?: string;
@@ -162,9 +163,10 @@ export async function fetchManualUserPaymentMethods(query: ManualUserListQuery) 
 }
 
 export async function fetchBarryAppUsers(query?: BarryAppUserListQuery) {
-  return getDataList(BarryAppUserRecord, "/barry/users", {
+  return getPage(BarryAppUserRecord, "/barry/users", {
     pageIndex: query?.pageIndex ?? 1,
     pageSize: query?.pageSize ?? 20,
+    userId: query?.userId,
     username: query?.username,
     name: query?.name,
     phone: query?.phone,

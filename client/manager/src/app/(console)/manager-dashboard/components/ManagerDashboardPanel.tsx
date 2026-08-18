@@ -538,6 +538,8 @@ export function ManagerDashboardPanel() {
 
   const realActualCategoryIds = configMap.realActualCompleted?.categoryIds ?? [];
   const realActualCategoryIdsKey = realActualCategoryIds.join(",");
+  const realManualCategoryIds = configMap.realManualSubmitted?.categoryIds ?? [];
+  const realManualCategoryIdsKey = realManualCategoryIds.join(",");
 
   useEffect(() => {
     if (!ready) {
@@ -556,7 +558,7 @@ export function ManagerDashboardPanel() {
           // Keep the previous snapshot so a temporary polling failure does not reset the speed.
         });
       void fetchDelayAssignmentCount(
-        realActualCategoryIds.length > 0 ? { shopCategoryIds: realActualCategoryIdsKey } : undefined,
+        realManualCategoryIds.length > 0 ? { shopCategoryIds: realManualCategoryIdsKey } : undefined,
       )
         .then(setRealDelayAssignmentCount)
         .catch(() => {
@@ -567,10 +569,14 @@ export function ManagerDashboardPanel() {
     loadRealActualCompleted();
     const timer = window.setInterval(loadRealActualCompleted, DASHBOARD_REFRESH_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [ready, realActualCategoryIds.length, realActualCategoryIdsKey, recordActualSpeed]);
-
-  const realManualCategoryIds = configMap.realManualSubmitted?.categoryIds ?? [];
-  const realManualCategoryIdsKey = realManualCategoryIds.join(",");
+  }, [
+    ready,
+    realActualCategoryIds.length,
+    realActualCategoryIdsKey,
+    realManualCategoryIds.length,
+    realManualCategoryIdsKey,
+    recordActualSpeed,
+  ]);
 
   useEffect(() => {
     if (!ready) {
@@ -641,7 +647,7 @@ export function ManagerDashboardPanel() {
           // Keep the most recent low-price completion data while a refresh is unavailable.
         });
       void fetchDelayAssignmentCount(
-        lowPriceUpstreamCategoryIdsKey ? { shopCategoryIds: lowPriceUpstreamCategoryIdsKey } : undefined,
+        lowPriceManualProductIdsKey ? { shopCategoryIds: lowPriceManualProductIdsKey } : undefined,
       )
         .then(setLowPriceDelayAssignmentCount)
         .catch(() => {

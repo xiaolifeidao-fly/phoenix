@@ -1006,6 +1006,27 @@ type ManualTaskStatisticsQueryDTO struct {
 	PageSize              int    `json:"pageSize,omitempty" form:"pageSize"`
 }
 
+type OrderFetchMonitorUsersQueryDTO struct {
+	UserIDs       string `json:"userIds" form:"userIds" binding:"required"`
+	WindowSeconds int    `json:"windowSeconds,omitempty" form:"windowSeconds"`
+}
+
+type OrderFetchMonitorUIDsQueryDTO struct {
+	OrderFetchMonitorUsersQueryDTO
+	UIDs string `json:"uids" form:"uids" binding:"required"`
+}
+
+type OrderFetchMonitorDTO struct {
+	UserID         int64   `json:"userId"`
+	UID            string  `json:"uid,omitempty"`
+	HitNum         int64   `json:"hitNum"`
+	MissNum        int64   `json:"missNum"`
+	WindowSeconds  int     `json:"windowSeconds"`
+	ElapsedSeconds int     `json:"elapsedSeconds"`
+	HitSpeed       float64 `json:"hitSpeed"`
+	MissSpeed      float64 `json:"missSpeed"`
+}
+
 type ManualOrderDetailQueryDTO struct {
 	StartDate             string `json:"startDate,omitempty" form:"startDate"`
 	EndDate               string `json:"endDate,omitempty" form:"endDate"`

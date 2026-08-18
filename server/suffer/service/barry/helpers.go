@@ -80,6 +80,8 @@ const (
 	barryInnerWorkbenchDashboardBridgeDailyStatisticsPath     = "barry.url.inner.workbench.dashboard.bridge.daily.statistics.suffix"
 	barryInnerWorkbenchDashboardBridgeTypesPath               = "barry.url.inner.workbench.dashboard.bridge.types.suffix"
 	barryInnerManualTaskStatisticsUsersPath                   = "barry.url.inner.manual.task.statistics.users.suffix"
+	barryInnerOrderFetchMonitorUsersPath                      = "barry.url.inner.order.fetch.monitor.users.suffix"
+	barryInnerOrderFetchMonitorUIDsPath                       = "barry.url.inner.order.fetch.monitor.uids.suffix"
 	barryInnerUserWithdrawRecordPath                          = "barry.url.inner.point.user.withdraw.record.suffix"
 	barryInnerUserWithdrawAccountPath                         = "barry.url.inner.point.user.withdraw.account.suffix"
 	barryInnerUserWithdrawFinishPath                          = "barry.url.inner.point.user.withdraw.finish.suffix"

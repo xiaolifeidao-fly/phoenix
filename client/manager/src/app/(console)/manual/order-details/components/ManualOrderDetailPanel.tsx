@@ -10,11 +10,19 @@ import type { TablePaginationConfig } from "antd/es/table/interface";
 import { message } from "@/utils/notify";
 import { dateRangePresets } from "@/utils/date-range-presets";
 import { fetchManualTaskStatisticUsers, fetchManualTaskStatistics, type ManualShopCategoryOption, type ManualUserOption } from "../../api/task-statistics.api";
-import { fetchManualOrderDetailSecUid, fetchManualOrderDetails, type ManualOrderDetail, type ManualOrderDetailPage } from "../../api/order-details.api";
+import {
+  fetchManualOrderDetailSecUid,
+  fetchManualOrderDetails,
+  fetchManualOrderFetchMonitorUIDs,
+  type ManualOrderDetail,
+  type ManualOrderDetailPage,
+  type ManualOrderFetchMonitor,
+} from "../../api/order-details.api";
 
 const { RangePicker } = DatePicker;
 const { Text, Title } = Typography;
 const defaultDateRange: [Dayjs, Dayjs] = [dayjs().startOf("day"), dayjs().startOf("day")];
+const getOrderFetchMonitorKey = (userId: number, uid: string) => `${userId}:${uid}`;
 
 export function ManualOrderDetailPanel() {
   const [loading, setLoading] = useState(false);
@@ -22,7 +30,9 @@ export function ManualOrderDetailPanel() {
   const [approvalRateOrder, setApprovalRateOrder] = useState<"ascend" | "descend" | null>(null);
   const [userOptions, setUserOptions] = useState<ManualUserOption[]>([]);
   const [shopCategoryOptions, setShopCategoryOptions] = useState<ManualShopCategoryOption[]>([]);
+  const [orderFetchMonitors, setOrderFetchMonitors] = useState<Map<string, ManualOrderFetchMonitor>>(new Map());
   const userOptionCacheRef = useRef(new Map<number, ManualUserOption>());
+  const monitorRequestIdRef = useRef(0);
   const [filters, setFilters] = useState({
     dateRange: defaultDateRange,
     userId: undefined as number | undefined,
@@ -39,10 +49,11 @@ export function ManualOrderDetailPanel() {
   });
 
   const loadDetails = async (nextFilters = filters) => {
+    const monitorRequestId = ++monitorRequestIdRef.current;
     setLoading(true);
     try {
       const [startDate, endDate] = nextFilters.dateRange;
-      setDetails(await fetchManualOrderDetails({
+      const detailPage = await fetchManualOrderDetails({
         startDate: startDate.format("YYYY-MM-DD"),
         endDate: endDate.format("YYYY-MM-DD"),
         userId: nextFilters.userId,
@@ -56,7 +67,29 @@ export function ManualOrderDetailPanel() {
         approvalRateMax: nextFilters.approvalRateMax === undefined ? undefined : nextFilters.approvalRateMax / 100,
         page: nextFilters.page,
         pageSize: nextFilters.pageSize,
-      }));
+      });
+      setDetails(detailPage);
+      setOrderFetchMonitors(new Map());
+
+      const monitorRecords = Array.from(new Map(
+        detailPage.records
+          .filter((record) => Boolean(record.uid))
+          .map((record) => [getOrderFetchMonitorKey(record.userId, record.uid), record]),
+      ).values());
+      if (monitorRecords.length === 0) return;
+
+      try {
+        const monitors = await fetchManualOrderFetchMonitorUIDs({
+          userIds: monitorRecords.map((record) => record.userId).join(","),
+          uids: monitorRecords.map((record) => record.uid).join(","),
+        });
+        if (monitorRequestId !== monitorRequestIdRef.current) return;
+        setOrderFetchMonitors(new Map(monitors.map((monitor) => [getOrderFetchMonitorKey(monitor.userId, monitor.uid), monitor])));
+      } catch (error) {
+        if (monitorRequestId === monitorRequestIdRef.current) {
+          message.error(error instanceof Error ? error.message : "加载取单速度失败");
+        }
+      }
     } catch (error) {
       message.error(error instanceof Error ? error.message : "加载人工做单明细失败");
       setDetails(null);
@@ -136,6 +169,30 @@ export function ManualOrderDetailPanel() {
       render: (uid, record) => uid
         ? <a href="#" onClick={(event) => { event.preventDefault(); void openDouyinProfile(record); }}>{uid}</a>
         : <Text>-</Text>,
+    },
+    {
+      title: "取到任务数",
+      key: "hitNum",
+      width: 120,
+      render: (_, record) => formatMonitorCount(orderFetchMonitors.get(getOrderFetchMonitorKey(record.userId, record.uid))?.hitNum),
+    },
+    {
+      title: "无任务数",
+      key: "missNum",
+      width: 110,
+      render: (_, record) => formatMonitorCount(orderFetchMonitors.get(getOrderFetchMonitorKey(record.userId, record.uid))?.missNum),
+    },
+    {
+      title: "速度（次/分钟）",
+      key: "hitSpeed",
+      width: 140,
+      render: (_, record) => formatMonitorSpeed(orderFetchMonitors.get(getOrderFetchMonitorKey(record.userId, record.uid))?.hitSpeed),
+    },
+    {
+      title: "统计窗口",
+      key: "windowSeconds",
+      width: 110,
+      render: (_, record) => formatMonitorWindow(orderFetchMonitors.get(getOrderFetchMonitorKey(record.userId, record.uid))?.windowSeconds),
     },
     {
       title: "粉丝数",
@@ -266,7 +323,7 @@ export function ManualOrderDetailPanel() {
       <section className="manager-shell-card" style={{ borderRadius: 28, padding: 24 }}>
         <Space direction="vertical" size={18} style={{ width: "100%" }}>
           <div><div className="manager-section-label">做单数据</div><Title level={4} style={{ margin: "10px 0 4px" }}>按用户与 UID 汇总</Title><Text type="secondary">UID 可打开最新做单记录对应的抖音主页</Text></div>
-          <Table<ManualOrderDetail> rowKey={(record) => `${record.userId}-${record.uid}`} loading={loading} columns={columns} dataSource={displayedRecords} pagination={pagination} onChange={handleTableChange} scroll={{ x: 1240 }} locale={{ emptyText: <Empty description="当前筛选条件下暂无做单数据" /> }} />
+          <Table<ManualOrderDetail> rowKey={(record) => `${record.userId}-${record.uid}`} loading={loading} columns={columns} dataSource={displayedRecords} pagination={pagination} onChange={handleTableChange} scroll={{ x: 1720 }} locale={{ emptyText: <Empty description="当前筛选条件下暂无做单数据" /> }} />
         </Space>
       </section>
     </div>
@@ -275,3 +332,6 @@ export function ManualOrderDetailPanel() {
 
 function formatCount(value?: number) { return Number(value || 0).toLocaleString("zh-CN"); }
 function formatPercent(value?: number) { return `${(Number(value || 0) * 100).toFixed(2)}%`; }
+function formatMonitorCount(value?: number) { return value === undefined ? "-" : formatCount(value); }
+function formatMonitorSpeed(value?: number) { return value === undefined ? "-" : Number(value).toFixed(2); }
+function formatMonitorWindow(value?: number) { return value === undefined ? "-" : `${value} 秒`; }

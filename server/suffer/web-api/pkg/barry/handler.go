@@ -25,6 +25,7 @@ func (h *BarryHandler) RegisterHandler(engine *gin.RouterGroup) {
 	h.registerChannelRoutes(engine)
 	h.registerUserRoutes(engine)
 	h.registerTransactionRoutes(engine)
+	h.registerOrderFetchMonitorRoutes(engine)
 }
 
 func normalizeBarryPage(q *barryDTO.PageQueryDTO) {

@@ -111,6 +111,11 @@ export const navTree: NavNode[] = [
         label: "任务统计",
       },
       {
+        key: "/manual/user-monitor",
+        icon: <BarChartOutlined />,
+        label: "用户做单监控",
+      },
+      {
         key: "/manual/order-details",
         icon: <UnorderedListOutlined />,
         label: "做单明细",
