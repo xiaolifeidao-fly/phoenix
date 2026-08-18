@@ -193,13 +193,40 @@ export interface ActualCompletedSummary {
   }>;
 }
 
+export interface PendingDetectionCountSummary {
+  total: number;
+  pendingDetectionCount: number;
+  finishAssignmentPendingDetectionCount?: number;
+  delayAssignmentPendingDetectionCount?: number;
+  groupList: Array<{
+    shopGroupId: number;
+    groupName: string;
+    groupCode: string;
+    pendingDetectionCount: number;
+    finishAssignmentPendingDetectionCount?: number;
+    delayAssignmentPendingDetectionCount?: number;
+  }>;
+}
+
 export interface DelayAssignmentCountSummary {
   total: number;
+  consumedCount: number;
+  consumePerMinute: number;
+  finishAssignmentConsumedCount?: number;
+  finishAssignmentConsumePerMinute?: number;
+  delayAssignmentConsumedCount?: number;
+  delayAssignmentConsumePerMinute?: number;
   categoryList: Array<{
     shopCategoryId: number;
     categoryName: string;
     categoryCode: string;
     count: number;
+    consumedCount: number;
+    consumePerMinute: number;
+    finishAssignmentConsumedCount?: number;
+    finishAssignmentConsumePerMinute?: number;
+    delayAssignmentConsumedCount?: number;
+    delayAssignmentConsumePerMinute?: number;
   }>;
 }
 
@@ -344,6 +371,14 @@ export async function fetchSystemBalance() {
 
 export async function fetchActualCompleted(query?: Pick<WorkbenchDashboardStatisticsQuery, "shopCategoryIds">) {
   const response = await instance.get<ApiResponse<ActualCompletedSummary>>("/dashboard/actual-completed", { params: query });
+  return unwrapApiResponse(response.data);
+}
+
+export async function fetchPendingDetectionCount(query?: Pick<BridgeDailyStatisticQuery, "shopGroupIds">) {
+  const response = await instance.get<ApiResponse<PendingDetectionCountSummary>>(
+    "/barry/workbench-dashboard/pending-detection-count",
+    { params: query },
+  );
   return unwrapApiResponse(response.data);
 }
 

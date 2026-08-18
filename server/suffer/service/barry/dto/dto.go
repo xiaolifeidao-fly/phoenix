@@ -1128,6 +1128,7 @@ type WorkbenchDashboardMetricQueryDTO struct {
 	StartDate         string `json:"startDate,omitempty" form:"startDate"`
 	EndDate           string `json:"endDate,omitempty" form:"endDate"`
 	ShopCategoryIDs   string `json:"shopCategoryIds,omitempty" form:"shopCategoryIds"`
+	ShopGroupIDs      string `json:"shopGroupIds,omitempty" form:"shopGroupIds"`
 	ShopCategoryCodes string `json:"shopCategoryCodes,omitempty" form:"shopCategoryCodes"`
 	WindowSeconds     int    `json:"windowSeconds,omitempty" form:"windowSeconds"`
 }
@@ -1207,16 +1208,33 @@ type WorkbenchDashboardManualSpeedDTO struct {
 	CategoryList         []*WorkbenchDashboardManualSpeedCategoryDTO `json:"categoryList"`
 }
 
+type WorkbenchDashboardPendingDetectionCountGroupDTO struct {
+	ShopGroupID           int64  `json:"shopGroupId"`
+	GroupName             string `json:"groupName"`
+	GroupCode             string `json:"groupCode"`
+	PendingDetectionCount int64  `json:"pendingDetectionCount"`
+}
+
+type WorkbenchDashboardPendingDetectionCountDTO struct {
+	Total                 int64                                              `json:"total"`
+	PendingDetectionCount int64                                              `json:"pendingDetectionCount"`
+	GroupList             []*WorkbenchDashboardPendingDetectionCountGroupDTO `json:"groupList"`
+}
+
 type WorkbenchDashboardDelayAssignmentCountCategoryDTO struct {
-	ShopCategoryID int64  `json:"shopCategoryId"`
-	CategoryName   string `json:"categoryName"`
-	CategoryCode   string `json:"categoryCode"`
-	Count          int64  `json:"count"`
+	ShopCategoryID   int64   `json:"shopCategoryId"`
+	CategoryName     string  `json:"categoryName"`
+	CategoryCode     string  `json:"categoryCode"`
+	Count            int64   `json:"count"`
+	ConsumedCount    int64   `json:"consumedCount"`
+	ConsumePerMinute float64 `json:"consumePerMinute"`
 }
 
 type WorkbenchDashboardDelayAssignmentCountDTO struct {
-	Total        int64                                                `json:"total"`
-	CategoryList []*WorkbenchDashboardDelayAssignmentCountCategoryDTO `json:"categoryList"`
+	Total            int64                                                `json:"total"`
+	ConsumedCount    int64                                                `json:"consumedCount"`
+	ConsumePerMinute float64                                              `json:"consumePerMinute"`
+	CategoryList     []*WorkbenchDashboardDelayAssignmentCountCategoryDTO `json:"categoryList"`
 }
 
 type OrderStatusStatisticDTO struct {

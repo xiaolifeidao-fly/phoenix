@@ -18,7 +18,7 @@ FROM (
          '/barry/workbench-dashboard/manual-submitted'
   UNION ALL SELECT '工作台人工速度', 'workbenchManualSpeed',
          '/barry/workbench-dashboard/manual-speed'
-  UNION ALL SELECT '工作台休眠延迟单量', 'workbenchDelayAssignmentCount',
+  UNION ALL SELECT '工作台分配延迟消费速度', 'workbenchDelayAssignmentMetrics',
          '/barry/workbench-dashboard/delay-assignment-count'
   UNION ALL SELECT '工作台商品桥接器情况', 'workbenchBridgeDailyStatistics',
          '/barry/workbench-dashboard/bridge-daily-statistics'

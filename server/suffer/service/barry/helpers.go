@@ -75,6 +75,7 @@ const (
 	barryInnerWorkbenchDashboardManualSubmittedPath           = "barry.url.inner.workbench.dashboard.manual.submitted.suffix"
 	barryInnerWorkbenchDashboardManualSubmittedComparisonPath = "barry.url.inner.workbench.dashboard.manual.submitted.comparison.suffix"
 	barryInnerWorkbenchDashboardManualSpeedPath               = "barry.url.inner.workbench.dashboard.manual.speed.suffix"
+	barryInnerWorkbenchDashboardPendingDetectionCountPath     = "barry.url.inner.workbench.dashboard.pending.detection.count.suffix"
 	barryInnerWorkbenchDashboardDelayAssignmentCountPath      = "barry.url.inner.workbench.dashboard.delay.assignment.count.suffix"
 	barryInnerWorkbenchDashboardActualCompletedPath           = "barry.url.inner.workbench.dashboard.actual.completed.suffix"
 	barryInnerWorkbenchDashboardBridgeDailyStatisticsPath     = "barry.url.inner.workbench.dashboard.bridge.daily.statistics.suffix"

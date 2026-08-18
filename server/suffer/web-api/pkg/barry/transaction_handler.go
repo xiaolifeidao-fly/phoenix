@@ -20,6 +20,7 @@ func (h *BarryHandler) registerTransactionRoutes(engine *gin.RouterGroup) {
 	engine.GET("/barry/workbench-dashboard/task-remaining", h.getWorkbenchTaskRemaining)
 	engine.GET("/barry/workbench-dashboard/manual-submitted", h.getWorkbenchManualSubmitted)
 	engine.GET("/barry/workbench-dashboard/manual-speed", h.getWorkbenchManualSpeed)
+	engine.GET("/barry/workbench-dashboard/pending-detection-count", h.getWorkbenchPendingDetectionCount)
 	engine.GET("/barry/workbench-dashboard/delay-assignment-count", h.getWorkbenchDelayAssignmentCount)
 	engine.GET("/barry/workbench-dashboard/manual-submitted-comparison", h.getWorkbenchManualSubmittedComparison)
 	engine.GET("/barry/workbench-dashboard/actual-completed", h.getWorkbenchActualCompleted)
@@ -153,6 +154,16 @@ func (h *BarryHandler) getWorkbenchManualSpeed(c *gin.Context) {
 		return
 	}
 	response, err := h.barryService.WorkbenchDashboardStats.ManualSpeed(c.Request.Context(), q)
+	commonRouter.ToJson(c, response, err)
+}
+
+func (h *BarryHandler) getWorkbenchPendingDetectionCount(c *gin.Context) {
+	var q barryDTO.WorkbenchDashboardMetricQueryDTO
+	if c.ShouldBindQuery(&q) != nil {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := h.barryService.WorkbenchDashboardStats.PendingDetectionCount(c.Request.Context(), q)
 	commonRouter.ToJson(c, response, err)
 }
 
