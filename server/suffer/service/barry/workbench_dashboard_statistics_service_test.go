@@ -25,7 +25,7 @@ func TestWorkbenchDashboardStatisticsServiceProxiesPendingDetectionAndDelayConsu
 			if shopCategoryIDs := r.URL.Query().Get("shopCategoryIds"); shopCategoryIDs != "7,12" {
 				t.Fatalf("shopCategoryIds = %q", shopCategoryIDs)
 			}
-			_, _ = w.Write([]byte(`{"success":true,"data":{"total":18,"consumedCount":18,"consumePerMinute":1.5,"categoryList":[{"shopCategoryId":7,"consumedCount":9,"consumePerMinute":0.75}]}}`))
+			_, _ = w.Write([]byte(`{"success":true,"data":{"total":18,"consumedCount":18,"consumePerMinute":1.5,"finishAssignmentConsumedCount":18,"finishAssignmentConsumePerMinute":1.5,"delayAssignmentConsumedCount":6,"delayAssignmentConsumePerMinute":0.5,"categoryList":[{"shopCategoryId":7,"consumedCount":9,"consumePerMinute":0.75,"finishAssignmentConsumedCount":9,"finishAssignmentConsumePerMinute":0.75,"delayAssignmentConsumedCount":3,"delayAssignmentConsumePerMinute":0.25}]}}`))
 		default:
 			t.Fatalf("path = %q", r.URL.Path)
 		}
@@ -64,7 +64,16 @@ func TestWorkbenchDashboardStatisticsServiceProxiesPendingDetectionAndDelayConsu
 	if delay.ConsumedCount != 18 || delay.ConsumePerMinute != 1.5 {
 		t.Fatalf("unexpected delay response: %+v", delay)
 	}
+	if delay.FinishAssignmentConsumedCount != 18 || delay.FinishAssignmentConsumePerMinute != 1.5 {
+		t.Fatalf("unexpected finish assignment delay response: %+v", delay)
+	}
+	if delay.DelayAssignmentConsumedCount != 6 || delay.DelayAssignmentConsumePerMinute != 0.5 {
+		t.Fatalf("unexpected user delay response: %+v", delay)
+	}
 	if len(delay.CategoryList) != 1 || delay.CategoryList[0].ShopCategoryID != 7 {
 		t.Fatalf("unexpected delay categories: %+v", delay.CategoryList)
+	}
+	if delay.CategoryList[0].DelayAssignmentConsumedCount != 3 || delay.CategoryList[0].DelayAssignmentConsumePerMinute != 0.25 {
+		t.Fatalf("unexpected user delay category: %+v", delay.CategoryList[0])
 	}
 }

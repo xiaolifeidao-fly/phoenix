@@ -25,6 +25,8 @@ export class OrderFetchMonitorRecord {
   hitSpeed = 0;
 
   missSpeed = 0;
+
+  hitRate = 0;
 }
 
 export interface ManualUserMonitorQuery {

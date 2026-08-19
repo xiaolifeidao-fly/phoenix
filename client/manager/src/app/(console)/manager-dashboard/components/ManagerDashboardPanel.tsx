@@ -572,7 +572,7 @@ export function ManagerDashboardPanel() {
           // Keep the previous snapshot so a temporary polling failure does not reset the speed.
         });
       void fetchDelayAssignmentCount(
-        realActualCategoryIds.length > 0 ? { shopCategoryIds: realActualCategoryIdsKey } : undefined,
+        realManualCategoryIdsKey ? { shopCategoryIds: realManualCategoryIdsKey } : undefined,
       ).then(setRealDelayAssignmentCount).catch(() => setRealDelayAssignmentCount(null));
     };
 
@@ -583,6 +583,7 @@ export function ManagerDashboardPanel() {
     ready,
     realActualCategoryIds.length,
     realActualCategoryIdsKey,
+    realManualCategoryIdsKey,
     recordActualSpeed,
   ]);
 
@@ -677,7 +678,7 @@ export function ManagerDashboardPanel() {
           // Keep the most recent low-price completion data while a refresh is unavailable.
         });
       void fetchDelayAssignmentCount(
-        lowPriceUpstreamCategoryIdsKey ? { shopCategoryIds: lowPriceUpstreamCategoryIdsKey } : undefined,
+        lowPriceManualProductIdsKey ? { shopCategoryIds: lowPriceManualProductIdsKey } : undefined,
       ).then(setLowPriceDelayAssignmentCount).catch(() => setLowPriceDelayAssignmentCount(null));
     };
 

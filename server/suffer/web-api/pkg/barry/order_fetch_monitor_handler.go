@@ -11,6 +11,7 @@ func (h *BarryHandler) registerOrderFetchMonitorRoutes(engine *gin.RouterGroup) 
 	engine.GET("/barry/order-fetch-monitor/users", h.listOrderFetchMonitorUsers)
 	engine.GET("/barry/order-fetch-monitor/uids", h.listOrderFetchMonitorUIDs)
 	engine.GET("/barry/assign-queue/uid", h.listUserAssignQueues)
+	engine.POST("/barry/assign-queue/fetch-task", h.fetchUserTask)
 }
 
 func (h *BarryHandler) listOrderFetchMonitorUsers(c *gin.Context) {
@@ -40,5 +41,15 @@ func (h *BarryHandler) listUserAssignQueues(c *gin.Context) {
 		return
 	}
 	response, err := h.barryService.UserAssignQueue.UID(c.Request.Context(), query)
+	commonRouter.ToJson(c, response, err)
+}
+
+func (h *BarryHandler) fetchUserTask(c *gin.Context) {
+	var query barryDTO.UserFetchTaskQueryDTO
+	if c.ShouldBindJSON(&query) != nil {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := h.barryService.UserAssignQueue.FetchTask(c.Request.Context(), query)
 	commonRouter.ToJson(c, response, err)
 }

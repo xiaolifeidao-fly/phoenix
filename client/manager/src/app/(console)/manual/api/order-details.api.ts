@@ -60,6 +60,7 @@ export interface ManualOrderFetchMonitor {
   elapsedSeconds: number;
   hitSpeed: number;
   missSpeed: number;
+  hitRate: number;
 }
 
 export async function fetchManualOrderDetails(query?: ManualOrderDetailQuery) {
@@ -90,6 +91,8 @@ export interface UserAssignQueue {
   shopTypeName: string;
   shopTypeCode: string;
   shopGroupId: number;
+  shopGroupName: string;
+  shopGroupCode: string;
   queueKey: string;
   delayQueueKey: string;
   normalNum: number;
@@ -104,4 +107,39 @@ export async function fetchUserAssignQueues(uid: string, userId?: number) {
     timeout: 30_000,
   });
   return unwrapApiResponse(response.data) ?? [];
+}
+
+export interface ManualUserFetchTaskQuery {
+  userId: number;
+  uid: string;
+  code: string;
+  uidType?: string;
+  secUid?: string;
+}
+
+export interface ManualUserFetchTask {
+  fetched: boolean;
+  message?: string;
+  requestUrl?: string;
+  userId?: number;
+  username?: string;
+  uid?: string;
+  uidType?: string;
+  secUid?: string;
+  code?: string;
+  orderId?: string;
+  videoId?: string;
+  taskUrl?: string;
+  shortUrl?: string;
+  taskTag?: string;
+  assistId?: string;
+  totalNum?: number;
+  property?: Record<string, unknown>;
+}
+
+export async function fetchUserTask(query: ManualUserFetchTaskQuery) {
+  const response = await instance.post<ApiResponse<ManualUserFetchTask>>("/barry/assign-queue/fetch-task", query, {
+    timeout: 30_000,
+  });
+  return unwrapApiResponse(response.data);
 }

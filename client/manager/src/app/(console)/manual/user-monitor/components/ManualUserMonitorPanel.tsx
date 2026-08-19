@@ -63,6 +63,16 @@ export function ManualUserMonitorPanel() {
     { title: "无任务数", dataIndex: ["monitor", "missNum"], width: 110, render: formatCount },
     { title: "取单速度", dataIndex: ["monitor", "hitSpeed"], width: 140, render: formatSpeed },
     { title: "无任务速度", dataIndex: ["monitor", "missSpeed"], width: 140, render: formatSpeed },
+    {
+      title: "取单成功率",
+      dataIndex: ["monitor", "hitRate"],
+      width: 130,
+      render: (value, record) => (
+        <Tooltip title={`取到任务 ${formatCount(record.monitor.hitNum)} 次 / 总取单 ${formatCount(record.monitor.hitNum + record.monitor.missNum)} 次`}>
+          {formatRate(value, record.monitor.hitNum + record.monitor.missNum)}
+        </Tooltip>
+      ),
+    },
     { title: "统计窗口", dataIndex: ["monitor", "windowSeconds"], width: 130, render: formatWindow },
     {
       title: "已持续时间",
@@ -118,6 +128,11 @@ function formatCount(value?: number) {
 
 function formatSpeed(value?: number) {
   return `${Number(value || 0).toFixed(2)} 次/分钟`;
+}
+
+function formatRate(value?: number, totalNum?: number) {
+  if (!totalNum) return "-";
+  return `${(Number(value || 0) * 100).toFixed(2)}%`;
 }
 
 function formatWindow(value?: number) {

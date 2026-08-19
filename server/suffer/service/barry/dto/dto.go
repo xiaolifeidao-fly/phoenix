@@ -1029,6 +1029,7 @@ type OrderFetchMonitorDTO struct {
 	ElapsedSeconds       int     `json:"elapsedSeconds"`
 	HitSpeed             float64 `json:"hitSpeed"`
 	MissSpeed            float64 `json:"missSpeed"`
+	HitRate              float64 `json:"hitRate"`
 }
 
 type UserAssignQueueQueryDTO struct {
@@ -1043,12 +1044,44 @@ type UserAssignQueueDTO struct {
 	ShopTypeName     string `json:"shopTypeName,omitempty"`
 	ShopTypeCode     string `json:"shopTypeCode,omitempty"`
 	ShopGroupID      int64  `json:"shopGroupId,omitempty"`
+	ShopGroupName    string `json:"shopGroupName,omitempty"`
+	ShopGroupCode    string `json:"shopGroupCode,omitempty"`
 	QueueKey         string `json:"queueKey,omitempty"`
 	DelayQueueKey    string `json:"delayQueueKey,omitempty"`
 	NormalNum        int64  `json:"normalNum"`
 	DelayNum         int64  `json:"delayNum"`
 	TotalNum         int64  `json:"totalNum"`
 	RemainingSeconds int64  `json:"remainingSeconds"`
+}
+
+// UserFetchTaskQueryDTO 管理端代替做单用户按商品分组取一次任务的入参。
+type UserFetchTaskQueryDTO struct {
+	UserID  int64  `json:"userId" form:"userId" binding:"required"`
+	UID     string `json:"uid" form:"uid" binding:"required"`
+	Code    string `json:"code" form:"code" binding:"required"`
+	UIDType string `json:"uidType,omitempty" form:"uidType"`
+	SecUID  string `json:"secUid,omitempty" form:"secUid"`
+}
+
+// UserFetchTaskDTO 代取任务的结果，Fetched=false 表示调用成功但当前没有任务可取。
+type UserFetchTaskDTO struct {
+	Fetched    bool           `json:"fetched"`
+	Message    string         `json:"message,omitempty"`
+	RequestURL string         `json:"requestUrl,omitempty"`
+	UserID     int64          `json:"userId,omitempty"`
+	Username   string         `json:"username,omitempty"`
+	UID        string         `json:"uid,omitempty"`
+	UIDType    string         `json:"uidType,omitempty"`
+	SecUID     string         `json:"secUid,omitempty"`
+	Code       string         `json:"code,omitempty"`
+	OrderID    string         `json:"orderId,omitempty"`
+	VideoID    string         `json:"videoId,omitempty"`
+	TaskURL    string         `json:"taskUrl,omitempty"`
+	ShortURL   string         `json:"shortUrl,omitempty"`
+	TaskTag    string         `json:"taskTag,omitempty"`
+	AssistID   string         `json:"assistId,omitempty"`
+	TotalNum   int64          `json:"totalNum,omitempty"`
+	Property   map[string]any `json:"property,omitempty"`
 }
 
 type ManualOrderDetailQueryDTO struct {
@@ -1246,19 +1279,27 @@ type WorkbenchDashboardPendingDetectionCountDTO struct {
 }
 
 type WorkbenchDashboardDelayAssignmentCountCategoryDTO struct {
-	ShopCategoryID   int64   `json:"shopCategoryId"`
-	CategoryName     string  `json:"categoryName"`
-	CategoryCode     string  `json:"categoryCode"`
-	Count            int64   `json:"count"`
-	ConsumedCount    int64   `json:"consumedCount"`
-	ConsumePerMinute float64 `json:"consumePerMinute"`
+	ShopCategoryID                   int64   `json:"shopCategoryId"`
+	CategoryName                     string  `json:"categoryName"`
+	CategoryCode                     string  `json:"categoryCode"`
+	Count                            int64   `json:"count"`
+	ConsumedCount                    int64   `json:"consumedCount"`
+	ConsumePerMinute                 float64 `json:"consumePerMinute"`
+	FinishAssignmentConsumedCount    int64   `json:"finishAssignmentConsumedCount"`
+	FinishAssignmentConsumePerMinute float64 `json:"finishAssignmentConsumePerMinute"`
+	DelayAssignmentConsumedCount     int64   `json:"delayAssignmentConsumedCount"`
+	DelayAssignmentConsumePerMinute  float64 `json:"delayAssignmentConsumePerMinute"`
 }
 
 type WorkbenchDashboardDelayAssignmentCountDTO struct {
-	Total            int64                                                `json:"total"`
-	ConsumedCount    int64                                                `json:"consumedCount"`
-	ConsumePerMinute float64                                              `json:"consumePerMinute"`
-	CategoryList     []*WorkbenchDashboardDelayAssignmentCountCategoryDTO `json:"categoryList"`
+	Total                            int64                                                `json:"total"`
+	ConsumedCount                    int64                                                `json:"consumedCount"`
+	ConsumePerMinute                 float64                                              `json:"consumePerMinute"`
+	FinishAssignmentConsumedCount    int64                                                `json:"finishAssignmentConsumedCount"`
+	FinishAssignmentConsumePerMinute float64                                              `json:"finishAssignmentConsumePerMinute"`
+	DelayAssignmentConsumedCount     int64                                                `json:"delayAssignmentConsumedCount"`
+	DelayAssignmentConsumePerMinute  float64                                              `json:"delayAssignmentConsumePerMinute"`
+	CategoryList                     []*WorkbenchDashboardDelayAssignmentCountCategoryDTO `json:"categoryList"`
 }
 
 type OrderStatusStatisticDTO struct {

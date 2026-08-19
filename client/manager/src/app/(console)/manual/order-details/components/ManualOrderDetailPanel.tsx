@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import dayjs, { type Dayjs } from "dayjs";
-import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
-import { Button, DatePicker, Empty, Input, InputNumber, Modal, Select, Space, Switch, Table, Tag, Tooltip, Typography } from "antd";
+import { ReloadOutlined, SearchOutlined, ThunderboltOutlined } from "@ant-design/icons";
+import { Alert, Button, Collapse, DatePicker, Descriptions, Empty, Input, InputNumber, Modal, Select, Space, Switch, Table, Tag, Tooltip, Typography } from "antd";
 import type { TableProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { TablePaginationConfig } from "antd/es/table/interface";
@@ -15,9 +15,11 @@ import {
   fetchManualOrderDetails,
   fetchManualOrderFetchMonitorUIDs,
   fetchUserAssignQueues,
+  fetchUserTask,
   type ManualOrderDetail,
   type ManualOrderDetailPage,
   type ManualOrderFetchMonitor,
+  type ManualUserFetchTask,
   type UserAssignQueue,
 } from "../../api/order-details.api";
 
@@ -25,6 +27,18 @@ const { RangePicker } = DatePicker;
 const { Text, Title } = Typography;
 const defaultDateRange: [Dayjs, Dayjs] = [dayjs().startOf("day"), dayjs().startOf("day")];
 const getOrderFetchMonitorKey = (userId: number, uid: string) => `${userId}:${uid}`;
+const getAssignQueueGroupKey = (row: UserAssignQueue) => row.shopGroupCode || `group-${row.shopGroupId ?? 0}`;
+
+interface AssignQueueGroup {
+  groupKey: string;
+  shopGroupId: number;
+  shopGroupName: string;
+  shopGroupCode: string;
+  rows: UserAssignQueue[];
+  normalNum: number;
+  delayNum: number;
+  totalNum: number;
+}
 
 export function ManualOrderDetailPanel() {
   const [loading, setLoading] = useState(false);
@@ -36,6 +50,9 @@ export function ManualOrderDetailPanel() {
   const [assignQueueRecord, setAssignQueueRecord] = useState<ManualOrderDetail | null>(null);
   const [assignQueueLoading, setAssignQueueLoading] = useState(false);
   const [assignQueues, setAssignQueues] = useState<UserAssignQueue[]>([]);
+  const [assignQueueMonitor, setAssignQueueMonitor] = useState<ManualOrderFetchMonitor | null>(null);
+  const [fetchTaskResults, setFetchTaskResults] = useState<Map<string, ManualUserFetchTask>>(new Map());
+  const [fetchingGroupKey, setFetchingGroupKey] = useState<string | null>(null);
   const userOptionCacheRef = useRef(new Map<number, ManualUserOption>());
   const monitorRequestIdRef = useRef(0);
   const [filters, setFilters] = useState({
@@ -152,13 +169,53 @@ export function ManualOrderDetailPanel() {
     }),
     { normalNum: 0, delayNum: 0, totalNum: 0 },
   ), [assignQueues]);
+  const assignQueueGroups = useMemo<AssignQueueGroup[]>(() => {
+    const groups = new Map<string, AssignQueueGroup>();
+    assignQueues.forEach((row) => {
+      const groupKey = getAssignQueueGroupKey(row);
+      const group = groups.get(groupKey) ?? {
+        groupKey,
+        shopGroupId: row.shopGroupId,
+        shopGroupName: row.shopGroupName || row.shopGroupCode || "未归组商品",
+        shopGroupCode: row.shopGroupCode || "",
+        rows: [],
+        normalNum: 0,
+        delayNum: 0,
+        totalNum: 0,
+      };
+      group.rows.push(row);
+      group.normalNum += row.normalNum;
+      group.delayNum += row.delayNum;
+      group.totalNum += row.totalNum;
+      groups.set(groupKey, group);
+    });
+    return Array.from(groups.values()).sort((left, right) => right.totalNum - left.totalNum || left.shopGroupId - right.shopGroupId);
+  }, [assignQueues]);
 
+  // 队列积压与取单速度一起刷新，保证弹窗顶部的速度指标与队列数量是同一时刻的快照。
   const loadAssignQueues = async (record: ManualOrderDetail) => {
     setAssignQueueLoading(true);
     try {
-      setAssignQueues(await fetchUserAssignQueues(record.uid, record.userId));
+      const [queues, monitors] = await Promise.all([
+        fetchUserAssignQueues(record.uid, record.userId),
+        fetchManualOrderFetchMonitorUIDs({ userIds: String(record.userId), uids: record.uid }).catch((error) => {
+          message.error(error instanceof Error ? error.message : "加载取单速度失败");
+          return [] as ManualOrderFetchMonitor[];
+        }),
+      ]);
+      setAssignQueues(queues);
+      const monitor = monitors.find((item) => item.userId === record.userId && item.uid === record.uid) ?? monitors[0] ?? null;
+      setAssignQueueMonitor(monitor);
+      if (monitor) {
+        setOrderFetchMonitors((current) => {
+          const next = new Map(current);
+          next.set(getOrderFetchMonitorKey(record.userId, record.uid), monitor);
+          return next;
+        });
+      }
     } catch (error) {
       setAssignQueues([]);
+      setAssignQueueMonitor(null);
       message.error(error instanceof Error ? error.message : "加载任务队列详情失败");
     } finally {
       setAssignQueueLoading(false);
@@ -168,12 +225,43 @@ export function ManualOrderDetailPanel() {
   const openAssignQueueDetail = (record: ManualOrderDetail) => {
     setAssignQueueRecord(record);
     setAssignQueues([]);
+    setAssignQueueMonitor(null);
+    setFetchTaskResults(new Map());
     void loadAssignQueues(record);
   };
 
   const closeAssignQueueDetail = () => {
     setAssignQueueRecord(null);
     setAssignQueues([]);
+    setAssignQueueMonitor(null);
+    setFetchTaskResults(new Map());
+  };
+
+  // 代替该用户按商品分组取一次任务，取完立即刷新队列，保证队列数量是取单后的最新值。
+  const handleFetchTask = async (record: ManualOrderDetail, group: AssignQueueGroup) => {
+    if (!group.shopGroupCode) {
+      message.warning("该商品分组没有配置 code，无法获取任务");
+      return;
+    }
+    setFetchingGroupKey(group.groupKey);
+    try {
+      const task = await fetchUserTask({ userId: record.userId, uid: record.uid, code: group.shopGroupCode });
+      setFetchTaskResults((current) => {
+        const next = new Map(current);
+        next.set(group.groupKey, task);
+        return next;
+      });
+      if (task.fetched) {
+        message.success(`「${group.shopGroupName}」取到任务 ${task.orderId ?? ""}`);
+      } else {
+        message.info(task.message || `「${group.shopGroupName}」当前没有取到任务`);
+      }
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "获取任务失败");
+    } finally {
+      setFetchingGroupKey(null);
+      await loadAssignQueues(record);
+    }
   };
 
   const openDouyinProfile = async (record: ManualOrderDetail) => {
@@ -237,6 +325,20 @@ export function ManualOrderDetailPanel() {
       key: "missSpeed",
       width: 140,
       render: (_, record) => formatMonitorSpeed(orderFetchMonitors.get(getOrderFetchMonitorKey(record.userId, record.uid))?.missSpeed),
+    },
+    {
+      title: "取单成功率",
+      key: "hitRate",
+      width: 130,
+      render: (_, record) => {
+        const monitor = orderFetchMonitors.get(getOrderFetchMonitorKey(record.userId, record.uid));
+        if (!monitor) return "-";
+        return (
+          <Tooltip title={`取到任务 ${formatCount(monitor.hitNum)} 次 / 总取单 ${formatCount(monitor.hitNum + monitor.missNum)} 次`}>
+            {formatMonitorRate(monitor.hitRate, monitor.hitNum + monitor.missNum)}
+          </Tooltip>
+        );
+      },
     },
     {
       title: "统计窗口",
@@ -386,7 +488,7 @@ export function ManualOrderDetailPanel() {
       <section className="manager-shell-card" style={{ borderRadius: 28, padding: 24 }}>
         <Space direction="vertical" size={18} style={{ width: "100%" }}>
           <div><div className="manager-section-label">做单数据</div><Title level={4} style={{ margin: "10px 0 4px" }}>按用户与 UID 汇总</Title><Text type="secondary">UID 可打开最新做单记录对应的抖音主页</Text></div>
-          <Table<ManualOrderDetail> rowKey={(record) => `${record.userId}-${record.uid}`} loading={loading} columns={columns} dataSource={displayedRecords} pagination={pagination} onChange={handleTableChange} scroll={{ x: 1840 }} locale={{ emptyText: <Empty description="当前筛选条件下暂无做单数据" /> }} />
+          <Table<ManualOrderDetail> rowKey={(record) => `${record.userId}-${record.uid}`} loading={loading} columns={columns} dataSource={displayedRecords} pagination={pagination} onChange={handleTableChange} scroll={{ x: 1970 }} locale={{ emptyText: <Empty description="当前筛选条件下暂无做单数据" /> }} />
         </Space>
       </section>
 
@@ -397,7 +499,6 @@ export function ManualOrderDetailPanel() {
         width={880}
         destroyOnClose
         footer={[
-          <Button key="reload" icon={<ReloadOutlined />} loading={assignQueueLoading} onClick={() => assignQueueRecord && void loadAssignQueues(assignQueueRecord)}>刷新</Button>,
           <Button key="close" type="primary" onClick={closeAssignQueueDetail}>关闭</Button>,
         ]}
       >
@@ -406,29 +507,81 @@ export function ManualOrderDetailPanel() {
             <Text type="secondary">用户名：<Text strong>{assignQueueRecord?.username || "-"}</Text></Text>
             <Text type="secondary">UID：<Text strong>{assignQueueRecord?.uid || "-"}</Text></Text>
             <Text type="secondary">合计待取任务：<Text strong>{formatCount(assignQueueTotals.totalNum)}</Text></Text>
+            <Button
+              size="small"
+              icon={<ReloadOutlined />}
+              loading={assignQueueLoading}
+              onClick={() => assignQueueRecord && void loadAssignQueues(assignQueueRecord)}
+            >
+              刷新
+            </Button>
           </Space>
-          <Text type="secondary">按商品类型统计 Redis 取单队列的积压数量，正常队列与延迟队列分别计数。</Text>
-          <Table<UserAssignQueue>
-            rowKey={(row) => row.shopTypeId}
-            size="small"
-            loading={assignQueueLoading}
-            dataSource={assignQueues}
-            pagination={false}
-            scroll={{ y: 420 }}
-            columns={assignQueueColumns}
-            locale={{ emptyText: <Empty description="该 UID 当前没有任何商品类型的队列数据" /> }}
-            summary={() => (
-              <Table.Summary fixed>
-                <Table.Summary.Row>
-                  <Table.Summary.Cell index={0} colSpan={2}>合计</Table.Summary.Cell>
-                  <Table.Summary.Cell index={2}>{formatCount(assignQueueTotals.normalNum)}</Table.Summary.Cell>
-                  <Table.Summary.Cell index={3}>{formatCount(assignQueueTotals.delayNum)}</Table.Summary.Cell>
-                  <Table.Summary.Cell index={4}>{formatCount(assignQueueTotals.totalNum)}</Table.Summary.Cell>
-                  <Table.Summary.Cell index={5} />
-                </Table.Summary.Row>
-              </Table.Summary>
+          <Descriptions size="small" bordered column={{ xs: 1, sm: 2, md: 3 }} title="该 UID 的取单情况">
+            <Descriptions.Item label="取到任务数">{formatMonitorCount(assignQueueMonitor?.hitNum)}</Descriptions.Item>
+            <Descriptions.Item label="无任务数">{formatMonitorCount(assignQueueMonitor?.missNum)}</Descriptions.Item>
+            <Descriptions.Item label="取单速度">{formatMonitorSpeed(assignQueueMonitor?.hitSpeed)}</Descriptions.Item>
+            <Descriptions.Item label="无任务速度">{formatMonitorSpeed(assignQueueMonitor?.missSpeed)}</Descriptions.Item>
+            <Descriptions.Item label="取单成功率">
+              <Tooltip title={assignQueueMonitor ? `取到任务 ${formatCount(assignQueueMonitor.hitNum)} 次 / 总取单 ${formatCount(assignQueueMonitor.hitNum + assignQueueMonitor.missNum)} 次` : undefined}>
+                {assignQueueMonitor ? formatMonitorRate(assignQueueMonitor.hitRate, assignQueueMonitor.hitNum + assignQueueMonitor.missNum) : "-"}
+              </Tooltip>
+            </Descriptions.Item>
+            <Descriptions.Item label="统计窗口">{formatMonitorWindow(assignQueueMonitor?.windowSeconds)}</Descriptions.Item>
+            <Descriptions.Item label="已持续时间">
+              <Tooltip title={formatRemainingTooltip(assignQueueMonitor?.hitRemainingSeconds, assignQueueMonitor?.missRemainingSeconds)}>
+                {formatMonitorElapsed(assignQueueMonitor?.elapsedSeconds)}
+              </Tooltip>
+            </Descriptions.Item>
+          </Descriptions>
+          <Text type="secondary">取单速度单位为次/分钟，与做单明细列表口径一致。下方按商品分组归类 Redis 取单队列的积压数量，展开可看到分组下各商品类型的正常队列与延迟队列。点击「获取任务」会用该用户的身份按分组取一次任务，取完自动刷新队列数量与上方取单情况。</Text>
+          {assignQueueGroups.length === 0
+            ? <Empty description={assignQueueLoading ? "正在加载队列数据" : "该 UID 当前没有任何商品类型的队列数据"} />
+            : (
+              <Collapse
+                defaultActiveKey={assignQueueGroups.length > 0 ? [assignQueueGroups[0].groupKey] : []}
+                items={assignQueueGroups.map((group) => ({
+                  key: group.groupKey,
+                  label: (
+                    <Space size={12} wrap>
+                      <Text strong>{group.shopGroupName}</Text>
+                      {group.shopGroupCode ? <Tag>{group.shopGroupCode}</Tag> : <Tag color="warning">无分组 code</Tag>}
+                      <Text type="secondary">合计 {formatCount(group.totalNum)}</Text>
+                      <Text type="secondary">正常 {formatCount(group.normalNum)}</Text>
+                      <Text type="secondary">延迟 {formatCount(group.delayNum)}</Text>
+                    </Space>
+                  ),
+                  extra: (
+                    <Button
+                      size="small"
+                      type="primary"
+                      icon={<ThunderboltOutlined />}
+                      disabled={!group.shopGroupCode || !assignQueueRecord}
+                      loading={fetchingGroupKey === group.groupKey}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (assignQueueRecord) void handleFetchTask(assignQueueRecord, group);
+                      }}
+                    >
+                      获取任务
+                    </Button>
+                  ),
+                  children: (
+                    <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                      {renderFetchTaskResult(fetchTaskResults.get(group.groupKey))}
+                      <Table<UserAssignQueue>
+                        rowKey={(row) => row.shopTypeId}
+                        size="small"
+                        loading={assignQueueLoading}
+                        dataSource={group.rows}
+                        pagination={false}
+                        columns={assignQueueColumns}
+                        locale={{ emptyText: <Empty description="该分组下没有商品类型队列数据" /> }}
+                      />
+                    </Space>
+                  ),
+                }))}
+              />
             )}
-          />
         </Space>
       </Modal>
     </div>
@@ -448,10 +601,44 @@ const assignQueueColumns: ColumnsType<UserAssignQueue> = [
   { title: "队列剩余有效期", dataIndex: "remainingSeconds", width: 140, render: formatMonitorWindow },
 ];
 
+function renderFetchTaskResult(task?: ManualUserFetchTask) {
+  if (!task) return null;
+  if (!task.fetched) {
+    return <Alert type="info" showIcon message={task.message || "当前没有取到任务"} description={task.requestUrl ? <Text type="secondary" copyable={{ text: task.requestUrl }}>{task.requestUrl}</Text> : undefined} />;
+  }
+  return (
+    <Alert
+      type="success"
+      showIcon
+      message={`取到任务${task.orderId ? `（订单号 ${task.orderId}）` : ""}`}
+      description={(
+        <Descriptions size="small" column={2} style={{ marginTop: 8 }}>
+          <Descriptions.Item label="订单号">{task.orderId || "-"}</Descriptions.Item>
+          <Descriptions.Item label="视频ID">{task.videoId || "-"}</Descriptions.Item>
+          <Descriptions.Item label="任务量">{task.totalNum === undefined ? "-" : formatCount(task.totalNum)}</Descriptions.Item>
+          <Descriptions.Item label="任务标记">{task.taskTag || "-"}</Descriptions.Item>
+          <Descriptions.Item label="协助ID">{task.assistId || "-"}</Descriptions.Item>
+          <Descriptions.Item label="secUid">{task.secUid || "-"}</Descriptions.Item>
+          <Descriptions.Item label="任务链接" span={2}>
+            {task.taskUrl ? <a href={task.taskUrl} target="_blank" rel="noreferrer noopener">{task.taskUrl}</a> : "-"}
+          </Descriptions.Item>
+          <Descriptions.Item label="短链" span={2}>
+            {task.shortUrl ? <a href={task.shortUrl} target="_blank" rel="noreferrer noopener">{task.shortUrl}</a> : "-"}
+          </Descriptions.Item>
+        </Descriptions>
+      )}
+    />
+  );
+}
+
 function formatCount(value?: number) { return Number(value || 0).toLocaleString("zh-CN"); }
 function formatPercent(value?: number) { return `${(Number(value || 0) * 100).toFixed(2)}%`; }
 function formatMonitorCount(value?: number) { return value === undefined ? "-" : formatCount(value); }
 function formatMonitorSpeed(value?: number) { return value === undefined ? "-" : Number(value).toFixed(2); }
+function formatMonitorRate(value?: number, totalNum?: number) {
+  if (!totalNum) return "-";
+  return `${(Number(value || 0) * 100).toFixed(2)}%`;
+}
 function formatMonitorWindow(value?: number) { return value === undefined ? "-" : `${value} 秒`; }
 function formatMonitorElapsed(value?: number) {
   if (value === undefined) return "-";
