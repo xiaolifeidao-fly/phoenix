@@ -83,6 +83,7 @@ const (
 	barryInnerManualTaskStatisticsUsersPath                   = "barry.url.inner.manual.task.statistics.users.suffix"
 	barryInnerOrderFetchMonitorUsersPath                      = "barry.url.inner.order.fetch.monitor.users.suffix"
 	barryInnerOrderFetchMonitorUIDsPath                       = "barry.url.inner.order.fetch.monitor.uids.suffix"
+	barryInnerUserAssignQueueUIDPath                          = "barry.url.inner.order.assign.queue.uid.suffix"
 	barryInnerUserWithdrawRecordPath                          = "barry.url.inner.point.user.withdraw.record.suffix"
 	barryInnerUserWithdrawAccountPath                         = "barry.url.inner.point.user.withdraw.account.suffix"
 	barryInnerUserWithdrawFinishPath                          = "barry.url.inner.point.user.withdraw.finish.suffix"

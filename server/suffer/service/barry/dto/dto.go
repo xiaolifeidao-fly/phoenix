@@ -1031,6 +1031,26 @@ type OrderFetchMonitorDTO struct {
 	MissSpeed            float64 `json:"missSpeed"`
 }
 
+type UserAssignQueueQueryDTO struct {
+	UserID int64  `json:"userId,omitempty" form:"userId"`
+	UID    string `json:"uid" form:"uid" binding:"required"`
+}
+
+type UserAssignQueueDTO struct {
+	UserID           int64  `json:"userId,omitempty"`
+	UID              string `json:"uid,omitempty"`
+	ShopTypeID       int64  `json:"shopTypeId"`
+	ShopTypeName     string `json:"shopTypeName,omitempty"`
+	ShopTypeCode     string `json:"shopTypeCode,omitempty"`
+	ShopGroupID      int64  `json:"shopGroupId,omitempty"`
+	QueueKey         string `json:"queueKey,omitempty"`
+	DelayQueueKey    string `json:"delayQueueKey,omitempty"`
+	NormalNum        int64  `json:"normalNum"`
+	DelayNum         int64  `json:"delayNum"`
+	TotalNum         int64  `json:"totalNum"`
+	RemainingSeconds int64  `json:"remainingSeconds"`
+}
+
 type ManualOrderDetailQueryDTO struct {
 	StartDate             string `json:"startDate,omitempty" form:"startDate"`
 	EndDate               string `json:"endDate,omitempty" form:"endDate"`
@@ -1209,16 +1229,20 @@ type WorkbenchDashboardManualSpeedDTO struct {
 }
 
 type WorkbenchDashboardPendingDetectionCountGroupDTO struct {
-	ShopGroupID           int64  `json:"shopGroupId"`
-	GroupName             string `json:"groupName"`
-	GroupCode             string `json:"groupCode"`
-	PendingDetectionCount int64  `json:"pendingDetectionCount"`
+	ShopGroupID                           int64  `json:"shopGroupId"`
+	GroupName                             string `json:"groupName"`
+	GroupCode                             string `json:"groupCode"`
+	PendingDetectionCount                 int64  `json:"pendingDetectionCount"`
+	FinishAssignmentPendingDetectionCount int64  `json:"finishAssignmentPendingDetectionCount"`
+	DelayAssignmentPendingDetectionCount  int64  `json:"delayAssignmentPendingDetectionCount"`
 }
 
 type WorkbenchDashboardPendingDetectionCountDTO struct {
-	Total                 int64                                              `json:"total"`
-	PendingDetectionCount int64                                              `json:"pendingDetectionCount"`
-	GroupList             []*WorkbenchDashboardPendingDetectionCountGroupDTO `json:"groupList"`
+	Total                                 int64                                              `json:"total"`
+	PendingDetectionCount                 int64                                              `json:"pendingDetectionCount"`
+	FinishAssignmentPendingDetectionCount int64                                              `json:"finishAssignmentPendingDetectionCount"`
+	DelayAssignmentPendingDetectionCount  int64                                              `json:"delayAssignmentPendingDetectionCount"`
+	GroupList                             []*WorkbenchDashboardPendingDetectionCountGroupDTO `json:"groupList"`
 }
 
 type WorkbenchDashboardDelayAssignmentCountCategoryDTO struct {

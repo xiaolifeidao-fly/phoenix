@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dayjs, { type Dayjs } from "dayjs";
 import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
-import { Button, DatePicker, Empty, Input, InputNumber, Select, Space, Switch, Table, Tag, Tooltip, Typography } from "antd";
+import { Button, DatePicker, Empty, Input, InputNumber, Modal, Select, Space, Switch, Table, Tag, Tooltip, Typography } from "antd";
 import type { TableProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { TablePaginationConfig } from "antd/es/table/interface";
@@ -14,9 +14,11 @@ import {
   fetchManualOrderDetailSecUid,
   fetchManualOrderDetails,
   fetchManualOrderFetchMonitorUIDs,
+  fetchUserAssignQueues,
   type ManualOrderDetail,
   type ManualOrderDetailPage,
   type ManualOrderFetchMonitor,
+  type UserAssignQueue,
 } from "../../api/order-details.api";
 
 const { RangePicker } = DatePicker;
@@ -31,6 +33,9 @@ export function ManualOrderDetailPanel() {
   const [userOptions, setUserOptions] = useState<ManualUserOption[]>([]);
   const [shopCategoryOptions, setShopCategoryOptions] = useState<ManualShopCategoryOption[]>([]);
   const [orderFetchMonitors, setOrderFetchMonitors] = useState<Map<string, ManualOrderFetchMonitor>>(new Map());
+  const [assignQueueRecord, setAssignQueueRecord] = useState<ManualOrderDetail | null>(null);
+  const [assignQueueLoading, setAssignQueueLoading] = useState(false);
+  const [assignQueues, setAssignQueues] = useState<UserAssignQueue[]>([]);
   const userOptionCacheRef = useRef(new Map<number, ManualUserOption>());
   const monitorRequestIdRef = useRef(0);
   const [filters, setFilters] = useState({
@@ -139,6 +144,37 @@ export function ManualOrderDetailPanel() {
     const direction = approvalRateOrder === "ascend" ? 1 : -1;
     return [...records].sort((left, right) => direction * (Number(left.approvalRate || 0) - Number(right.approvalRate || 0)));
   }, [details, approvalRateOrder]);
+  const assignQueueTotals = useMemo(() => assignQueues.reduce(
+    (totals, row) => ({
+      normalNum: totals.normalNum + row.normalNum,
+      delayNum: totals.delayNum + row.delayNum,
+      totalNum: totals.totalNum + row.totalNum,
+    }),
+    { normalNum: 0, delayNum: 0, totalNum: 0 },
+  ), [assignQueues]);
+
+  const loadAssignQueues = async (record: ManualOrderDetail) => {
+    setAssignQueueLoading(true);
+    try {
+      setAssignQueues(await fetchUserAssignQueues(record.uid, record.userId));
+    } catch (error) {
+      setAssignQueues([]);
+      message.error(error instanceof Error ? error.message : "加载任务队列详情失败");
+    } finally {
+      setAssignQueueLoading(false);
+    }
+  };
+
+  const openAssignQueueDetail = (record: ManualOrderDetail) => {
+    setAssignQueueRecord(record);
+    setAssignQueues([]);
+    void loadAssignQueues(record);
+  };
+
+  const closeAssignQueueDetail = () => {
+    setAssignQueueRecord(null);
+    setAssignQueues([]);
+  };
 
   const openDouyinProfile = async (record: ManualOrderDetail) => {
     const profileWindow = window.open("", "_blank");
@@ -168,6 +204,14 @@ export function ManualOrderDetailPanel() {
       width: 190,
       render: (uid, record) => uid
         ? <a href="#" onClick={(event) => { event.preventDefault(); void openDouyinProfile(record); }}>{uid}</a>
+        : <Text>-</Text>,
+    },
+    {
+      title: "任务队列",
+      key: "assignQueue",
+      width: 120,
+      render: (_, record) => record.uid
+        ? <Button size="small" onClick={() => openAssignQueueDetail(record)}>查看详情</Button>
         : <Text>-</Text>,
     },
     {
@@ -342,12 +386,67 @@ export function ManualOrderDetailPanel() {
       <section className="manager-shell-card" style={{ borderRadius: 28, padding: 24 }}>
         <Space direction="vertical" size={18} style={{ width: "100%" }}>
           <div><div className="manager-section-label">做单数据</div><Title level={4} style={{ margin: "10px 0 4px" }}>按用户与 UID 汇总</Title><Text type="secondary">UID 可打开最新做单记录对应的抖音主页</Text></div>
-          <Table<ManualOrderDetail> rowKey={(record) => `${record.userId}-${record.uid}`} loading={loading} columns={columns} dataSource={displayedRecords} pagination={pagination} onChange={handleTableChange} scroll={{ x: 1720 }} locale={{ emptyText: <Empty description="当前筛选条件下暂无做单数据" /> }} />
+          <Table<ManualOrderDetail> rowKey={(record) => `${record.userId}-${record.uid}`} loading={loading} columns={columns} dataSource={displayedRecords} pagination={pagination} onChange={handleTableChange} scroll={{ x: 1840 }} locale={{ emptyText: <Empty description="当前筛选条件下暂无做单数据" /> }} />
         </Space>
       </section>
+
+      <Modal
+        open={Boolean(assignQueueRecord)}
+        onCancel={closeAssignQueueDetail}
+        title="任务队列详情"
+        width={880}
+        destroyOnClose
+        footer={[
+          <Button key="reload" icon={<ReloadOutlined />} loading={assignQueueLoading} onClick={() => assignQueueRecord && void loadAssignQueues(assignQueueRecord)}>刷新</Button>,
+          <Button key="close" type="primary" onClick={closeAssignQueueDetail}>关闭</Button>,
+        ]}
+      >
+        <Space direction="vertical" size={14} style={{ width: "100%" }}>
+          <Space size={18} wrap>
+            <Text type="secondary">用户名：<Text strong>{assignQueueRecord?.username || "-"}</Text></Text>
+            <Text type="secondary">UID：<Text strong>{assignQueueRecord?.uid || "-"}</Text></Text>
+            <Text type="secondary">合计待取任务：<Text strong>{formatCount(assignQueueTotals.totalNum)}</Text></Text>
+          </Space>
+          <Text type="secondary">按商品类型统计 Redis 取单队列的积压数量，正常队列与延迟队列分别计数。</Text>
+          <Table<UserAssignQueue>
+            rowKey={(row) => row.shopTypeId}
+            size="small"
+            loading={assignQueueLoading}
+            dataSource={assignQueues}
+            pagination={false}
+            scroll={{ y: 420 }}
+            columns={assignQueueColumns}
+            locale={{ emptyText: <Empty description="该 UID 当前没有任何商品类型的队列数据" /> }}
+            summary={() => (
+              <Table.Summary fixed>
+                <Table.Summary.Row>
+                  <Table.Summary.Cell index={0} colSpan={2}>合计</Table.Summary.Cell>
+                  <Table.Summary.Cell index={2}>{formatCount(assignQueueTotals.normalNum)}</Table.Summary.Cell>
+                  <Table.Summary.Cell index={3}>{formatCount(assignQueueTotals.delayNum)}</Table.Summary.Cell>
+                  <Table.Summary.Cell index={4}>{formatCount(assignQueueTotals.totalNum)}</Table.Summary.Cell>
+                  <Table.Summary.Cell index={5} />
+                </Table.Summary.Row>
+              </Table.Summary>
+            )}
+          />
+        </Space>
+      </Modal>
     </div>
   );
 }
+
+const assignQueueColumns: ColumnsType<UserAssignQueue> = [
+  {
+    title: "商品类型",
+    dataIndex: "shopTypeName",
+    render: (value, row) => <Tooltip title={row.queueKey}>{value || row.shopTypeCode || "-"}</Tooltip>,
+  },
+  { title: "商品类型ID", dataIndex: "shopTypeId", width: 110 },
+  { title: "正常队列数量", dataIndex: "normalNum", width: 130, sorter: (left, right) => left.normalNum - right.normalNum, render: formatCount },
+  { title: "延迟队列数量", dataIndex: "delayNum", width: 130, sorter: (left, right) => left.delayNum - right.delayNum, render: (value) => <Tag color={value > 0 ? "gold" : undefined}>{formatCount(value)}</Tag> },
+  { title: "合计", dataIndex: "totalNum", width: 100, defaultSortOrder: "descend", sorter: (left, right) => left.totalNum - right.totalNum, render: formatCount },
+  { title: "队列剩余有效期", dataIndex: "remainingSeconds", width: 140, render: formatMonitorWindow },
+];
 
 function formatCount(value?: number) { return Number(value || 0).toLocaleString("zh-CN"); }
 function formatPercent(value?: number) { return `${(Number(value || 0) * 100).toFixed(2)}%`; }

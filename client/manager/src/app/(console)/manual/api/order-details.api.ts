@@ -82,3 +82,26 @@ export async function fetchManualOrderFetchMonitorUIDs(query: ManualOrderFetchMo
   });
   return unwrapApiResponse(response.data);
 }
+
+export interface UserAssignQueue {
+  userId: number;
+  uid: string;
+  shopTypeId: number;
+  shopTypeName: string;
+  shopTypeCode: string;
+  shopGroupId: number;
+  queueKey: string;
+  delayQueueKey: string;
+  normalNum: number;
+  delayNum: number;
+  totalNum: number;
+  remainingSeconds: number;
+}
+
+export async function fetchUserAssignQueues(uid: string, userId?: number) {
+  const response = await instance.get<ApiResponse<UserAssignQueue[]>>("/barry/assign-queue/uid", {
+    params: { uid, userId },
+    timeout: 30_000,
+  });
+  return unwrapApiResponse(response.data) ?? [];
+}

@@ -20,7 +20,7 @@ func TestWorkbenchDashboardStatisticsServiceProxiesPendingDetectionAndDelayConsu
 			if shopGroupIDs := r.URL.Query().Get("shopGroupIds"); shopGroupIDs != "17,19" {
 				t.Fatalf("shopGroupIds = %q", shopGroupIDs)
 			}
-			_, _ = w.Write([]byte(`{"success":true,"data":{"total":8,"pendingDetectionCount":8,"groupList":[{"shopGroupId":17,"groupName":"真人","groupCode":"REAL","pendingDetectionCount":5}]}}`))
+			_, _ = w.Write([]byte(`{"success":true,"data":{"total":8,"pendingDetectionCount":8,"finishAssignmentPendingDetectionCount":8,"delayAssignmentPendingDetectionCount":3,"groupList":[{"shopGroupId":17,"groupName":"真人","groupCode":"REAL","pendingDetectionCount":5,"finishAssignmentPendingDetectionCount":5,"delayAssignmentPendingDetectionCount":2}]}}`))
 		case "/workbench/dashboard/delay-assignment-count":
 			if shopCategoryIDs := r.URL.Query().Get("shopCategoryIds"); shopCategoryIDs != "7,12" {
 				t.Fatalf("shopCategoryIds = %q", shopCategoryIDs)
@@ -47,8 +47,14 @@ func TestWorkbenchDashboardStatisticsServiceProxiesPendingDetectionAndDelayConsu
 	if pending.Total != 8 || pending.PendingDetectionCount != 8 {
 		t.Fatalf("unexpected pending response: %+v", pending)
 	}
+	if pending.FinishAssignmentPendingDetectionCount != 8 || pending.DelayAssignmentPendingDetectionCount != 3 {
+		t.Fatalf("unexpected pending dual metrics: %+v", pending)
+	}
 	if len(pending.GroupList) != 1 || pending.GroupList[0].ShopGroupID != 17 {
 		t.Fatalf("unexpected pending groups: %+v", pending.GroupList)
+	}
+	if pending.GroupList[0].FinishAssignmentPendingDetectionCount != 5 || pending.GroupList[0].DelayAssignmentPendingDetectionCount != 2 {
+		t.Fatalf("unexpected pending group dual metrics: %+v", pending.GroupList[0])
 	}
 
 	delay, err := service.DelayAssignmentCount(context.Background(), barryDTO.WorkbenchDashboardMetricQueryDTO{ShopCategoryIDs: "7,12"})
