@@ -28,7 +28,7 @@ export function ManualUserMonitorPanel() {
   const [channels, setChannels] = useState<ManualChannelRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [channelLoading, setChannelLoading] = useState(false);
-  const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 100, total: 0 });
   const [monitorDurationSeconds, setMonitorDurationSeconds] = useState(DEFAULT_MONITOR_DURATION_SECONDS);
   const [monitoring, setMonitoring] = useState(false);
   const [monitorRemainingSeconds, setMonitorRemainingSeconds] = useState(0);
