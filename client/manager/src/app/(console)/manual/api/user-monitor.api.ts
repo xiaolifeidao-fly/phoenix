@@ -34,6 +34,7 @@ export interface ManualUserMonitorQuery {
   pageSize?: number;
   userId?: string;
   username?: string;
+  channel?: string;
   windowSeconds?: number;
 }
 
@@ -49,6 +50,7 @@ export async function fetchManualUserMonitorPage(
     pageSize: query.pageSize ?? 20,
     userId: query.userId?.trim() || undefined,
     username: query.username?.trim() || undefined,
+    channel: query.channel?.trim() || undefined,
   });
   const userIds = page.data.map((user) => user.userId).filter(Boolean);
 

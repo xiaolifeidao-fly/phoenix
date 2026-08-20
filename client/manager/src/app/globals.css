@@ -321,6 +321,52 @@ select {
   padding: 14px 16px;
 }
 
+.manual-monitor-filter-bar,
+.manual-order-detail-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px;
+}
+
+.manual-monitor-filter-field,
+.manual-order-detail-filter-field {
+  flex: 0 1 280px;
+  width: 280px;
+  max-width: 100%;
+}
+
+.manual-monitor-filter-actions,
+.manual-order-detail-filter-actions,
+.manual-assign-queue-summary,
+.manual-assign-queue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.manual-monitor-duration {
+  width: 146px;
+}
+
+.manual-assign-queue-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.manual-assign-queue-summary {
+  gap: 18px;
+}
+
+.manual-assign-queue-actions {
+  justify-content: flex-end;
+}
+
 .order-query-panel {
   display: flex;
   flex-direction: column;
@@ -3470,6 +3516,26 @@ select {
 
   .manager-data-card {
     padding: 16px;
+  }
+
+  .manual-monitor-filter-field,
+  .manual-order-detail-filter-field {
+    flex-basis: 100%;
+    width: 100%;
+  }
+
+  .manual-monitor-filter-actions,
+  .manual-order-detail-filter-actions {
+    width: 100%;
+  }
+
+  .manual-assign-queue-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .manual-assign-queue-actions {
+    justify-content: flex-start;
   }
 
   .manager-login-panel > div {

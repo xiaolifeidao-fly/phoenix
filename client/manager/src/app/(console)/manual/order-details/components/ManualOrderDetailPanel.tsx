@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import dayjs, { type Dayjs } from "dayjs";
-import { ReloadOutlined, SearchOutlined, ThunderboltOutlined } from "@ant-design/icons";
+import { EyeOutlined, ReloadOutlined, SearchOutlined, StopOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import { Alert, Button, Collapse, DatePicker, Descriptions, Empty, Input, InputNumber, Modal, Select, Space, Switch, Table, Tag, Tooltip, Typography } from "antd";
 import type { TableProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -28,6 +28,8 @@ const { Text, Title } = Typography;
 const defaultDateRange: [Dayjs, Dayjs] = [dayjs().startOf("day"), dayjs().startOf("day")];
 const getOrderFetchMonitorKey = (userId: number, uid: string) => `${userId}:${uid}`;
 const getAssignQueueGroupKey = (row: UserAssignQueue) => row.shopGroupCode || `group-${row.shopGroupId ?? 0}`;
+const DEFAULT_ASSIGN_QUEUE_MONITOR_DURATION_SECONDS = 120;
+const ASSIGN_QUEUE_MONITOR_REFRESH_INTERVAL_MS = 2_000;
 
 interface AssignQueueGroup {
   groupKey: string;
@@ -53,8 +55,14 @@ export function ManualOrderDetailPanel() {
   const [assignQueueMonitor, setAssignQueueMonitor] = useState<ManualOrderFetchMonitor | null>(null);
   const [fetchTaskResults, setFetchTaskResults] = useState<Map<string, ManualUserFetchTask>>(new Map());
   const [fetchingGroupKey, setFetchingGroupKey] = useState<string | null>(null);
+  const [assignQueueMonitorDurationSeconds, setAssignQueueMonitorDurationSeconds] = useState(DEFAULT_ASSIGN_QUEUE_MONITOR_DURATION_SECONDS);
+  const [assignQueueMonitoring, setAssignQueueMonitoring] = useState(false);
+  const [assignQueueMonitorRemainingSeconds, setAssignQueueMonitorRemainingSeconds] = useState(0);
   const userOptionCacheRef = useRef(new Map<number, ManualUserOption>());
   const monitorRequestIdRef = useRef(0);
+  const assignQueueMonitorTimerRef = useRef<number | null>(null);
+  const assignQueueMonitorSessionRef = useRef(0);
+  const assignQueueMonitorRequestInFlightRef = useRef(false);
   const [filters, setFilters] = useState({
     dateRange: defaultDateRange,
     userId: undefined as number | undefined,
@@ -151,6 +159,10 @@ export function ManualOrderDetailPanel() {
     void loadDetails();
     void searchUsers();
     void loadShopCategories();
+    return () => {
+      assignQueueMonitorSessionRef.current += 1;
+      if (assignQueueMonitorTimerRef.current !== null) window.clearInterval(assignQueueMonitorTimerRef.current);
+    };
   }, []);
 
   const selectedUser = filters.userId ? userOptionCacheRef.current.get(filters.userId) : undefined;
@@ -192,6 +204,17 @@ export function ManualOrderDetailPanel() {
     return Array.from(groups.values()).sort((left, right) => right.totalNum - left.totalNum || left.shopGroupId - right.shopGroupId);
   }, [assignQueues]);
 
+  const stopAssignQueueMonitoring = () => {
+    assignQueueMonitorSessionRef.current += 1;
+    if (assignQueueMonitorTimerRef.current !== null) {
+      window.clearInterval(assignQueueMonitorTimerRef.current);
+      assignQueueMonitorTimerRef.current = null;
+    }
+    assignQueueMonitorRequestInFlightRef.current = false;
+    setAssignQueueMonitoring(false);
+    setAssignQueueMonitorRemainingSeconds(0);
+  };
+
   // 队列积压与取单速度一起刷新，保证弹窗顶部的速度指标与队列数量是同一时刻的快照。
   const loadAssignQueues = async (record: ManualOrderDetail) => {
     setAssignQueueLoading(true);
@@ -223,18 +246,58 @@ export function ManualOrderDetailPanel() {
   };
 
   const openAssignQueueDetail = (record: ManualOrderDetail) => {
+    stopAssignQueueMonitoring();
     setAssignQueueRecord(record);
     setAssignQueues([]);
     setAssignQueueMonitor(null);
     setFetchTaskResults(new Map());
+    setAssignQueueMonitorDurationSeconds(DEFAULT_ASSIGN_QUEUE_MONITOR_DURATION_SECONDS);
     void loadAssignQueues(record);
   };
 
   const closeAssignQueueDetail = () => {
+    stopAssignQueueMonitoring();
     setAssignQueueRecord(null);
     setAssignQueues([]);
     setAssignQueueMonitor(null);
     setFetchTaskResults(new Map());
+  };
+
+  const startAssignQueueMonitoring = () => {
+    if (!assignQueueRecord) return;
+    const durationSeconds = Math.floor(assignQueueMonitorDurationSeconds);
+    if (durationSeconds < 2) {
+      message.warning("监控时长不能少于 2 秒");
+      return;
+    }
+
+    stopAssignQueueMonitoring();
+    const session = assignQueueMonitorSessionRef.current + 1;
+    assignQueueMonitorSessionRef.current = session;
+    const record = assignQueueRecord;
+    const endAt = Date.now() + durationSeconds * 1_000;
+
+    setAssignQueueMonitoring(true);
+    setAssignQueueMonitorRemainingSeconds(durationSeconds);
+
+    const refresh = () => {
+      if (session !== assignQueueMonitorSessionRef.current) return;
+      const remainingSeconds = Math.ceil((endAt - Date.now()) / 1_000);
+      if (remainingSeconds <= 0) {
+        stopAssignQueueMonitoring();
+        return;
+      }
+      setAssignQueueMonitorRemainingSeconds(remainingSeconds);
+      if (assignQueueMonitorRequestInFlightRef.current) return;
+
+      assignQueueMonitorRequestInFlightRef.current = true;
+      void loadAssignQueues(record).finally(() => {
+        if (session === assignQueueMonitorSessionRef.current) assignQueueMonitorRequestInFlightRef.current = false;
+      });
+    };
+
+    refresh();
+    assignQueueMonitorTimerRef.current = window.setInterval(refresh, ASSIGN_QUEUE_MONITOR_REFRESH_INTERVAL_MS);
   };
 
   // 代替该用户按商品分组取一次任务，取完立即刷新队列，保证队列数量是取单后的最新值。
@@ -283,6 +346,11 @@ export function ManualOrderDetailPanel() {
     }
   };
 
+  const getMonitorMetric = (
+    record: ManualOrderDetail,
+    metric: "hitNum" | "missNum" | "hitSpeed" | "missSpeed" | "hitRate",
+  ) => Number(orderFetchMonitors.get(getOrderFetchMonitorKey(record.userId, record.uid))?.[metric] ?? 0);
+
   const columns: ColumnsType<ManualOrderDetail> = [
     { title: "用户名", dataIndex: "username", width: 150, render: (value) => <Text strong>{value || "-"}</Text> },
     { title: "渠道", dataIndex: "channel", width: 130, render: (value) => value || "-" },
@@ -306,30 +374,35 @@ export function ManualOrderDetailPanel() {
       title: "取到任务数",
       key: "hitNum",
       width: 120,
+      sorter: (left, right) => getMonitorMetric(left, "hitNum") - getMonitorMetric(right, "hitNum"),
       render: (_, record) => formatMonitorCount(orderFetchMonitors.get(getOrderFetchMonitorKey(record.userId, record.uid))?.hitNum),
     },
     {
       title: "无任务数",
       key: "missNum",
       width: 110,
+      sorter: (left, right) => getMonitorMetric(left, "missNum") - getMonitorMetric(right, "missNum"),
       render: (_, record) => formatMonitorCount(orderFetchMonitors.get(getOrderFetchMonitorKey(record.userId, record.uid))?.missNum),
     },
     {
       title: "取单速度",
       key: "hitSpeed",
       width: 140,
+      sorter: (left, right) => getMonitorMetric(left, "hitSpeed") - getMonitorMetric(right, "hitSpeed"),
       render: (_, record) => formatMonitorSpeed(orderFetchMonitors.get(getOrderFetchMonitorKey(record.userId, record.uid))?.hitSpeed),
     },
     {
       title: "无任务速度",
       key: "missSpeed",
       width: 140,
+      sorter: (left, right) => getMonitorMetric(left, "missSpeed") - getMonitorMetric(right, "missSpeed"),
       render: (_, record) => formatMonitorSpeed(orderFetchMonitors.get(getOrderFetchMonitorKey(record.userId, record.uid))?.missSpeed),
     },
     {
       title: "取单成功率",
       key: "hitRate",
       width: 130,
+      sorter: (left, right) => getMonitorMetric(left, "hitRate") - getMonitorMetric(right, "hitRate"),
       render: (_, record) => {
         const monitor = orderFetchMonitors.get(getOrderFetchMonitorKey(record.userId, record.uid));
         if (!monitor) return "-";
@@ -419,8 +492,8 @@ export function ManualOrderDetailPanel() {
       <section className="manager-shell-card" style={{ borderRadius: 28, padding: 24 }}>
         <Space direction="vertical" size={18} style={{ width: "100%" }}>
           <div><div className="manager-section-label">筛选条件</div><Title level={4} style={{ margin: "10px 0 0" }}>查看人工用户做单明细</Title></div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, alignItems: "end" }}>
-            <div>
+          <div className="manual-order-detail-filter-bar">
+            <div className="manual-order-detail-filter-field">
               <Text type="secondary">做单日期区间</Text>
               <RangePicker
                 allowClear={false}
@@ -434,7 +507,7 @@ export function ManualOrderDetailPanel() {
                 }}
               />
             </div>
-            <div>
+            <div className="manual-order-detail-filter-field">
               <Text type="secondary">用户名</Text>
               <Select
                 allowClear
@@ -448,11 +521,9 @@ export function ManualOrderDetailPanel() {
                 onChange={(value) => setFilters((current) => ({ ...current, userId: value }))}
               />
             </div>
-            <div><Text type="secondary">UID</Text><Input allowClear placeholder="输入 UID" value={filters.uid} onChange={(event) => setFilters((current) => ({ ...current, uid: event.target.value }))} onPressEnter={() => { const next = { ...filters, page: 1 }; setFilters(next); void loadDetails(next); }} style={{ marginTop: 8 }} /></div>
-            <div><Text type="secondary">人工商品</Text><Select mode="multiple" allowClear maxTagCount="responsive" placeholder="全部人工商品" style={{ width: "100%", marginTop: 8 }} options={shopCategoryOptions.map((item) => ({ value: item.id, label: item.code ? `${item.name} (${item.code})` : item.name }))} value={filters.shopCategoryIds} onChange={(value) => setFilters((current) => ({ ...current, shopCategoryIds: value, excludeWhitelistUsers: value.length > 0 ? current.excludeWhitelistUsers : false }))} /></div>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, alignItems: "end" }}>
-            <div>
+            <div className="manual-order-detail-filter-field"><Text type="secondary">UID</Text><Input allowClear placeholder="输入 UID" value={filters.uid} onChange={(event) => setFilters((current) => ({ ...current, uid: event.target.value }))} onPressEnter={() => { const next = { ...filters, page: 1 }; setFilters(next); void loadDetails(next); }} style={{ marginTop: 8 }} /></div>
+            <div className="manual-order-detail-filter-field"><Text type="secondary">人工商品</Text><Select mode="multiple" allowClear maxTagCount="responsive" placeholder="全部人工商品" style={{ width: "100%", marginTop: 8 }} options={shopCategoryOptions.map((item) => ({ value: item.id, label: item.code ? `${item.name} (${item.code})` : item.name }))} value={filters.shopCategoryIds} onChange={(value) => setFilters((current) => ({ ...current, shopCategoryIds: value, excludeWhitelistUsers: value.length > 0 ? current.excludeWhitelistUsers : false }))} /></div>
+            <div className="manual-order-detail-filter-field">
               <Text type="secondary">粉丝量区间</Text>
               <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 8, marginTop: 8 }}>
                 <InputNumber min={0} precision={0} placeholder="最小值" style={{ width: "100%" }} value={filters.fansNumMin} onChange={(value) => setFilters((current) => ({ ...current, fansNumMin: typeof value === "number" ? value : undefined }))} />
@@ -460,7 +531,7 @@ export function ManualOrderDetailPanel() {
                 <InputNumber min={0} precision={0} placeholder="最大值" style={{ width: "100%" }} value={filters.fansNumMax} onChange={(value) => setFilters((current) => ({ ...current, fansNumMax: typeof value === "number" ? value : undefined }))} />
               </div>
             </div>
-            <div>
+            <div className="manual-order-detail-filter-field">
               <Text type="secondary">审核通过率区间</Text>
               <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 8, marginTop: 8 }}>
                 <InputNumber min={0} max={100} precision={2} placeholder="最小值" addonAfter="%" style={{ width: "100%" }} value={filters.approvalRateMin} onChange={(value) => setFilters((current) => ({ ...current, approvalRateMin: typeof value === "number" ? value : undefined }))} />
@@ -468,7 +539,7 @@ export function ManualOrderDetailPanel() {
                 <InputNumber min={0} max={100} precision={2} placeholder="最大值" addonAfter="%" style={{ width: "100%" }} value={filters.approvalRateMax} onChange={(value) => setFilters((current) => ({ ...current, approvalRateMax: typeof value === "number" ? value : undefined }))} />
               </div>
             </div>
-            <div>
+            <div className="manual-order-detail-filter-field">
               <Text type="secondary">是否过滤人工商品白名单用户</Text>
               <div style={{ marginTop: 12 }}>
                 <Switch
@@ -480,7 +551,7 @@ export function ManualOrderDetailPanel() {
                 />
               </div>
             </div>
-            <Space><Button type="primary" icon={<SearchOutlined />} loading={loading} onClick={() => { const next = { ...filters, page: 1 }; setFilters(next); void loadDetails(next); }}>查询</Button><Button icon={<ReloadOutlined />} onClick={() => { const reset = { dateRange: defaultDateRange, userId: undefined, uid: "", shopCategoryIds: [] as number[], excludeWhitelistUsers: false, fansNumOrder: undefined, fansNumMin: undefined, fansNumMax: undefined, approvalRateMin: undefined, approvalRateMax: undefined, page: 1, pageSize: 20 }; setFilters(reset); void loadDetails(reset); }}>重置</Button></Space>
+            <div className="manual-order-detail-filter-actions"><Button type="primary" icon={<SearchOutlined />} loading={loading} onClick={() => { const next = { ...filters, page: 1 }; setFilters(next); void loadDetails(next); }}>查询</Button><Button icon={<ReloadOutlined />} onClick={() => { const reset = { dateRange: defaultDateRange, userId: undefined, uid: "", shopCategoryIds: [] as number[], excludeWhitelistUsers: false, fansNumOrder: undefined, fansNumMin: undefined, fansNumMax: undefined, approvalRateMin: undefined, approvalRateMax: undefined, page: 1, pageSize: 20 }; setFilters(reset); void loadDetails(reset); }}>重置</Button></div>
           </div>
         </Space>
       </section>
@@ -503,19 +574,28 @@ export function ManualOrderDetailPanel() {
         ]}
       >
         <Space direction="vertical" size={14} style={{ width: "100%" }}>
-          <Space size={18} wrap>
-            <Text type="secondary">用户名：<Text strong>{assignQueueRecord?.username || "-"}</Text></Text>
-            <Text type="secondary">UID：<Text strong>{assignQueueRecord?.uid || "-"}</Text></Text>
-            <Text type="secondary">合计待取任务：<Text strong>{formatCount(assignQueueTotals.totalNum)}</Text></Text>
-            <Button
-              size="small"
-              icon={<ReloadOutlined />}
-              loading={assignQueueLoading}
-              onClick={() => assignQueueRecord && void loadAssignQueues(assignQueueRecord)}
-            >
-              刷新
-            </Button>
-          </Space>
+          <div className="manual-assign-queue-header">
+            <div className="manual-assign-queue-summary">
+              <Text type="secondary">用户名：<Text strong>{assignQueueRecord?.username || "-"}</Text></Text>
+              <Text type="secondary">UID：<Text strong>{assignQueueRecord?.uid || "-"}</Text></Text>
+              <Text type="secondary">合计待取任务：<Text strong>{formatCount(assignQueueTotals.totalNum)}</Text></Text>
+            </div>
+            <div className="manual-assign-queue-actions">
+              <Button
+                size="small"
+                icon={<ReloadOutlined />}
+                loading={assignQueueLoading}
+                onClick={() => {
+                  stopAssignQueueMonitoring();
+                  if (assignQueueRecord) void loadAssignQueues(assignQueueRecord);
+                }}
+              >
+                刷新
+              </Button>
+              <InputNumber className="manual-monitor-duration" min={2} precision={0} addonBefore="时长" addonAfter="秒" value={assignQueueMonitorDurationSeconds} disabled={assignQueueMonitoring} onChange={(value) => setAssignQueueMonitorDurationSeconds(typeof value === "number" ? value : DEFAULT_ASSIGN_QUEUE_MONITOR_DURATION_SECONDS)} />
+              <Button icon={assignQueueMonitoring ? <StopOutlined /> : <EyeOutlined />} danger={assignQueueMonitoring} onClick={assignQueueMonitoring ? stopAssignQueueMonitoring : startAssignQueueMonitoring} style={{ minWidth: 126 }}>{assignQueueMonitoring ? `停止监控 ${assignQueueMonitorRemainingSeconds}s` : "监控"}</Button>
+            </div>
+          </div>
           <Descriptions size="small" bordered column={{ xs: 1, sm: 2, md: 3 }} title="该 UID 的取单情况">
             <Descriptions.Item label="取到任务数">{formatMonitorCount(assignQueueMonitor?.hitNum)}</Descriptions.Item>
             <Descriptions.Item label="无任务数">{formatMonitorCount(assignQueueMonitor?.missNum)}</Descriptions.Item>
