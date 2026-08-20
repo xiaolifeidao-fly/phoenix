@@ -418,7 +418,11 @@ export function ManualUserManagementPanel() {
               <Input.Password placeholder="请输入密码" />
             </Form.Item>
           )}
-          <Form.Item name="channel" label="渠道">
+          <Form.Item
+            name="channel"
+            label="渠道"
+            rules={editingUser ? undefined : [{ required: true, message: "请选择渠道" }]}
+          >
             <Select
               allowClear
               showSearch
