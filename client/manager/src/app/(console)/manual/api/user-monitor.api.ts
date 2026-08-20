@@ -42,6 +42,28 @@ export interface ManualUserMonitorItem extends BarryAppUserRecord {
   monitor: OrderFetchMonitorRecord;
 }
 
+export async function fetchOrderFetchMonitorUsers(query: {
+  userIds: Array<number | string>;
+  windowSeconds?: number;
+}): Promise<OrderFetchMonitorRecord[]> {
+  const userIds = Array.from(
+    new Set(
+      query.userIds
+        .map((userId) => Number(userId))
+        .filter((userId) => Number.isSafeInteger(userId) && userId > 0),
+    ),
+  );
+
+  if (!userIds.length) {
+    return [];
+  }
+
+  return getDataList(OrderFetchMonitorRecord, "/barry/order-fetch-monitor/users", {
+    userIds: userIds.join(","),
+    windowSeconds: query.windowSeconds,
+  });
+}
+
 export async function fetchManualUserMonitorPage(
   query: ManualUserMonitorQuery = {},
 ): Promise<PageResult<ManualUserMonitorItem>> {
@@ -58,8 +80,8 @@ export async function fetchManualUserMonitorPage(
     return { total: page.total, data: [] };
   }
 
-  const monitorRecords = await getDataList(OrderFetchMonitorRecord, "/barry/order-fetch-monitor/users", {
-    userIds: userIds.join(","),
+  const monitorRecords = await fetchOrderFetchMonitorUsers({
+    userIds,
     windowSeconds: query.windowSeconds,
   });
   const monitorByUserId = new Map(monitorRecords.map((record) => [String(record.userId), record]));

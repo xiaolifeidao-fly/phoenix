@@ -8,10 +8,12 @@ import {
   ClockCircleOutlined,
   DeleteOutlined,
   EditOutlined,
+  EyeOutlined,
   FundOutlined,
   PayCircleOutlined,
   PlusOutlined,
   ShopOutlined,
+  StopOutlined,
   TeamOutlined,
   WarningOutlined,
   WalletOutlined,
@@ -29,6 +31,10 @@ import {
 } from "../../product/api/product.api";
 import { fetchManualProducts, type ManualProductRecord } from "../../manual/api/product.api";
 import { fetchUserStats, fetchUsers, UserStats, type UserRecord } from "../../user/api/user.api";
+import {
+  fetchOrderFetchMonitorUsers,
+  type OrderFetchMonitorRecord,
+} from "../../manual/api/user-monitor.api";
 import {
   fetchBarryBridgeTypes,
   fetchBarryShopGroups,
@@ -142,6 +148,7 @@ interface DerivedCategoryDetail {
   completionRate: number;
   manualSpeedPerSecond: number;
   actualSpeedPerSecond: number;
+  orderFetchMonitor?: OrderFetchMonitorRecord;
 }
 
 interface DashboardCardView {
@@ -187,6 +194,9 @@ const DASHBOARD_BRIDGE_STATISTIC_REFRESH_INTERVAL_MS = 60 * 1000;
 const MAX_BRIDGE_STATISTIC_REQUEST_CONCURRENCY = 3;
 const MIN_BARRY_WINDOW_SECONDS = 1;
 const MAX_BARRY_WINDOW_SECONDS = 3600;
+const DEFAULT_ONLINE_USER_MONITOR_DURATION_SECONDS = 120;
+const MIN_ONLINE_USER_MONITOR_DURATION_SECONDS = 2;
+const ONLINE_USER_MONITOR_REFRESH_INTERVAL_MS = 2_000;
 // Barry BridgeType 的完整当前枚举。枚举接口暂不可用（例如后端尚未发布）时，
 // 配置抽屉仍可展示和选择全部类型；接口返回的新值会在下方一并合并。
 const BARRY_BRIDGE_TYPE_FALLBACK = [
@@ -309,6 +319,13 @@ export function ManagerDashboardPanel() {
   const [actualSpeedPerSecond, setActualSpeedPerSecond] = useState(0);
   const [realActualSpeedPerSecond, setRealActualSpeedPerSecond] = useState(0);
   const [workbenchUserOverview, setWorkbenchUserOverview] = useState<WorkbenchUserOverview | null>(null);
+  const [onlineUserMonitorByUserId, setOnlineUserMonitorByUserId] = useState<Map<number, OrderFetchMonitorRecord>>(new Map());
+  const [onlineUserMonitorDurationSeconds, setOnlineUserMonitorDurationSeconds] = useState(
+    DEFAULT_ONLINE_USER_MONITOR_DURATION_SECONDS,
+  );
+  const [onlineUserMonitoring, setOnlineUserMonitoring] = useState(false);
+  const [onlineUserMonitorRemainingSeconds, setOnlineUserMonitorRemainingSeconds] = useState(0);
+  const [onlineUserMonitorLoading, setOnlineUserMonitorLoading] = useState(false);
   const [dashboardStatistics, setDashboardStatistics] = useState<DashboardStatistics | null>(null);
   const [dashboardMetricLoading, setDashboardMetricLoading] = useState<Partial<Record<DashboardMetricId, boolean>>>({});
   const [dashboardMetricFailed, setDashboardMetricFailed] = useState<Partial<Record<DashboardMetricId, boolean>>>({});
@@ -325,6 +342,9 @@ export function ManagerDashboardPanel() {
     total: undefined,
     real: undefined,
   });
+  const onlineUserMonitorTimerRef = useRef<number | null>(null);
+  const onlineUserMonitorSessionRef = useRef(0);
+  const onlineUserMonitorRequestInFlightRef = useRef(false);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -398,6 +418,92 @@ export function ManagerDashboardPanel() {
   const userOverviewWindowSeconds = clampBarryWindowSeconds(
     configMap.productCount?.userOverviewWindowSeconds,
   );
+
+  const stopOnlineUserMonitoring = useCallback(() => {
+    onlineUserMonitorSessionRef.current += 1;
+    if (onlineUserMonitorTimerRef.current !== null) {
+      window.clearInterval(onlineUserMonitorTimerRef.current);
+      onlineUserMonitorTimerRef.current = null;
+    }
+    onlineUserMonitorRequestInFlightRef.current = false;
+    setOnlineUserMonitoring(false);
+    setOnlineUserMonitorRemainingSeconds(0);
+  }, []);
+
+  const startOnlineUserMonitoring = useCallback(() => {
+    const durationSeconds = Math.floor(onlineUserMonitorDurationSeconds);
+    if (durationSeconds < MIN_ONLINE_USER_MONITOR_DURATION_SECONDS) {
+      messageApi.warning(`监控时长不能少于 ${MIN_ONLINE_USER_MONITOR_DURATION_SECONDS} 秒`);
+      return;
+    }
+
+    const userIds = Array.from(
+      new Set(
+        (workbenchUserOverview?.detailList ?? [])
+          .map((detail) => Number(detail.userId))
+          .filter((userId) => Number.isSafeInteger(userId) && userId > 0),
+      ),
+    );
+    if (!userIds.length) {
+      messageApi.warning("当前没有可监控的上号用户");
+      return;
+    }
+
+    stopOnlineUserMonitoring();
+    const session = onlineUserMonitorSessionRef.current + 1;
+    onlineUserMonitorSessionRef.current = session;
+    const endAt = Date.now() + durationSeconds * 1_000;
+    setOnlineUserMonitoring(true);
+    setOnlineUserMonitorRemainingSeconds(durationSeconds);
+
+    const refresh = (showError = false) => {
+      if (session !== onlineUserMonitorSessionRef.current) {
+        return;
+      }
+      const remainingSeconds = Math.ceil((endAt - Date.now()) / 1_000);
+      if (remainingSeconds <= 0) {
+        stopOnlineUserMonitoring();
+        return;
+      }
+      setOnlineUserMonitorRemainingSeconds(remainingSeconds);
+      if (onlineUserMonitorRequestInFlightRef.current) {
+        return;
+      }
+
+      onlineUserMonitorRequestInFlightRef.current = true;
+      setOnlineUserMonitorLoading(true);
+      void fetchOrderFetchMonitorUsers({ userIds, windowSeconds: durationSeconds })
+        .then((records) => {
+          if (session !== onlineUserMonitorSessionRef.current) {
+            return;
+          }
+          setOnlineUserMonitorByUserId(new Map(records.map((record) => [record.userId, record])));
+        })
+        .catch((error) => {
+          if (showError && session === onlineUserMonitorSessionRef.current) {
+            messageApi.error(error instanceof Error ? error.message : "刷新上号用户监控失败");
+          }
+        })
+        .finally(() => {
+          if (session === onlineUserMonitorSessionRef.current) {
+            onlineUserMonitorRequestInFlightRef.current = false;
+            setOnlineUserMonitorLoading(false);
+          }
+        });
+    };
+
+    refresh(true);
+    onlineUserMonitorTimerRef.current = window.setInterval(
+      () => refresh(),
+      ONLINE_USER_MONITOR_REFRESH_INTERVAL_MS,
+    );
+  }, [messageApi, onlineUserMonitorDurationSeconds, stopOnlineUserMonitoring, workbenchUserOverview]);
+
+  useEffect(() => () => {
+    if (onlineUserMonitorTimerRef.current !== null) {
+      window.clearInterval(onlineUserMonitorTimerRef.current);
+    }
+  }, []);
 
   // Each dashboard metric loads on its own request and updates just its
   // slice of state, so a slow endpoint never holds up the other cards.
@@ -914,6 +1020,7 @@ export function ManagerDashboardPanel() {
             realManualSubmittedStatistics,
             lowPriceManualSubmittedStatistics,
             workbenchUserOverview,
+            onlineUserMonitorByUserId,
             dashboardStatistics,
             lowPriceActualCompleted,
             pendingDetectionCount,
@@ -939,7 +1046,7 @@ export function ManagerDashboardPanel() {
           return [cardId, view];
         }),
       ) as Record<DashboardCardId, DashboardCardView>,
-    [categories.length, categoryDetailsWithSpeed, configMap, dashboardMetricLoading, dashboardStatistics, derivedManualProductDetails, lowPriceActualCompleted, lowPriceDelayAssignmentCount, lowPriceManualProductDetails, lowPriceManualSubmittedStatistics, manualProducts.length, pendingDetectionCount, products, realDelayAssignmentCount, realManualSubmittedStatistics, users, userStats, workbenchStatistics, workbenchUserOverview],
+    [categories.length, categoryDetailsWithSpeed, configMap, dashboardMetricLoading, dashboardStatistics, derivedManualProductDetails, lowPriceActualCompleted, lowPriceDelayAssignmentCount, lowPriceManualProductDetails, lowPriceManualSubmittedStatistics, manualProducts.length, onlineUserMonitorByUserId, pendingDetectionCount, products, realDelayAssignmentCount, realManualSubmittedStatistics, users, userStats, workbenchStatistics, workbenchUserOverview],
   );
 
   const hiddenCardIds = useMemo(
@@ -1089,9 +1196,14 @@ export function ManagerDashboardPanel() {
       <Drawer
         title={detailCard?.title || "Dashboard 详情"}
         placement="right"
-        width={560}
+        width={detailCardId === "productCount" ? "min(1420px, calc(100vw - 24px))" : 560}
         open={Boolean(detailCard)}
-        onClose={() => setDetailCardId(null)}
+        onClose={() => {
+          if (detailCardId === "productCount") {
+            stopOnlineUserMonitoring();
+          }
+          setDetailCardId(null);
+        }}
         className="manager-dashboard-drawer"
       >
         {detailCard ? (
@@ -1130,14 +1242,40 @@ export function ManagerDashboardPanel() {
                 <Text style={{ color: "var(--manager-text-soft)" }}>
                   {getDetailListDescription(detailCardId)}
                 </Text>
-                <Tag className="manager-dashboard-tag">
-                  {getDetailListUnitLabel(detailCardId)} {detailCard.detailRows.length}
-                </Tag>
+                <Space wrap size={8}>
+                  {detailCardId === "productCount" ? (
+                    <>
+                      <InputNumber
+                        min={MIN_ONLINE_USER_MONITOR_DURATION_SECONDS}
+                        precision={0}
+                        addonBefore="时长"
+                        addonAfter="秒"
+                        value={onlineUserMonitorDurationSeconds}
+                        disabled={onlineUserMonitoring}
+                        style={{ width: 164 }}
+                        onChange={(value) => setOnlineUserMonitorDurationSeconds(
+                          typeof value === "number" ? value : DEFAULT_ONLINE_USER_MONITOR_DURATION_SECONDS,
+                        )}
+                      />
+                      <Button
+                        icon={onlineUserMonitoring ? <StopOutlined /> : <EyeOutlined />}
+                        danger={onlineUserMonitoring}
+                        loading={onlineUserMonitorLoading}
+                        onClick={onlineUserMonitoring ? stopOnlineUserMonitoring : startOnlineUserMonitoring}
+                      >
+                        {onlineUserMonitoring ? `停止监控 ${onlineUserMonitorRemainingSeconds}s` : "监控"}
+                      </Button>
+                    </>
+                  ) : null}
+                  <Tag className="manager-dashboard-tag">
+                    {getDetailListUnitLabel(detailCardId)} {detailCard.detailRows.length}
+                  </Tag>
+                </Space>
               </Space>
               <Table<DerivedCategoryDetail>
                 rowKey="key"
                 pagination={false}
-                scroll={detailCardId === "productCount" || detailCardId === "taskRemaining" ? undefined : { x: 760 }}
+                scroll={detailCardId === "productCount" ? { x: 1300 } : detailCardId === "taskRemaining" ? undefined : { x: 760 }}
                 tableLayout={detailCardId === "productCount" ? "fixed" : undefined}
                 dataSource={detailCard.detailRows}
                 columns={buildDetailColumns(detailCardId)}
@@ -2199,10 +2337,14 @@ function toBalanceDetailRows(details: NonNullable<DashboardStatistics["systemBal
   }));
 }
 
-function toOnlineUserDetailRows(details: WorkbenchUserOverview["detailList"]): DerivedCategoryDetail[] {
+function toOnlineUserDetailRows(
+  details: WorkbenchUserOverview["detailList"],
+  monitorByUserId: Map<number, OrderFetchMonitorRecord>,
+): DerivedCategoryDetail[] {
   return details.map((detail) => ({
     ...toBaseDashboardDetail(detail.userId, detail.username, detail.channel),
     userCoverage: detail.accountCount,
+    orderFetchMonitor: monitorByUserId.get(detail.userId),
   }));
 }
 
@@ -2216,6 +2358,7 @@ function buildDashboardCardView(
   realManualSubmittedStatistics: WorkbenchDashboardStatistics | null,
   lowPriceManualSubmittedStatistics: WorkbenchDashboardStatistics | null,
   workbenchUserOverview: WorkbenchUserOverview | null,
+  onlineUserMonitorByUserId: Map<number, OrderFetchMonitorRecord>,
   dashboardStatistics: DashboardStatistics | null,
   lowPriceActualCompleted: ActualCompletedSummary | null,
   pendingDetectionCount: PendingDetectionCountSummary | null,
@@ -2284,7 +2427,7 @@ function buildDashboardCardView(
             value: `${formatCount(workbenchUserOverview?.onlineAccountCount ?? 0)} 个`,
           },
         ],
-        detailRows: toOnlineUserDetailRows(workbenchUserOverview?.detailList ?? []),
+        detailRows: toOnlineUserDetailRows(workbenchUserOverview?.detailList ?? [], onlineUserMonitorByUserId),
         compact: true,
         hideIcon: true,
       };
@@ -2654,6 +2797,65 @@ function buildDetailColumns(cardId: DashboardCardId | null): ColumnsType<Derived
         sorter: (left, right) => left.userCoverage - right.userCoverage,
         sortDirections: ["ascend", "descend"],
         render: (value: number) => formatCount(value),
+      },
+      {
+        title: "成功取到任务数",
+        key: "orderFetchHitNum",
+        width: 120,
+        sorter: (left, right) => (left.orderFetchMonitor?.hitNum ?? 0) - (right.orderFetchMonitor?.hitNum ?? 0),
+        sortDirections: ["ascend", "descend"],
+        render: (_, record) => record.orderFetchMonitor ? formatCount(record.orderFetchMonitor.hitNum) : "-",
+      },
+      {
+        title: "无任务数",
+        key: "orderFetchMissNum",
+        width: 110,
+        sorter: (left, right) => (left.orderFetchMonitor?.missNum ?? 0) - (right.orderFetchMonitor?.missNum ?? 0),
+        sortDirections: ["ascend", "descend"],
+        render: (_, record) => record.orderFetchMonitor ? formatCount(record.orderFetchMonitor.missNum) : "-",
+      },
+      {
+        title: "取单速度",
+        key: "orderFetchHitSpeed",
+        width: 135,
+        sorter: (left, right) => (left.orderFetchMonitor?.hitSpeed ?? 0) - (right.orderFetchMonitor?.hitSpeed ?? 0),
+        sortDirections: ["ascend", "descend"],
+        render: (_, record) => formatOrderFetchMonitorSpeed(record.orderFetchMonitor?.hitSpeed),
+      },
+      {
+        title: "无任务速度",
+        key: "orderFetchMissSpeed",
+        width: 135,
+        sorter: (left, right) => (left.orderFetchMonitor?.missSpeed ?? 0) - (right.orderFetchMonitor?.missSpeed ?? 0),
+        sortDirections: ["ascend", "descend"],
+        render: (_, record) => formatOrderFetchMonitorSpeed(record.orderFetchMonitor?.missSpeed),
+      },
+      {
+        title: "取单成功率",
+        key: "orderFetchHitRate",
+        width: 130,
+        sorter: (left, right) => (left.orderFetchMonitor?.hitRate ?? 0) - (right.orderFetchMonitor?.hitRate ?? 0),
+        sortDirections: ["ascend", "descend"],
+        render: (_, record) => {
+          const monitor = record.orderFetchMonitor;
+          return monitor ? (
+            <Tooltip title={`取到任务 ${formatCount(monitor.hitNum)} 次 / 总取单 ${formatCount(monitor.hitNum + monitor.missNum)} 次`}>
+              {formatOrderFetchMonitorRate(monitor.hitRate)}
+            </Tooltip>
+          ) : "-";
+        },
+      },
+      {
+        title: "统计窗口",
+        key: "orderFetchWindowSeconds",
+        width: 115,
+        render: (_, record) => formatOrderFetchMonitorWindow(record.orderFetchMonitor?.windowSeconds),
+      },
+      {
+        title: "已持续时间",
+        key: "orderFetchElapsedSeconds",
+        width: 125,
+        render: (_, record) => formatOrderFetchMonitorElapsed(record.orderFetchMonitor?.elapsedSeconds),
       },
     ];
   }
@@ -3380,6 +3582,29 @@ function formatCount(value: number) {
 
 function formatRate(value: number) {
   return rateFormatter.format(value || 0);
+}
+
+function formatOrderFetchMonitorSpeed(value: number | undefined) {
+  return value === undefined ? "-" : `${formatRate(value)} 次/分钟`;
+}
+
+function formatOrderFetchMonitorRate(value: number | undefined) {
+  return value === undefined ? "-" : `${formatRate(value * 100)}%`;
+}
+
+function formatOrderFetchMonitorWindow(value: number | undefined) {
+  return value === undefined ? "-" : `${value} 秒`;
+}
+
+function formatOrderFetchMonitorElapsed(value: number | undefined) {
+  if (value === undefined) {
+    return "-";
+  }
+  const seconds = Math.max(0, Math.floor(value));
+  if (seconds < 60) {
+    return `${seconds} 秒`;
+  }
+  return `${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒`;
 }
 
 function formatDelayDetectionRate(value: number | undefined) {
