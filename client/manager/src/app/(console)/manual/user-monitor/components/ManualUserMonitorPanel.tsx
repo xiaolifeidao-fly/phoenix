@@ -99,7 +99,7 @@ export function ManualUserMonitorPanel() {
     { title: "状态", dataIndex: "status", width: 110, render: (value) => value ? <Tag color="processing">{value}</Tag> : "-" },
     { title: "取到任务数", dataIndex: ["monitor", "hitNum"], width: 120, sorter: (left, right) => left.monitor.hitNum - right.monitor.hitNum, render: formatCount },
     { title: "无任务数", dataIndex: ["monitor", "missNum"], width: 110, sorter: (left, right) => left.monitor.missNum - right.monitor.missNum, render: formatCount },
-    { title: "取单速度", dataIndex: ["monitor", "hitSpeed"], width: 140, sorter: (left, right) => left.monitor.hitSpeed - right.monitor.hitSpeed, render: formatSpeed },
+    { title: "取单速度", dataIndex: ["monitor", "hitSpeed"], width: 140, defaultSortOrder: "descend", sorter: (left, right) => left.monitor.hitSpeed - right.monitor.hitSpeed, render: formatSpeed },
     { title: "无任务速度", dataIndex: ["monitor", "missSpeed"], width: 140, sorter: (left, right) => left.monitor.missSpeed - right.monitor.missSpeed, render: formatSpeed },
     {
       title: "取单成功率",

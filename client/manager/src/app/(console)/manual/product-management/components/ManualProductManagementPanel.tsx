@@ -1312,13 +1312,14 @@ export function ManualProductManagementPanel() {
     }
     setAppUserSearching(true);
     try {
-      const users = await fetchBarryAppUsers({
+      const page = await fetchBarryAppUsers({
         pageIndex: 1,
         pageSize: 20,
         username: searchText,
         shopCategoryId: strategyProduct?.id || undefined,
       });
-      setAppUserOptions(Array.isArray(users) ? users : []);
+      // fetchBarryAppUsers uses the paginated /barry/users response shape.
+      setAppUserOptions(Array.isArray(page.data) ? page.data : []);
     } catch (error) {
       message.error(error instanceof Error ? error.message : "搜索 app_user 用户失败");
     } finally {
