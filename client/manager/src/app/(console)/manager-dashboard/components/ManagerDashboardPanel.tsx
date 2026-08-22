@@ -41,6 +41,7 @@ import {
   fetchWorkbenchBridgeDailyStatistics,
   fetchActualCompleted,
   fetchDelayAssignmentCount,
+  fetchFetchAssignmentMonitor,
   fetchManualSpeed,
   fetchPendingDetectionCount,
   fetchSystemBalance,
@@ -54,6 +55,7 @@ import {
   type BridgeDailyStatisticSummary,
   type DashboardStatistics,
   type DelayAssignmentCountSummary,
+  type FetchAssignmentMonitorSummary,
   type ManualSpeedSummary,
   type PendingDetectionCountSummary,
   type WorkbenchDashboardStatistics,
@@ -182,7 +184,7 @@ interface DashboardComparison {
 }
 
 const DASHBOARD_STORAGE_KEY = "phoenix_manager_dashboard_config_v1";
-const DASHBOARD_CONFIG_VERSION = 14;
+const DASHBOARD_CONFIG_VERSION = 16;
 const DASHBOARD_SPEED_STORAGE_KEY = "phoenix_manager_dashboard_speed_history_v1";
 const DASHBOARD_DATA_CACHE_KEY = "phoenix_manager_dashboard_data_cache_v1";
 const DASHBOARD_SPEED_WINDOW_MS = 48 * 60 * 60 * 1000;
@@ -312,6 +314,8 @@ export function ManagerDashboardPanel() {
   const [bridgeTypes, setBridgeTypes] = useState<string[]>([]);
   const [lowPriceActualCompleted, setLowPriceActualCompleted] = useState<ActualCompletedSummary | null>(null);
   const [pendingDetectionCount, setPendingDetectionCount] = useState<PendingDetectionCountSummary | null>(null);
+  const [realFetchAssignmentMonitor, setRealFetchAssignmentMonitor] = useState<FetchAssignmentMonitorSummary | null>(null);
+  const [lowPriceFetchAssignmentMonitor, setLowPriceFetchAssignmentMonitor] = useState<FetchAssignmentMonitorSummary | null>(null);
   const [realDelayAssignmentCount, setRealDelayAssignmentCount] = useState<DelayAssignmentCountSummary | null>(null);
   const [lowPriceDelayAssignmentCount, setLowPriceDelayAssignmentCount] = useState<DelayAssignmentCountSummary | null>(null);
   const [manualSpeed, setManualSpeed] = useState<ManualSpeedSummary | null>(null);
@@ -680,6 +684,9 @@ export function ManagerDashboardPanel() {
       void fetchDelayAssignmentCount(
         realManualCategoryIdsKey ? { shopCategoryIds: realManualCategoryIdsKey } : undefined,
       ).then(setRealDelayAssignmentCount).catch(() => setRealDelayAssignmentCount(null));
+      void fetchFetchAssignmentMonitor(
+        realManualCategoryIdsKey ? { shopCategoryIds: realManualCategoryIdsKey } : undefined,
+      ).then(setRealFetchAssignmentMonitor).catch(() => setRealFetchAssignmentMonitor(null));
     };
 
     loadRealActualCompleted();
@@ -786,6 +793,9 @@ export function ManagerDashboardPanel() {
       void fetchDelayAssignmentCount(
         lowPriceManualProductIdsKey ? { shopCategoryIds: lowPriceManualProductIdsKey } : undefined,
       ).then(setLowPriceDelayAssignmentCount).catch(() => setLowPriceDelayAssignmentCount(null));
+      void fetchFetchAssignmentMonitor(
+        lowPriceManualProductIdsKey ? { shopCategoryIds: lowPriceManualProductIdsKey } : undefined,
+      ).then(setLowPriceFetchAssignmentMonitor).catch(() => setLowPriceFetchAssignmentMonitor(null));
     };
 
     loadLowPriceStatistics();
@@ -1024,6 +1034,8 @@ export function ManagerDashboardPanel() {
             dashboardStatistics,
             lowPriceActualCompleted,
             pendingDetectionCount,
+            realFetchAssignmentMonitor,
+            lowPriceFetchAssignmentMonitor,
             realDelayAssignmentCount,
             lowPriceDelayAssignmentCount,
             cardId === "pendingDetection"
@@ -1046,7 +1058,7 @@ export function ManagerDashboardPanel() {
           return [cardId, view];
         }),
       ) as Record<DashboardCardId, DashboardCardView>,
-    [categories.length, categoryDetailsWithSpeed, configMap, dashboardMetricLoading, dashboardStatistics, derivedManualProductDetails, lowPriceActualCompleted, lowPriceDelayAssignmentCount, lowPriceManualProductDetails, lowPriceManualSubmittedStatistics, manualProducts.length, onlineUserMonitorByUserId, pendingDetectionCount, products, realDelayAssignmentCount, realManualSubmittedStatistics, users, userStats, workbenchStatistics, workbenchUserOverview],
+    [categories.length, categoryDetailsWithSpeed, configMap, dashboardMetricLoading, dashboardStatistics, derivedManualProductDetails, lowPriceActualCompleted, lowPriceDelayAssignmentCount, lowPriceFetchAssignmentMonitor, lowPriceManualProductDetails, lowPriceManualSubmittedStatistics, manualProducts.length, onlineUserMonitorByUserId, pendingDetectionCount, products, realDelayAssignmentCount, realFetchAssignmentMonitor, realManualSubmittedStatistics, users, userStats, workbenchStatistics, workbenchUserOverview],
   );
 
   const hiddenCardIds = useMemo(
@@ -2151,13 +2163,46 @@ function renderUninitiatedOrderMetricValue(totalCount: number, recentCount: numb
 }
 
 function renderDelayDetectionMetricValue(count: number, rate: number | undefined): ReactNode {
+  const fullValue = `${formatCount(count)}（${formatDelayDetectionRate(rate)}）`;
   return (
-    <span>
-      {formatCount(count)}
-      <Tooltip title="检测速度">
+    <Tooltip title={fullValue}>
+      <span>
+        {formatCount(count)}
         <span className="manager-dashboard-card__metric-note">（{formatDelayDetectionRate(rate)}）</span>
-      </Tooltip>
-    </span>
+      </span>
+    </Tooltip>
+  );
+}
+
+function renderDailyFetchMetricValue(
+  todayCount: number,
+  yesterdayCount: number,
+  increaseIsGood = true,
+): ReactNode {
+  const today = Math.max(0, Number(todayCount || 0));
+  const yesterday = Math.max(0, Number(yesterdayCount || 0));
+  const change = today - yesterday;
+  const shouldShowComparison = yesterday > 0 && change !== 0;
+  const directionClass = !shouldShowComparison
+    ? undefined
+    : (change > 0) === increaseIsGood
+      ? "manager-dashboard-card__comparison-change--up"
+      : "manager-dashboard-card__comparison-change--down";
+  const rateLabel = shouldShowComparison ? `${formatRate(Math.abs(change / yesterday) * 100)}%` : undefined;
+  const comparisonDescription = rateLabel ? `，环比${change > 0 ? "增加" : "减少"} ${rateLabel}` : "";
+  return (
+    <Tooltip title={`今日 ${formatCount(today)}，昨日 ${formatCount(yesterday)}${comparisonDescription}`}>
+      <span className="manager-dashboard-card__daily-fetch-value">
+        <span>{formatCount(today)}</span>
+        <span className="manager-dashboard-card__daily-fetch-yesterday">（{formatCount(yesterday)}）</span>
+        {rateLabel ? (
+          <span className={`manager-dashboard-card__daily-fetch-rate ${directionClass}`}>
+            {change > 0 ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
+            {rateLabel}
+          </span>
+        ) : null}
+      </span>
+    </Tooltip>
   );
 }
 
@@ -2362,6 +2407,8 @@ function buildDashboardCardView(
   dashboardStatistics: DashboardStatistics | null,
   lowPriceActualCompleted: ActualCompletedSummary | null,
   pendingDetectionCount: PendingDetectionCountSummary | null,
+  realFetchAssignmentMonitor: FetchAssignmentMonitorSummary | null,
+  lowPriceFetchAssignmentMonitor: FetchAssignmentMonitorSummary | null,
   realDelayAssignmentCount: DelayAssignmentCountSummary | null,
   lowPriceDelayAssignmentCount: DelayAssignmentCountSummary | null,
   scopeLabel: string,
@@ -2657,6 +2704,25 @@ function buildDashboardCardView(
               getDelayAssignmentDetectionRate(realDelayAssignmentCount),
             ),
           },
+          { label: "单任务建池待消费", value: formatCount(realFetchAssignmentMonitor?.singleInitPendingCount ?? 0) },
+          { label: "今日空队列次数", value: formatCount(realFetchAssignmentMonitor?.emptyQueueFetchCount ?? 0) },
+          { label: "今日触发建池用户", value: formatCount(realFetchAssignmentMonitor?.initSubmittedUserCount ?? 0) },
+          {
+            label: "今日取到任务",
+            value: renderDailyFetchMetricValue(
+              realFetchAssignmentMonitor?.dailyFetchHitCount ?? 0,
+              realFetchAssignmentMonitor?.dailyFetchHitYesterdayCount ?? 0,
+            ),
+          },
+          {
+            label: "今日无任务",
+            value: renderDailyFetchMetricValue(
+              realFetchAssignmentMonitor?.dailyFetchMissCount ?? 0,
+              realFetchAssignmentMonitor?.dailyFetchMissYesterdayCount ?? 0,
+              false,
+            ),
+          },
+          { label: "今日取单成功率", value: formatPercent(realFetchAssignmentMonitor?.dailyFetchSuccessRate ?? 0) },
         ],
         detailRows: realActualDetailRows,
         compact: true,
@@ -2718,6 +2784,25 @@ function buildDashboardCardView(
               getDelayAssignmentDetectionRate(lowPriceDelayAssignmentCount),
             ),
           },
+          { label: "单任务建池待消费", value: formatCount(lowPriceFetchAssignmentMonitor?.singleInitPendingCount ?? 0) },
+          { label: "今日空队列次数", value: formatCount(lowPriceFetchAssignmentMonitor?.emptyQueueFetchCount ?? 0) },
+          { label: "今日触发建池用户", value: formatCount(lowPriceFetchAssignmentMonitor?.initSubmittedUserCount ?? 0) },
+          {
+            label: "今日取到任务",
+            value: renderDailyFetchMetricValue(
+              lowPriceFetchAssignmentMonitor?.dailyFetchHitCount ?? 0,
+              lowPriceFetchAssignmentMonitor?.dailyFetchHitYesterdayCount ?? 0,
+            ),
+          },
+          {
+            label: "今日无任务",
+            value: renderDailyFetchMetricValue(
+              lowPriceFetchAssignmentMonitor?.dailyFetchMissCount ?? 0,
+              lowPriceFetchAssignmentMonitor?.dailyFetchMissYesterdayCount ?? 0,
+              false,
+            ),
+          },
+          { label: "今日取单成功率", value: formatPercent(lowPriceFetchAssignmentMonitor?.dailyFetchSuccessRate ?? 0) },
         ],
         detailRows: actualDetailRows,
         compact: true,
@@ -3254,7 +3339,9 @@ function isUpstreamUserMetric(cardId: DashboardCardId | null): boolean {
 
 // Submission cards are viewed along the 人工商品 (manual product) dimension.
 function isManualProductMetric(cardId: DashboardCardId | null): boolean {
-  return cardId === "manualSubmitted" || cardId === "realManualSubmitted" || cardId === "lowPriceManualSubmitted";
+  return cardId === "manualSubmitted"
+    || cardId === "realManualSubmitted"
+    || cardId === "lowPriceManualSubmitted";
 }
 
 // Completion cards are viewed along the 上游商品类目 (upstream product category) dimension.

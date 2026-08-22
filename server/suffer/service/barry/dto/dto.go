@@ -1278,6 +1278,43 @@ type WorkbenchDashboardPendingDetectionCountDTO struct {
 	GroupList                             []*WorkbenchDashboardPendingDetectionCountGroupDTO `json:"groupList"`
 }
 
+type WorkbenchDashboardFetchAssignmentMonitorCategoryDTO struct {
+	ShopCategoryID               int64   `json:"shopCategoryId"`
+	CategoryName                 string  `json:"categoryName"`
+	CategoryCode                 string  `json:"categoryCode"`
+	ShopTypeID                   int64   `json:"shopTypeId"`
+	ShopTypeName                 string  `json:"shopTypeName"`
+	ShopTypeCode                 string  `json:"shopTypeCode"`
+	SingleInitPendingCount       int64   `json:"singleInitPendingCount"`
+	BatchInitPendingCount        int64   `json:"batchInitPendingCount"`
+	PendingCount                 int64   `json:"pendingCount"`
+	EmptyQueueFetchCount         int64   `json:"emptyQueueFetchCount"`
+	EmptyQueueUserCount          int64   `json:"emptyQueueUserCount"`
+	InitSubmittedCount           int64   `json:"initSubmittedCount"`
+	InitSubmittedUserCount       int64   `json:"initSubmittedUserCount"`
+	DailyFetchHitCount           int64   `json:"dailyFetchHitCount"`
+	DailyFetchMissCount          int64   `json:"dailyFetchMissCount"`
+	DailyFetchHitYesterdayCount  int64   `json:"dailyFetchHitYesterdayCount"`
+	DailyFetchMissYesterdayCount int64   `json:"dailyFetchMissYesterdayCount"`
+	DailyFetchSuccessRate        float64 `json:"dailyFetchSuccessRate"`
+}
+
+type WorkbenchDashboardFetchAssignmentMonitorDTO struct {
+	SingleInitPendingCount       int64                                                  `json:"singleInitPendingCount"`
+	BatchInitPendingCount        int64                                                  `json:"batchInitPendingCount"`
+	PendingCount                 int64                                                  `json:"pendingCount"`
+	EmptyQueueFetchCount         int64                                                  `json:"emptyQueueFetchCount"`
+	EmptyQueueUserCount          int64                                                  `json:"emptyQueueUserCount"`
+	InitSubmittedCount           int64                                                  `json:"initSubmittedCount"`
+	InitSubmittedUserCount       int64                                                  `json:"initSubmittedUserCount"`
+	DailyFetchHitCount           int64                                                  `json:"dailyFetchHitCount"`
+	DailyFetchMissCount          int64                                                  `json:"dailyFetchMissCount"`
+	DailyFetchHitYesterdayCount  int64                                                  `json:"dailyFetchHitYesterdayCount"`
+	DailyFetchMissYesterdayCount int64                                                  `json:"dailyFetchMissYesterdayCount"`
+	DailyFetchSuccessRate        float64                                                `json:"dailyFetchSuccessRate"`
+	CategoryList                 []*WorkbenchDashboardFetchAssignmentMonitorCategoryDTO `json:"categoryList"`
+}
+
 type WorkbenchDashboardDelayAssignmentCountCategoryDTO struct {
 	ShopCategoryID                   int64   `json:"shopCategoryId"`
 	CategoryName                     string  `json:"categoryName"`

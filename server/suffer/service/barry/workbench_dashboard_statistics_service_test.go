@@ -21,6 +21,11 @@ func TestWorkbenchDashboardStatisticsServiceProxiesPendingDetectionAndDelayConsu
 				t.Fatalf("shopGroupIds = %q", shopGroupIDs)
 			}
 			_, _ = w.Write([]byte(`{"success":true,"data":{"total":8,"pendingDetectionCount":8,"finishAssignmentPendingDetectionCount":8,"delayAssignmentPendingDetectionCount":3,"groupList":[{"shopGroupId":17,"groupName":"真人","groupCode":"REAL","pendingDetectionCount":5,"finishAssignmentPendingDetectionCount":5,"delayAssignmentPendingDetectionCount":2}]}}`))
+		case "/workbench/dashboard/fetch-assignment-monitor":
+			if shopCategoryIDs := r.URL.Query().Get("shopCategoryIds"); shopCategoryIDs != "7,12" {
+				t.Fatalf("shopCategoryIds = %q", shopCategoryIDs)
+			}
+			_, _ = w.Write([]byte(`{"success":true,"data":{"singleInitPendingCount":4,"batchInitPendingCount":2,"pendingCount":6,"emptyQueueFetchCount":20,"emptyQueueUserCount":8,"initSubmittedCount":9,"initSubmittedUserCount":6,"dailyFetchHitCount":31,"dailyFetchMissCount":9,"dailyFetchHitYesterdayCount":25,"dailyFetchMissYesterdayCount":12,"dailyFetchSuccessRate":0.775,"categoryList":[{"shopCategoryId":7,"shopTypeId":71,"singleInitPendingCount":3,"batchInitPendingCount":2,"pendingCount":5,"emptyQueueFetchCount":15,"emptyQueueUserCount":6,"initSubmittedCount":7,"initSubmittedUserCount":5,"dailyFetchHitCount":25,"dailyFetchMissCount":5,"dailyFetchHitYesterdayCount":18,"dailyFetchMissYesterdayCount":8,"dailyFetchSuccessRate":0.8333}]}}`))
 		case "/workbench/dashboard/delay-assignment-count":
 			if shopCategoryIDs := r.URL.Query().Get("shopCategoryIds"); shopCategoryIDs != "7,12" {
 				t.Fatalf("shopCategoryIds = %q", shopCategoryIDs)
@@ -34,9 +39,11 @@ func TestWorkbenchDashboardStatisticsServiceProxiesPendingDetectionAndDelayConsu
 
 	viper.Set(barryInnerPrefixPath, server.URL)
 	viper.Set(barryInnerWorkbenchDashboardPendingDetectionCountPath, "/workbench/dashboard/pending-detection-count")
+	viper.Set(barryInnerWorkbenchDashboardFetchAssignmentMonitorPath, "/workbench/dashboard/fetch-assignment-monitor")
 	viper.Set(barryInnerWorkbenchDashboardDelayAssignmentCountPath, "/workbench/dashboard/delay-assignment-count")
 	defer viper.Set(barryInnerPrefixPath, nil)
 	defer viper.Set(barryInnerWorkbenchDashboardPendingDetectionCountPath, nil)
+	defer viper.Set(barryInnerWorkbenchDashboardFetchAssignmentMonitorPath, nil)
 	defer viper.Set(barryInnerWorkbenchDashboardDelayAssignmentCountPath, nil)
 
 	service := NewWorkbenchDashboardStatisticsService(&Client{timeout: time.Second})
@@ -55,6 +62,23 @@ func TestWorkbenchDashboardStatisticsServiceProxiesPendingDetectionAndDelayConsu
 	}
 	if pending.GroupList[0].FinishAssignmentPendingDetectionCount != 5 || pending.GroupList[0].DelayAssignmentPendingDetectionCount != 2 {
 		t.Fatalf("unexpected pending group dual metrics: %+v", pending.GroupList[0])
+	}
+
+	fetchMonitor, err := service.FetchAssignmentMonitor(context.Background(), barryDTO.WorkbenchDashboardMetricQueryDTO{ShopCategoryIDs: "7,12"})
+	if err != nil {
+		t.Fatalf("FetchAssignmentMonitor() error = %v", err)
+	}
+	if fetchMonitor.PendingCount != 6 || fetchMonitor.EmptyQueueFetchCount != 20 || fetchMonitor.InitSubmittedUserCount != 6 {
+		t.Fatalf("unexpected fetch assignment monitor response: %+v", fetchMonitor)
+	}
+	if fetchMonitor.DailyFetchHitCount != 31 || fetchMonitor.DailyFetchMissCount != 9 || fetchMonitor.DailyFetchHitYesterdayCount != 25 || fetchMonitor.DailyFetchMissYesterdayCount != 12 || fetchMonitor.DailyFetchSuccessRate != 0.775 {
+		t.Fatalf("unexpected fetch assignment daily result: %+v", fetchMonitor)
+	}
+	if len(fetchMonitor.CategoryList) != 1 || fetchMonitor.CategoryList[0].ShopTypeID != 71 || fetchMonitor.CategoryList[0].PendingCount != 5 {
+		t.Fatalf("unexpected fetch assignment monitor categories: %+v", fetchMonitor.CategoryList)
+	}
+	if fetchMonitor.CategoryList[0].DailyFetchHitCount != 25 || fetchMonitor.CategoryList[0].DailyFetchMissCount != 5 || fetchMonitor.CategoryList[0].DailyFetchHitYesterdayCount != 18 || fetchMonitor.CategoryList[0].DailyFetchMissYesterdayCount != 8 || fetchMonitor.CategoryList[0].DailyFetchSuccessRate != 0.8333 {
+		t.Fatalf("unexpected fetch assignment daily category: %+v", fetchMonitor.CategoryList[0])
 	}
 
 	delay, err := service.DelayAssignmentCount(context.Background(), barryDTO.WorkbenchDashboardMetricQueryDTO{ShopCategoryIDs: "7,12"})

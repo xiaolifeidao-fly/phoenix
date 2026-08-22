@@ -2837,8 +2837,7 @@ select {
 
 .manager-dashboard-card__metrics.manager-dashboard-card__real-workload-metrics {
   flex: 1;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-rows: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 4px;
   margin-top: 6px;
 }
@@ -2849,6 +2848,9 @@ select {
 
 .manager-dashboard-card__real-workload-metrics .manager-dashboard-card__metric-label {
   font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .manager-dashboard-card__real-workload-metrics .manager-dashboard-card__metric-value {
@@ -3157,6 +3159,26 @@ select {
   margin-left: 4px;
   color: var(--manager-warning);
   cursor: help;
+}
+
+.manager-dashboard-card__daily-fetch-value {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.manager-dashboard-card__daily-fetch-yesterday {
+  color: var(--manager-text-soft);
+}
+
+.manager-dashboard-card__daily-fetch-rate {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--manager-text-soft);
+  font-size: 12px;
 }
 
 .manager-dashboard-card__metric-description {

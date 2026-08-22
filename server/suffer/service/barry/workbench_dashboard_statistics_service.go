@@ -77,6 +77,20 @@ func (s *WorkbenchDashboardStatisticsService) PendingDetectionCount(ctx context.
 	return response.Data, nil
 }
 
+func (s *WorkbenchDashboardStatisticsService) FetchAssignmentMonitor(ctx context.Context, query barryDTO.WorkbenchDashboardMetricQueryDTO) (*barryDTO.WorkbenchDashboardFetchAssignmentMonitorDTO, error) {
+	response := &barryDTO.DetailResponseDTO[barryDTO.WorkbenchDashboardFetchAssignmentMonitorDTO]{}
+	err := s.client.GetAbsolute(ctx, innerServicePath(barryInnerWorkbenchDashboardFetchAssignmentMonitorPath), buildValues(
+		"shopCategoryIds", query.ShopCategoryIDs,
+	), response)
+	if err != nil {
+		return nil, err
+	}
+	if !response.Success || response.Data == nil {
+		return nil, responseError(response.Message, "barry workbench fetch assignment monitor response is empty")
+	}
+	return response.Data, nil
+}
+
 func (s *WorkbenchDashboardStatisticsService) DelayAssignmentCount(ctx context.Context, query barryDTO.WorkbenchDashboardMetricQueryDTO) (*barryDTO.WorkbenchDashboardDelayAssignmentCountDTO, error) {
 	response := &barryDTO.DetailResponseDTO[barryDTO.WorkbenchDashboardDelayAssignmentCountDTO]{}
 	err := s.client.GetAbsolute(ctx, innerServicePath(barryInnerWorkbenchDashboardDelayAssignmentCountPath), buildValues(
