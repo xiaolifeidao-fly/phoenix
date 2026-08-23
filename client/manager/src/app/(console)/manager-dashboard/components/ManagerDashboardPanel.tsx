@@ -178,6 +178,7 @@ interface DashboardCardView {
     description?: string;
   }>;
   inlineMetricsLabel?: string;
+  inlineMetricsRefreshSummary?: FetchTaskRefreshSummary | null;
   inlineMetricsStatus?: FetchTaskSuccessStatus;
   detailRows: DerivedCategoryDetail[];
   comparison?: DashboardComparison;
@@ -189,9 +190,23 @@ interface DashboardCardView {
 }
 
 interface FetchTaskSuccessStatus {
-  color: "error" | "warning" | "success";
+  color: "error" | "warning" | "processing" | "success";
   label: string;
   message: string;
+}
+
+interface FetchTaskMonitorSnapshot {
+  hitCount: number;
+  missCount: number;
+  observedAt: number;
+}
+
+interface FetchTaskRefreshSummary {
+  hitCount: number;
+  missCount: number;
+  requestCount: number;
+  successRate: number;
+  elapsedSeconds: number;
 }
 
 interface DashboardComparison {
@@ -352,6 +367,8 @@ export function ManagerDashboardPanel() {
   const [pendingDetectionCount, setPendingDetectionCount] = useState<PendingDetectionCountSummary | null>(null);
   const [realFetchAssignmentMonitor, setRealFetchAssignmentMonitor] = useState<FetchAssignmentMonitorSummary | null>(null);
   const [lowPriceFetchAssignmentMonitor, setLowPriceFetchAssignmentMonitor] = useState<FetchAssignmentMonitorSummary | null>(null);
+  const [realFetchTaskRefreshSummary, setRealFetchTaskRefreshSummary] = useState<FetchTaskRefreshSummary | null>(null);
+  const [lowPriceFetchTaskRefreshSummary, setLowPriceFetchTaskRefreshSummary] = useState<FetchTaskRefreshSummary | null>(null);
   const [realDelayAssignmentCount, setRealDelayAssignmentCount] = useState<DelayAssignmentCountSummary | null>(null);
   const [lowPriceDelayAssignmentCount, setLowPriceDelayAssignmentCount] = useState<DelayAssignmentCountSummary | null>(null);
   const [manualSpeed, setManualSpeed] = useState<ManualSpeedSummary | null>(null);
@@ -378,6 +395,8 @@ export function ManagerDashboardPanel() {
   const [detailCardId, setDetailCardId] = useState<DashboardCardId | null>(null);
   const [bridgeStatisticDetailOpen, setBridgeStatisticDetailOpen] = useState(false);
   const [editingCardId, setEditingCardId] = useState<DashboardCardId | null>(null);
+  const realFetchTaskMonitorSnapshotRef = useRef<FetchTaskMonitorSnapshot | null>(null);
+  const lowPriceFetchTaskMonitorSnapshotRef = useRef<FetchTaskMonitorSnapshot | null>(null);
   const [currentFetchTaskTimeRange, setCurrentFetchTaskTimeRange] = useState<FetchTaskTimeRange>(
     () => resolveFetchTaskTimeRangeByDate(new Date()),
   );
@@ -731,6 +750,10 @@ export function ManagerDashboardPanel() {
       return;
     }
 
+    let disposed = false;
+    realFetchTaskMonitorSnapshotRef.current = null;
+    setRealFetchTaskRefreshSummary(null);
+
     const loadRealActualCompleted = () => {
       void fetchActualCompleted(
         realActualCategoryIds.length > 0 ? { shopCategoryIds: realActualCategoryIdsKey } : undefined,
@@ -749,12 +772,34 @@ export function ManagerDashboardPanel() {
         realManualCategoryIdsKey
           ? { shopCategoryIds: realManualCategoryIdsKey, fetchTimeRange: realFetchTaskTimeRange }
           : { fetchTimeRange: realFetchTaskTimeRange },
-      ).then(setRealFetchAssignmentMonitor).catch(() => setRealFetchAssignmentMonitor(null));
+      )
+        .then((value) => {
+          if (disposed) {
+            return;
+          }
+          const comparison = buildFetchTaskRefreshSummary(
+            realFetchTaskMonitorSnapshotRef.current,
+            value,
+            Date.now(),
+          );
+          realFetchTaskMonitorSnapshotRef.current = comparison.snapshot;
+          setRealFetchTaskRefreshSummary(comparison.summary);
+          setRealFetchAssignmentMonitor(value);
+        })
+        .catch(() => {
+          if (!disposed) {
+            setRealFetchAssignmentMonitor(null);
+            setRealFetchTaskRefreshSummary(null);
+          }
+        });
     };
 
     loadRealActualCompleted();
     const timer = window.setInterval(loadRealActualCompleted, DASHBOARD_REFRESH_INTERVAL_MS);
-    return () => window.clearInterval(timer);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
   }, [
     ready,
     realActualCategoryIds.length,
@@ -846,6 +891,10 @@ export function ManagerDashboardPanel() {
       return;
     }
 
+    let disposed = false;
+    lowPriceFetchTaskMonitorSnapshotRef.current = null;
+    setLowPriceFetchTaskRefreshSummary(null);
+
     const loadLowPriceStatistics = () => {
       void fetchWorkbenchDashboardStatisticsWithComparison(
         lowPriceManualProductIdsKey ? { shopCategoryIds: lowPriceManualProductIdsKey } : undefined,
@@ -868,12 +917,34 @@ export function ManagerDashboardPanel() {
         lowPriceManualProductIdsKey
           ? { shopCategoryIds: lowPriceManualProductIdsKey, fetchTimeRange: lowPriceFetchTaskTimeRange }
           : { fetchTimeRange: lowPriceFetchTaskTimeRange },
-      ).then(setLowPriceFetchAssignmentMonitor).catch(() => setLowPriceFetchAssignmentMonitor(null));
+      )
+        .then((value) => {
+          if (disposed) {
+            return;
+          }
+          const comparison = buildFetchTaskRefreshSummary(
+            lowPriceFetchTaskMonitorSnapshotRef.current,
+            value,
+            Date.now(),
+          );
+          lowPriceFetchTaskMonitorSnapshotRef.current = comparison.snapshot;
+          setLowPriceFetchTaskRefreshSummary(comparison.summary);
+          setLowPriceFetchAssignmentMonitor(value);
+        })
+        .catch(() => {
+          if (!disposed) {
+            setLowPriceFetchAssignmentMonitor(null);
+            setLowPriceFetchTaskRefreshSummary(null);
+          }
+        });
     };
 
     loadLowPriceStatistics();
     const timer = window.setInterval(loadLowPriceStatistics, DASHBOARD_REFRESH_INTERVAL_MS);
-    return () => window.clearInterval(timer);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
   }, [ready, lowPriceManualProductIdsKey, lowPriceUpstreamCategoryIdsKey, lowPriceFetchTaskTimeRange]);
 
   const bridgeStatisticScopes = useMemo(
@@ -1109,6 +1180,8 @@ export function ManagerDashboardPanel() {
             pendingDetectionCount,
             realFetchAssignmentMonitor,
             lowPriceFetchAssignmentMonitor,
+            realFetchTaskRefreshSummary,
+            lowPriceFetchTaskRefreshSummary,
             realDelayAssignmentCount,
             lowPriceDelayAssignmentCount,
             cardId === "realActualCompleted"
@@ -1136,7 +1209,7 @@ export function ManagerDashboardPanel() {
           return [cardId, view];
         }),
       ) as Record<DashboardCardId, DashboardCardView>,
-    [categories.length, categoryDetailsWithSpeed, configMap, currentFetchTaskTimeRange, dashboardMetricLoading, dashboardStatistics, derivedManualProductDetails, lowPriceActualCompleted, lowPriceDelayAssignmentCount, lowPriceFetchAssignmentMonitor, lowPriceFetchTaskTimeRange, lowPriceManualProductDetails, lowPriceManualSubmittedStatistics, manualProducts.length, onlineUserMonitorByUserId, pendingDetectionCount, products, realDelayAssignmentCount, realFetchAssignmentMonitor, realFetchTaskTimeRange, realManualSubmittedStatistics, users, userStats, workbenchStatistics, workbenchUserOverview],
+    [categories.length, categoryDetailsWithSpeed, configMap, currentFetchTaskTimeRange, dashboardMetricLoading, dashboardStatistics, derivedManualProductDetails, lowPriceActualCompleted, lowPriceDelayAssignmentCount, lowPriceFetchAssignmentMonitor, lowPriceFetchTaskTimeRange, lowPriceFetchTaskRefreshSummary, lowPriceManualProductDetails, lowPriceManualSubmittedStatistics, manualProducts.length, onlineUserMonitorByUserId, pendingDetectionCount, products, realDelayAssignmentCount, realFetchAssignmentMonitor, realFetchTaskRefreshSummary, realFetchTaskTimeRange, realManualSubmittedStatistics, users, userStats, workbenchStatistics, workbenchUserOverview],
   );
 
   const hiddenCardIds = useMemo(
@@ -1893,6 +1966,20 @@ function renderDashboardCard({
                 <div className="manager-dashboard-card__real-workload-inline-head">
                   <span className="manager-dashboard-card__real-workload-inline-head-label">取单统计时段</span>
                   <span className="manager-dashboard-card__real-workload-inline-tag">{view.inlineMetricsLabel}</span>
+                  {view.inlineMetricsRefreshSummary ? (
+                    <Tooltip title="接口调用总数 = 取到任务数 + 无任务数">
+                      <Tag className="manager-dashboard-card__fetch-refresh-tag" color="blue">
+                        <span>较上次刷新 {formatFetchTaskRefreshInterval(view.inlineMetricsRefreshSummary.elapsedSeconds)}</span>
+                        <span>调用 {formatCount(view.inlineMetricsRefreshSummary.requestCount)}</span>
+                        <span>取到 {formatCount(view.inlineMetricsRefreshSummary.hitCount)}</span>
+                        <span>无任务 {formatCount(view.inlineMetricsRefreshSummary.missCount)}</span>
+                      </Tag>
+                    </Tooltip>
+                  ) : (
+                    <Tag className="manager-dashboard-card__fetch-refresh-tag" color="processing">
+                      正在建立刷新对比
+                    </Tag>
+                  )}
                   {view.inlineMetricsStatus ? (
                     <Tooltip title={view.inlineMetricsStatus.message}>
                       <Tag
@@ -2574,6 +2661,8 @@ function buildDashboardCardView(
   pendingDetectionCount: PendingDetectionCountSummary | null,
   realFetchAssignmentMonitor: FetchAssignmentMonitorSummary | null,
   lowPriceFetchAssignmentMonitor: FetchAssignmentMonitorSummary | null,
+  realFetchTaskRefreshSummary: FetchTaskRefreshSummary | null,
+  lowPriceFetchTaskRefreshSummary: FetchTaskRefreshSummary | null,
   realDelayAssignmentCount: DelayAssignmentCountSummary | null,
   lowPriceDelayAssignmentCount: DelayAssignmentCountSummary | null,
   fetchTaskTimeRange: FetchTaskTimeRange,
@@ -2874,8 +2963,9 @@ function buildDashboardCardView(
           },
         ],
         inlineMetricsLabel: todayFetchTimeRangeLabel,
+        inlineMetricsRefreshSummary: realFetchTaskRefreshSummary,
         inlineMetricsStatus: buildFetchTaskSuccessStatus(
-          realFetchAssignmentMonitor?.dailyFetchSuccessRate,
+          realFetchTaskRefreshSummary,
           realActualCompleted?.remainingOrderCount,
         ),
         inlineMetrics: [
@@ -2883,7 +2973,7 @@ function buildDashboardCardView(
           { label: "空队列", value: renderCompactCountValue(realFetchAssignmentMonitor?.emptyQueueFetchCount ?? 0) },
           { label: "触发建池用户", value: renderCompactCountValue(realFetchAssignmentMonitor?.initSubmittedUserCount ?? 0) },
           {
-            label: "取到任务",
+            label: "本时段取到",
             value: renderDailyFetchMetricValue(
               realFetchAssignmentMonitor?.dailyFetchHitCount ?? 0,
               realFetchAssignmentMonitor?.dailyFetchHitYesterdayCount ?? 0,
@@ -2893,7 +2983,7 @@ function buildDashboardCardView(
             ),
           },
           {
-            label: "无任务",
+            label: "本时段无任务",
             value: renderDailyFetchMetricValue(
               realFetchAssignmentMonitor?.dailyFetchMissCount ?? 0,
               realFetchAssignmentMonitor?.dailyFetchMissYesterdayCount ?? 0,
@@ -2902,7 +2992,7 @@ function buildDashboardCardView(
               true,
             ),
           },
-          { label: "成功率", value: formatPercent(realFetchAssignmentMonitor?.dailyFetchSuccessRate ?? 0) },
+          { label: "本时段成功率", value: formatPercent(realFetchAssignmentMonitor?.dailyFetchSuccessRate ?? 0) },
         ],
         detailRows: realActualDetailRows,
         compact: true,
@@ -2966,8 +3056,9 @@ function buildDashboardCardView(
           },
         ],
         inlineMetricsLabel: todayFetchTimeRangeLabel,
+        inlineMetricsRefreshSummary: lowPriceFetchTaskRefreshSummary,
         inlineMetricsStatus: buildFetchTaskSuccessStatus(
-          lowPriceFetchAssignmentMonitor?.dailyFetchSuccessRate,
+          lowPriceFetchTaskRefreshSummary,
           lowPriceActualCompleted?.remainingOrderCount,
         ),
         inlineMetrics: [
@@ -2975,7 +3066,7 @@ function buildDashboardCardView(
           { label: "空队列", value: renderCompactCountValue(lowPriceFetchAssignmentMonitor?.emptyQueueFetchCount ?? 0) },
           { label: "触发建池用户", value: renderCompactCountValue(lowPriceFetchAssignmentMonitor?.initSubmittedUserCount ?? 0) },
           {
-            label: "取到任务",
+            label: "本时段取到",
             value: renderDailyFetchMetricValue(
               lowPriceFetchAssignmentMonitor?.dailyFetchHitCount ?? 0,
               lowPriceFetchAssignmentMonitor?.dailyFetchHitYesterdayCount ?? 0,
@@ -2985,7 +3076,7 @@ function buildDashboardCardView(
             ),
           },
           {
-            label: "无任务",
+            label: "本时段无任务",
             value: renderDailyFetchMetricValue(
               lowPriceFetchAssignmentMonitor?.dailyFetchMissCount ?? 0,
               lowPriceFetchAssignmentMonitor?.dailyFetchMissYesterdayCount ?? 0,
@@ -2994,7 +3085,7 @@ function buildDashboardCardView(
               true,
             ),
           },
-          { label: "成功率", value: formatPercent(lowPriceFetchAssignmentMonitor?.dailyFetchSuccessRate ?? 0) },
+          { label: "本时段成功率", value: formatPercent(lowPriceFetchAssignmentMonitor?.dailyFetchSuccessRate ?? 0) },
         ],
         detailRows: actualDetailRows,
         compact: true,
@@ -3762,32 +3853,90 @@ function safeDivide(a: number, b: number) {
   return a / b;
 }
 
+function buildFetchTaskRefreshSummary(
+  previousSnapshot: FetchTaskMonitorSnapshot | null,
+  monitor: FetchAssignmentMonitorSummary,
+  observedAt: number,
+): { snapshot: FetchTaskMonitorSnapshot; summary: FetchTaskRefreshSummary | null } {
+  const snapshot: FetchTaskMonitorSnapshot = {
+    hitCount: normalizeFetchTaskMonitorCount(monitor.dailyFetchHitCount),
+    missCount: normalizeFetchTaskMonitorCount(monitor.dailyFetchMissCount),
+    observedAt,
+  };
+  if (
+    !previousSnapshot ||
+    snapshot.hitCount < previousSnapshot.hitCount ||
+    snapshot.missCount < previousSnapshot.missCount
+  ) {
+    return { snapshot, summary: null };
+  }
+
+  const hitCount = snapshot.hitCount - previousSnapshot.hitCount;
+  const missCount = snapshot.missCount - previousSnapshot.missCount;
+  const requestCount = hitCount + missCount;
+  return {
+    snapshot,
+    summary: {
+      hitCount,
+      missCount,
+      requestCount,
+      successRate: safeDivide(hitCount, requestCount),
+      elapsedSeconds: Math.max(Math.round((observedAt - previousSnapshot.observedAt) / 1000), 1),
+    },
+  };
+}
+
+function normalizeFetchTaskMonitorCount(value: number | undefined) {
+  const count = Number(value);
+  return Number.isFinite(count) ? Math.max(Math.floor(count), 0) : 0;
+}
+
 function buildFetchTaskSuccessStatus(
-  successRate: number | undefined,
+  refreshSummary: FetchTaskRefreshSummary | null,
   remainingOrderCount: number | undefined,
 ): FetchTaskSuccessStatus | undefined {
-  const normalizedSuccessRate = Number(successRate);
+  if (!refreshSummary) {
+    return undefined;
+  }
+  if (refreshSummary.requestCount === 0) {
+    return {
+      color: "processing",
+      label: "暂无新调用",
+      message: "上次刷新后没有新的取单调用，暂不能判断成功率",
+    };
+  }
+
+  const normalizedSuccessRate = Number(refreshSummary.successRate);
   const normalizedRemainingOrderCount = Number(remainingOrderCount);
   if (!Number.isFinite(normalizedSuccessRate) || !Number.isFinite(normalizedRemainingOrderCount)) {
     return undefined;
   }
+  const rateText = formatPercent(normalizedSuccessRate);
 
   if (normalizedSuccessRate > FETCH_TASK_EXCELLENT_SUCCESS_RATE) {
-    return { color: "success", label: "极好", message: "当前获取任务极好" };
+    return { color: "success", label: "极好", message: `本轮成功率 ${rateText}，当前获取任务极好` };
   }
   if (normalizedSuccessRate > FETCH_TASK_GOOD_SUCCESS_RATE) {
-    return { color: "success", label: "良好", message: "当前获取任务良好" };
+    return { color: "success", label: "良好", message: `本轮成功率 ${rateText}，当前获取任务良好` };
   }
   if (normalizedSuccessRate > FETCH_TASK_POOR_SUCCESS_RATE) {
-    return { color: "warning", label: "成功率不良", message: "请监控上号情况、获取任务成功情况" };
+    return {
+      color: "warning",
+      label: "成功率不良",
+      message: `本轮成功率 ${rateText}，请监控上号情况、获取任务成功情况`,
+    };
   }
   if (
     normalizedSuccessRate < FETCH_TASK_EXTREMELY_POOR_SUCCESS_RATE &&
     normalizedRemainingOrderCount < FETCH_TASK_LOW_REMAINING_COUNT
   ) {
-    return { color: "error", label: "极差", message: "请补充上游单子" };
+    return { color: "error", label: "极差", message: `本轮成功率 ${rateText}，请补充上游单子` };
   }
-  return { color: "warning", label: "差", message: "取单成功率低于 50%" };
+  return { color: "warning", label: "差", message: `本轮成功率 ${rateText}，无任务占比偏高` };
+}
+
+function formatFetchTaskRefreshInterval(elapsedSeconds: number) {
+  return `${Math.max(Math.round(elapsedSeconds), 1)} 秒`;
 }
 
 function clampBarryWindowSeconds(value?: number) {
