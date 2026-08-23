@@ -81,6 +81,7 @@ func (s *WorkbenchDashboardStatisticsService) FetchAssignmentMonitor(ctx context
 	response := &barryDTO.DetailResponseDTO[barryDTO.WorkbenchDashboardFetchAssignmentMonitorDTO]{}
 	err := s.client.GetAbsolute(ctx, innerServicePath(barryInnerWorkbenchDashboardFetchAssignmentMonitorPath), buildValues(
 		"shopCategoryIds", query.ShopCategoryIDs,
+		"fetchTimeRange", query.FetchTimeRange,
 	), response)
 	if err != nil {
 		return nil, err

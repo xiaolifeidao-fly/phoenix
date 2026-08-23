@@ -2,12 +2,15 @@
 
 import { instance, unwrapApiResponse, type ApiResponse } from "@/utils/axios";
 
+export type FetchTaskTimeRange = "ALL" | "ZERO_TO_SIX" | "SIX_TO_TEN" | "TEN_TO_TWENTY_FOUR";
+
 export interface WorkbenchDashboardStatisticsQuery {
   startDate?: string;
   endDate?: string;
   shopCategoryIds?: string;
   shopCategoryCodes?: string;
   windowSeconds?: number;
+  fetchTimeRange?: FetchTaskTimeRange;
 }
 
 export interface BridgeDailyStatisticQuery {
@@ -417,7 +420,9 @@ export async function fetchPendingDetectionCount(query?: Pick<BridgeDailyStatist
   return unwrapApiResponse(response.data);
 }
 
-export async function fetchFetchAssignmentMonitor(query?: Pick<WorkbenchDashboardStatisticsQuery, "shopCategoryIds">) {
+export async function fetchFetchAssignmentMonitor(
+  query?: Pick<WorkbenchDashboardStatisticsQuery, "shopCategoryIds" | "fetchTimeRange">,
+) {
   const response = await instance.get<ApiResponse<FetchAssignmentMonitorSummary>>(
     "/barry/workbench-dashboard/fetch-assignment-monitor",
     { params: query },

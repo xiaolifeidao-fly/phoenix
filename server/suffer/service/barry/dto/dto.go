@@ -1184,6 +1184,7 @@ type WorkbenchDashboardMetricQueryDTO struct {
 	ShopGroupIDs      string `json:"shopGroupIds,omitempty" form:"shopGroupIds"`
 	ShopCategoryCodes string `json:"shopCategoryCodes,omitempty" form:"shopCategoryCodes"`
 	WindowSeconds     int    `json:"windowSeconds,omitempty" form:"windowSeconds"`
+	FetchTimeRange    string `json:"fetchTimeRange,omitempty" form:"fetchTimeRange"`
 }
 
 type BridgeDailyStatisticQueryDTO struct {

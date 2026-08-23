@@ -2627,8 +2627,13 @@ select {
 }
 
 .manager-dashboard-card--real-workload {
-  min-height: 189px;
-  padding: 8px;
+  --manager-workload-accent: #0f766e;
+  min-height: 0;
+  padding: 0 0 1px;
+}
+
+.manager-dashboard-card--low-price-workload {
+  --manager-workload-accent: #7c3aed;
 }
 
 .manager-dashboard-layout {
@@ -2641,6 +2646,7 @@ select {
 
 .manager-dashboard-workload-row {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .manager-dashboard-card--bridge-daily {
@@ -2767,49 +2773,129 @@ select {
 
 .manager-dashboard-card__content--real-workload {
   display: flex;
-  min-height: 168px;
+  min-height: 0;
   flex-direction: column;
+  height: 100%;
 }
 
-.manager-dashboard-card__real-workload-header,
-.manager-dashboard-card__real-workload-group-header {
+/* 顶部一条主题色细线，用来区分「真人 / 低价」两张卡 */
+.manager-dashboard-card--real-workload::before {
+  position: absolute;
+  z-index: 2;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--manager-workload-accent),
+    color-mix(in srgb, var(--manager-workload-accent) 18%, transparent)
+  );
+  content: "";
+  pointer-events: none;
+}
+
+.manager-dashboard-card__real-workload-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
+  padding: 9px 12px 0;
+}
+
+.manager-dashboard-card__real-workload-header .manager-dashboard-card__scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: var(--manager-radius-pill);
+  background: color-mix(in srgb, var(--manager-workload-accent) 10%, transparent);
+  color: var(--manager-workload-accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.manager-dashboard-card__real-workload-header .manager-dashboard-card__scope::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+}
+
+.manager-dashboard-card__real-workload-header-spacer {
+  flex: 1;
 }
 
 .manager-dashboard-card__real-workload-groups {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 6px;
+  margin: 8px 12px 0;
+  border: 1px solid var(--manager-border-soft);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(247, 249, 252, 0.9), rgba(255, 255, 255, 0.6));
 }
 
 .manager-dashboard-card__real-workload-group {
   min-width: 0;
-  padding: 8px;
-  border: 1px solid var(--manager-border);
-  border-radius: 8px;
-  background: rgba(248, 250, 252, 0.84);
+  padding: 8px 12px;
 }
 
-.manager-dashboard-card__real-workload-group--actual {
-  border-color: var(--manager-success-border);
-  background: rgba(240, 253, 244, 0.76);
+.manager-dashboard-card__real-workload-group + .manager-dashboard-card__real-workload-group {
+  border-left: 1px solid var(--manager-border-soft);
+}
+
+.manager-dashboard-card__real-workload-group-header {
+  display: flex;
+  min-height: 22px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
 }
 
 .manager-dashboard-card__real-workload-group-header .manager-section-label {
+  display: flex;
   min-width: 0;
+  align-items: center;
+  gap: 5px;
+  color: var(--manager-text-faint);
+  font-size: 11px;
   letter-spacing: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.manager-dashboard-card__real-workload-group-header .ant-btn {
+.manager-dashboard-card__real-workload-group-header .manager-section-label::before {
+  width: 3px;
+  height: 10px;
   flex: 0 0 auto;
-  padding-inline: 2px;
+  border-radius: 2px;
+  background: var(--manager-neutral-200);
+  content: "";
+}
+
+.manager-dashboard-card__real-workload-group--actual .manager-section-label::before {
+  background: var(--manager-workload-accent);
+}
+
+/* 编辑按钮平时隐身，hover 卡片时才浮出来，避免抢走数字的注意力 */
+.manager-dashboard-card__real-workload-group-header .ant-btn {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 0;
+  border-radius: 6px;
+  color: var(--manager-text-faint);
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity var(--manager-duration) var(--manager-ease);
+}
+
+.manager-dashboard-card--real-workload:hover .manager-dashboard-card__real-workload-group-header .ant-btn,
+.manager-dashboard-card__real-workload-group-header .ant-btn:focus-visible {
+  opacity: 1;
 }
 
 .manager-dashboard-card__real-workload-group-actions {
@@ -2819,43 +2905,208 @@ select {
   gap: 2px;
 }
 
-.manager-dashboard-card__real-workload-group-header .manager-dashboard-card__icon {
-  width: 30px;
-  height: 30px;
+.manager-dashboard-card__real-workload-header .manager-dashboard-card__icon {
+  width: 26px;
+  height: 26px;
   flex: 0 0 auto;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.manager-dashboard-card__real-workload-header .manager-dashboard-card__icon .anticon {
+  font-size: 14px;
 }
 
 .manager-dashboard-card__real-workload-value {
-  margin-top: 6px;
-  font-size: 24px;
-  line-height: 1.1;
+  margin-top: 3px;
+  font-family: var(--manager-mono);
+  font-size: 25px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.06;
 }
 
 .manager-dashboard-card__real-workload-value > div {
   white-space: nowrap;
 }
 
+/* 同比信息压成一行：先看涨跌胶囊，再看昨日基数 */
+.manager-dashboard-card--real-workload .manager-dashboard-card__comparison {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 11px;
+  overflow: hidden;
+}
+
+.manager-dashboard-card--real-workload .manager-dashboard-card__comparison > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manager-dashboard-card--real-workload .manager-dashboard-card__comparison > span:last-child {
+  flex: 0 0 auto;
+  order: -1;
+  padding: 1px 6px;
+  border-radius: var(--manager-radius-pill);
+  background: var(--manager-neutral-100);
+  font-family: var(--manager-mono);
+  font-weight: 700;
+}
+
+/* 胶囊底色跟着涨跌走，文字颜色交给通用的 --up / --down 规则 */
+.manager-dashboard-card--real-workload
+  .manager-dashboard-card__comparison
+  > span:last-child.manager-dashboard-card__comparison-change--up {
+  background: rgba(18, 161, 80, 0.1);
+  color: var(--manager-primary-deep);
+}
+
+.manager-dashboard-card--real-workload
+  .manager-dashboard-card__comparison
+  > span:last-child.manager-dashboard-card__comparison-change--down {
+  background: rgba(220, 38, 38, 0.09);
+  color: var(--manager-danger);
+}
+
+.manager-dashboard-card--real-workload
+  .manager-dashboard-card__comparison
+  > span:last-child.manager-dashboard-card__comparison-change--flat {
+  color: var(--manager-text-soft);
+}
+
+/* 指标区做成通栏细线网格：没有一堆小圆角方块，密度高但仍然好读 */
 .manager-dashboard-card__metrics.manager-dashboard-card__real-workload-metrics {
+  display: grid;
   flex: 1;
+  align-content: start;
+  gap: 0;
+  margin-top: 10px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 4px;
-  margin-top: 6px;
 }
 
 .manager-dashboard-card__real-workload-metrics .manager-dashboard-card__metric {
-  padding: 3px 6px;
+  padding: 5px 12px 6px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow:
+    1px 0 0 var(--manager-border-soft),
+    0 1px 0 var(--manager-border-soft),
+    0 -1px 0 var(--manager-border-soft);
+  backdrop-filter: none;
+}
+
+.manager-dashboard-card--real-workload:hover .manager-dashboard-card__real-workload-metrics .manager-dashboard-card__metric {
+  border: none;
+  background: color-mix(in srgb, var(--manager-workload-accent) 3%, transparent);
 }
 
 .manager-dashboard-card__real-workload-metrics .manager-dashboard-card__metric-label {
   font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .manager-dashboard-card__real-workload-metrics .manager-dashboard-card__metric-value {
+  margin-top: 1px;
   font-size: 14px;
-  line-height: 1.15;
+  line-height: 1.2;
+}
+
+/* 取单/建池这一组数字都很短，合并成一条通栏行，用简称串起来 */
+.manager-dashboard-card__real-workload-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 5px 12px 6px;
+  box-shadow:
+    0 1px 0 var(--manager-border-soft),
+    0 -1px 0 var(--manager-border-soft);
+  overflow: hidden;
+}
+
+.manager-dashboard-card--real-workload:hover .manager-dashboard-card__real-workload-inline {
+  background: color-mix(in srgb, var(--manager-workload-accent) 3%, transparent);
+}
+
+.manager-dashboard-card__real-workload-inline-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.manager-dashboard-card__real-workload-inline-head-label {
+  color: var(--manager-text-faint);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.manager-dashboard-card__real-workload-inline-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 0;
+}
+
+.manager-dashboard-card__real-workload-inline-tag {
+  flex: 0 0 auto;
+  padding: 1px 8px;
+  border-radius: var(--manager-radius-pill);
+  background: color-mix(in srgb, var(--manager-workload-accent) 9%, transparent);
+  color: var(--manager-workload-accent);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.manager-dashboard-card__real-workload-inline-item {
+  display: flex;
+  min-width: 0;
+  flex: 0 1 auto;
+  align-items: baseline;
+  gap: 5px;
+  padding: 0 8px;
+}
+
+.manager-dashboard-card__real-workload-inline-item:first-child {
+  padding-left: 0;
+}
+
+.manager-dashboard-card__real-workload-inline-item + .manager-dashboard-card__real-workload-inline-item {
+  border-left: 1px solid var(--manager-border-soft);
+}
+
+.manager-dashboard-card__real-workload-inline-label {
+  flex: 0 0 auto;
+  color: var(--manager-text-faint);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.manager-dashboard-card__real-workload-inline-value {
+  min-width: 0;
+  color: var(--manager-text);
+  font-family: var(--manager-mono);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manager-dashboard-card__real-workload-inline-value .manager-dashboard-card__daily-fetch-value {
+  width: auto;
 }
 
 .manager-dashboard-card__content--featured {
@@ -3031,7 +3282,7 @@ select {
   overflow-wrap: anywhere;
 }
 
-/* 待检测数量：分配延迟 / 用户分配延迟两个数量上下排列，各占一行。 */
+/* 待检测数量：分配延迟 / 用户分配延迟两个数量左右排列，各占半张卡。 */
 .manager-dashboard-card__content--pending-detection {
   display: flex;
   height: 100%;
@@ -3064,29 +3315,36 @@ select {
 .manager-dashboard-card--pending-detection .manager-dashboard-card__metrics {
   flex: 1;
   min-height: 0;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
   gap: 6px;
   margin-top: 8px;
 }
 
+/* 标题贴顶、数值贴底，两格的数字才会在同一条基线上 */
 .manager-dashboard-card--pending-detection .manager-dashboard-card__metric {
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: space-between;
   min-height: 0;
-  padding: 4px 10px;
+  padding: 6px 10px;
 }
 
+/* 标题窄了就换行，不截断；数值始终完整显示 */
 .manager-dashboard-card--pending-detection .manager-dashboard-card__metric-label {
   font-size: 12px;
   line-height: 1.25;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .manager-dashboard-card--pending-detection .manager-dashboard-card__metric-value {
   margin-top: 2px;
+  overflow: visible;
   font-size: 20px;
-  line-height: 1.2;
+  line-height: 1.25;
 }
 
 .manager-dashboard-card__comparison {
@@ -3100,12 +3358,28 @@ select {
   line-height: 1.4;
 }
 
+/* 同比一律涨绿跌红，箭头和数字同色 */
+.manager-dashboard-card__comparison-change {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
 .manager-dashboard-card__comparison-change--up {
   color: var(--manager-primary-deep);
 }
 
 .manager-dashboard-card__comparison-change--down {
   color: var(--manager-danger);
+}
+
+.manager-dashboard-card__comparison-change--flat {
+  color: var(--manager-text-faint);
+}
+
+.manager-dashboard-card__trend-arrow {
+  font-size: 10px;
+  line-height: 1;
 }
 
 .manager-dashboard-card__metric {
@@ -3229,12 +3503,27 @@ select {
     min-height: 132px;
   }
 
-  .manager-dashboard-card__content--real-workload {
-    min-height: 0;
-  }
-
   .manager-dashboard-card__real-workload-groups {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .manager-dashboard-card__real-workload-group + .manager-dashboard-card__real-workload-group {
+    border-top: 1px solid var(--manager-border-soft);
+    border-left: none;
+  }
+
+  .manager-dashboard-card__real-workload-inline {
+    flex-wrap: wrap;
+    gap: 2px 0;
+  }
+
+  .manager-dashboard-card__real-workload-inline-item {
+    flex: 0 0 auto;
+  }
+
+  /* 窄屏时编辑按钮常驻，触屏没有 hover */
+  .manager-dashboard-card__real-workload-group-header .ant-btn {
+    opacity: 1;
   }
 }
 

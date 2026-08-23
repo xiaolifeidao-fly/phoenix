@@ -25,6 +25,9 @@ func TestWorkbenchDashboardStatisticsServiceProxiesPendingDetectionAndDelayConsu
 			if shopCategoryIDs := r.URL.Query().Get("shopCategoryIds"); shopCategoryIDs != "7,12" {
 				t.Fatalf("shopCategoryIds = %q", shopCategoryIDs)
 			}
+			if fetchTimeRange := r.URL.Query().Get("fetchTimeRange"); fetchTimeRange != "SIX_TO_TEN" {
+				t.Fatalf("fetchTimeRange = %q", fetchTimeRange)
+			}
 			_, _ = w.Write([]byte(`{"success":true,"data":{"singleInitPendingCount":4,"batchInitPendingCount":2,"pendingCount":6,"emptyQueueFetchCount":20,"emptyQueueUserCount":8,"initSubmittedCount":9,"initSubmittedUserCount":6,"dailyFetchHitCount":31,"dailyFetchMissCount":9,"dailyFetchHitYesterdayCount":25,"dailyFetchMissYesterdayCount":12,"dailyFetchSuccessRate":0.775,"categoryList":[{"shopCategoryId":7,"shopTypeId":71,"singleInitPendingCount":3,"batchInitPendingCount":2,"pendingCount":5,"emptyQueueFetchCount":15,"emptyQueueUserCount":6,"initSubmittedCount":7,"initSubmittedUserCount":5,"dailyFetchHitCount":25,"dailyFetchMissCount":5,"dailyFetchHitYesterdayCount":18,"dailyFetchMissYesterdayCount":8,"dailyFetchSuccessRate":0.8333}]}}`))
 		case "/workbench/dashboard/delay-assignment-count":
 			if shopCategoryIDs := r.URL.Query().Get("shopCategoryIds"); shopCategoryIDs != "7,12" {
@@ -64,7 +67,10 @@ func TestWorkbenchDashboardStatisticsServiceProxiesPendingDetectionAndDelayConsu
 		t.Fatalf("unexpected pending group dual metrics: %+v", pending.GroupList[0])
 	}
 
-	fetchMonitor, err := service.FetchAssignmentMonitor(context.Background(), barryDTO.WorkbenchDashboardMetricQueryDTO{ShopCategoryIDs: "7,12"})
+	fetchMonitor, err := service.FetchAssignmentMonitor(context.Background(), barryDTO.WorkbenchDashboardMetricQueryDTO{
+		ShopCategoryIDs: "7,12",
+		FetchTimeRange:  "SIX_TO_TEN",
+	})
 	if err != nil {
 		t.Fatalf("FetchAssignmentMonitor() error = %v", err)
 	}

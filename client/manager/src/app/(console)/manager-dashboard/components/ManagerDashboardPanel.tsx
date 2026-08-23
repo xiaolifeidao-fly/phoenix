@@ -55,6 +55,7 @@ import {
   type BridgeDailyStatisticSummary,
   type DashboardStatistics,
   type DelayAssignmentCountSummary,
+  type FetchTaskTimeRange,
   type FetchAssignmentMonitorSummary,
   type ManualSpeedSummary,
   type PendingDetectionCountSummary,
@@ -82,6 +83,7 @@ type DashboardCardId =
 
 // The dashboard cards backed by their own independent API endpoint.
 type DashboardMetricId = "todayConsume" | "todayRecharge" | "systemBalance" | "actualCompleted";
+type FetchTaskTimeRangeSelection = FetchTaskTimeRange | "CURRENT";
 
 const DASHBOARD_METRIC_FETCHERS: {
   [K in DashboardMetricId]: () => Promise<NonNullable<DashboardStatistics[K]>>;
@@ -97,6 +99,8 @@ const DASHBOARD_METRIC_IDS = Object.keys(DASHBOARD_METRIC_FETCHERS) as Dashboard
 interface DashboardCardConfig {
   visible: boolean;
   categoryIds: number[];
+  /** 仅真人 / 低价工单卡使用；CURRENT 会随当前时间段自动滚动。 */
+  fetchTimeRange?: FetchTaskTimeRangeSelection;
   /** 仅用于升级旧版 localStorage 配置；新配置使用 bridgeStatisticScopes。 */
   shopGroupIds?: number[];
   bridgeStatisticScopes?: BridgeStatisticScope[];
@@ -166,6 +170,13 @@ interface DashboardCardView {
     value: ReactNode;
     description?: string;
   }>;
+  /** 取单/建池这类窄指标合并成一条通栏行，用简称展示，避免占满整格 */
+  inlineMetrics?: Array<{
+    label: string;
+    value: ReactNode;
+    description?: string;
+  }>;
+  inlineMetricsLabel?: string;
   detailRows: DerivedCategoryDetail[];
   comparison?: DashboardComparison;
   editable?: boolean;
@@ -184,7 +195,7 @@ interface DashboardComparison {
 }
 
 const DASHBOARD_STORAGE_KEY = "phoenix_manager_dashboard_config_v1";
-const DASHBOARD_CONFIG_VERSION = 16;
+const DASHBOARD_CONFIG_VERSION = 18;
 const DASHBOARD_SPEED_STORAGE_KEY = "phoenix_manager_dashboard_speed_history_v1";
 const DASHBOARD_DATA_CACHE_KEY = "phoenix_manager_dashboard_data_cache_v1";
 const DASHBOARD_SPEED_WINDOW_MS = 48 * 60 * 60 * 1000;
@@ -245,6 +256,14 @@ const DASHBOARD_LAYOUT: DashboardCardId[][] = [
 const DASHBOARD_WORKLOAD_CARD_IDS: DashboardCardId[] = ["realActualCompleted", "lowPriceActualCompleted"];
 const LOW_PRICE_MANUAL_PRODUCT_IDS = [15];
 const LOW_PRICE_UPSTREAM_CATEGORY_IDS = [8, 10];
+const DEFAULT_FETCH_TASK_TIME_RANGE: FetchTaskTimeRangeSelection = "CURRENT";
+const FETCH_TASK_TIME_RANGE_OPTIONS: Array<{ label: string; value: FetchTaskTimeRangeSelection }> = [
+  { label: "跟随当前时段（默认，自动滚动）", value: "CURRENT" },
+  { label: "全天（00:00–24:00）", value: "ALL" },
+  { label: "00:00–06:00", value: "ZERO_TO_SIX" },
+  { label: "06:00–10:00", value: "SIX_TO_TEN" },
+  { label: "10:00–24:00", value: "TEN_TO_TWENTY_FOUR" },
+];
 
 const DASHBOARD_TITLES: Record<DashboardCardId, string> = {
   productCount: "上号情况",
@@ -278,9 +297,13 @@ const DASHBOARD_DEFAULT_CONFIG: Record<DashboardCardId, DashboardCardConfig> = {
   manualSubmitted: { visible: true, categoryIds: [] },
   actualCompleted: { visible: true, categoryIds: [] },
   realManualSubmitted: { visible: true, categoryIds: [2, 18] },
-  realActualCompleted: { visible: true, categoryIds: [7, 12] },
+  realActualCompleted: { visible: true, categoryIds: [7, 12], fetchTimeRange: DEFAULT_FETCH_TASK_TIME_RANGE },
   lowPriceManualSubmitted: { visible: true, categoryIds: LOW_PRICE_MANUAL_PRODUCT_IDS },
-  lowPriceActualCompleted: { visible: true, categoryIds: LOW_PRICE_UPSTREAM_CATEGORY_IDS },
+  lowPriceActualCompleted: {
+    visible: true,
+    categoryIds: LOW_PRICE_UPSTREAM_CATEGORY_IDS,
+    fetchTimeRange: DEFAULT_FETCH_TASK_TIME_RANGE,
+  },
   averageSpeed: { visible: true, categoryIds: [], barryWindowSeconds: 30 },
 };
 
@@ -342,6 +365,9 @@ export function ManagerDashboardPanel() {
   const [detailCardId, setDetailCardId] = useState<DashboardCardId | null>(null);
   const [bridgeStatisticDetailOpen, setBridgeStatisticDetailOpen] = useState(false);
   const [editingCardId, setEditingCardId] = useState<DashboardCardId | null>(null);
+  const [currentFetchTaskTimeRange, setCurrentFetchTaskTimeRange] = useState<FetchTaskTimeRange>(
+    () => resolveFetchTaskTimeRangeByDate(new Date()),
+  );
   const actualSpeedSampleRef = useRef<Record<"total" | "real", { count: number; timestamp: number } | undefined>>({
     total: undefined,
     real: undefined,
@@ -402,6 +428,21 @@ export function ManagerDashboardPanel() {
     }
 
     setReady(true);
+  }, []);
+
+  useEffect(() => {
+    let timer: number | undefined;
+    const refreshCurrentFetchTaskTimeRange = () => {
+      const now = new Date();
+      setCurrentFetchTaskTimeRange(resolveFetchTaskTimeRangeByDate(now));
+      timer = window.setTimeout(refreshCurrentFetchTaskTimeRange, millisecondsUntilNextFetchTaskTimeRange(now));
+    };
+    refreshCurrentFetchTaskTimeRange();
+    return () => {
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+      }
+    };
   }, []);
 
   const recordActualSpeed = useCallback((scope: "total" | "real", count: number) => {
@@ -664,6 +705,13 @@ export function ManagerDashboardPanel() {
   const realActualCategoryIdsKey = realActualCategoryIds.join(",");
   const realManualCategoryIds = configMap.realManualSubmitted?.categoryIds ?? [];
   const realManualCategoryIdsKey = realManualCategoryIds.join(",");
+  const realFetchTaskTimeRangeSelection = normalizeFetchTaskTimeRange(
+    configMap.realActualCompleted?.fetchTimeRange,
+  );
+  const realFetchTaskTimeRange = resolveFetchTaskTimeRange(
+    realFetchTaskTimeRangeSelection,
+    currentFetchTaskTimeRange,
+  );
 
   useEffect(() => {
     if (!ready) {
@@ -685,7 +733,9 @@ export function ManagerDashboardPanel() {
         realManualCategoryIdsKey ? { shopCategoryIds: realManualCategoryIdsKey } : undefined,
       ).then(setRealDelayAssignmentCount).catch(() => setRealDelayAssignmentCount(null));
       void fetchFetchAssignmentMonitor(
-        realManualCategoryIdsKey ? { shopCategoryIds: realManualCategoryIdsKey } : undefined,
+        realManualCategoryIdsKey
+          ? { shopCategoryIds: realManualCategoryIdsKey, fetchTimeRange: realFetchTaskTimeRange }
+          : { fetchTimeRange: realFetchTaskTimeRange },
       ).then(setRealFetchAssignmentMonitor).catch(() => setRealFetchAssignmentMonitor(null));
     };
 
@@ -697,6 +747,7 @@ export function ManagerDashboardPanel() {
     realActualCategoryIds.length,
     realActualCategoryIdsKey,
     realManualCategoryIdsKey,
+    realFetchTaskTimeRange,
     recordActualSpeed,
   ]);
 
@@ -724,6 +775,13 @@ export function ManagerDashboardPanel() {
   const lowPriceManualProductIdsKey = lowPriceManualProductIds.join(",");
   const lowPriceUpstreamCategoryIds = configMap.lowPriceActualCompleted?.categoryIds ?? LOW_PRICE_UPSTREAM_CATEGORY_IDS;
   const lowPriceUpstreamCategoryIdsKey = lowPriceUpstreamCategoryIds.join(",");
+  const lowPriceFetchTaskTimeRangeSelection = normalizeFetchTaskTimeRange(
+    configMap.lowPriceActualCompleted?.fetchTimeRange,
+  );
+  const lowPriceFetchTaskTimeRange = resolveFetchTaskTimeRange(
+    lowPriceFetchTaskTimeRangeSelection,
+    currentFetchTaskTimeRange,
+  );
   const pendingDetectionShopGroupIds = configMap.pendingDetection?.shopGroupIds ?? [];
   const pendingDetectionShopGroupIdsKey = pendingDetectionShopGroupIds.join(",");
 
@@ -794,14 +852,16 @@ export function ManagerDashboardPanel() {
         lowPriceManualProductIdsKey ? { shopCategoryIds: lowPriceManualProductIdsKey } : undefined,
       ).then(setLowPriceDelayAssignmentCount).catch(() => setLowPriceDelayAssignmentCount(null));
       void fetchFetchAssignmentMonitor(
-        lowPriceManualProductIdsKey ? { shopCategoryIds: lowPriceManualProductIdsKey } : undefined,
+        lowPriceManualProductIdsKey
+          ? { shopCategoryIds: lowPriceManualProductIdsKey, fetchTimeRange: lowPriceFetchTaskTimeRange }
+          : { fetchTimeRange: lowPriceFetchTaskTimeRange },
       ).then(setLowPriceFetchAssignmentMonitor).catch(() => setLowPriceFetchAssignmentMonitor(null));
     };
 
     loadLowPriceStatistics();
     const timer = window.setInterval(loadLowPriceStatistics, DASHBOARD_REFRESH_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [ready, lowPriceManualProductIdsKey, lowPriceUpstreamCategoryIdsKey]);
+  }, [ready, lowPriceManualProductIdsKey, lowPriceUpstreamCategoryIdsKey, lowPriceFetchTaskTimeRange]);
 
   const bridgeStatisticScopes = useMemo(
     () => normalizeBridgeStatisticScopes(
@@ -1038,6 +1098,11 @@ export function ManagerDashboardPanel() {
             lowPriceFetchAssignmentMonitor,
             realDelayAssignmentCount,
             lowPriceDelayAssignmentCount,
+            cardId === "realActualCompleted"
+              ? realFetchTaskTimeRange
+              : cardId === "lowPriceActualCompleted"
+                ? lowPriceFetchTaskTimeRange
+                : currentFetchTaskTimeRange,
             cardId === "pendingDetection"
               ? formatShopGroupScopeLabel(config.shopGroupIds ?? [], shopGroups.length)
               : formatCategoryScopeLabel(
@@ -1058,7 +1123,7 @@ export function ManagerDashboardPanel() {
           return [cardId, view];
         }),
       ) as Record<DashboardCardId, DashboardCardView>,
-    [categories.length, categoryDetailsWithSpeed, configMap, dashboardMetricLoading, dashboardStatistics, derivedManualProductDetails, lowPriceActualCompleted, lowPriceDelayAssignmentCount, lowPriceFetchAssignmentMonitor, lowPriceManualProductDetails, lowPriceManualSubmittedStatistics, manualProducts.length, onlineUserMonitorByUserId, pendingDetectionCount, products, realDelayAssignmentCount, realFetchAssignmentMonitor, realManualSubmittedStatistics, users, userStats, workbenchStatistics, workbenchUserOverview],
+    [categories.length, categoryDetailsWithSpeed, configMap, currentFetchTaskTimeRange, dashboardMetricLoading, dashboardStatistics, derivedManualProductDetails, lowPriceActualCompleted, lowPriceDelayAssignmentCount, lowPriceFetchAssignmentMonitor, lowPriceFetchTaskTimeRange, lowPriceManualProductDetails, lowPriceManualSubmittedStatistics, manualProducts.length, onlineUserMonitorByUserId, pendingDetectionCount, products, realDelayAssignmentCount, realFetchAssignmentMonitor, realFetchTaskTimeRange, realManualSubmittedStatistics, users, userStats, workbenchStatistics, workbenchUserOverview],
   );
 
   const hiddenCardIds = useMemo(
@@ -1084,6 +1149,7 @@ export function ManagerDashboardPanel() {
       visible: nextConfig.visible,
       categoryIds: nextConfig.categoryIds,
       shopGroupIds: nextConfig.shopGroupIds ?? [],
+      fetchTimeRange: normalizeFetchTaskTimeRange(nextConfig.fetchTimeRange),
       bridgeStatisticScopes: normalizeBridgeStatisticScopes(
         nextConfig.bridgeStatisticScopes ?? DEFAULT_BRIDGE_STATISTIC_SCOPES,
       ),
@@ -1105,6 +1171,9 @@ export function ManagerDashboardPanel() {
           ? true
           : Boolean(values.visible),
         categoryIds: values.categoryIds ?? [],
+        fetchTimeRange: isFetchAssignmentMonitorWorkloadCard(editingCardId)
+          ? normalizeFetchTaskTimeRange(values.fetchTimeRange)
+          : current[editingCardId].fetchTimeRange,
         shopGroupIds: editingCardId === "pendingDetection"
           ? values.shopGroupIds ?? []
           : current[editingCardId].shopGroupIds,
@@ -1123,6 +1192,10 @@ export function ManagerDashboardPanel() {
   };
 
   const detailCard = detailCardId ? cardViews[detailCardId] : null;
+  // 抽屉里空间足够，把卡片上合并成一行的取单指标还原成普通指标格
+  const detailMetricsInDrawer = detailCard
+    ? [...detailCard.detailMetrics, ...(detailCard.inlineMetrics ?? [])]
+    : [];
   const bridgeStatisticDetails = bridgeStatisticScopes.map((scope) => ({
     scope,
     statistic: bridgeDailyStatistics[bridgeStatisticScopeKey(scope)] ?? null,
@@ -1228,9 +1301,9 @@ export function ManagerDashboardPanel() {
               <Text style={{ display: "block", marginTop: 10, color: "var(--manager-text-soft)" }}>
                 {detailCard.unitLabel}
               </Text>
-              {detailCard.detailMetrics.length > 0 ? (
+              {detailMetricsInDrawer.length > 0 ? (
                 <div className="manager-dashboard-card__metrics" style={{ marginTop: 18 }}>
-                  {detailCard.detailMetrics.map((metric, index) => (
+                  {detailMetricsInDrawer.map((metric, index) => (
                     <div key={`${metric.label}-${index}`} className="manager-dashboard-card__metric">
                       <div className="manager-dashboard-card__metric-label">{metric.label}</div>
                       <div className="manager-dashboard-card__metric-value">{metric.value}</div>
@@ -1410,6 +1483,16 @@ export function ManagerDashboardPanel() {
                 placeholder={getEditSelectorConfig(editingCardId).placeholder}
                 options={isManualProductMetric(editingCardId) ? manualProductOptions : categoryOptions}
               />
+            </Form.Item>
+          ) : null}
+
+          {editingCardId && isFetchAssignmentMonitorWorkloadCard(editingCardId) ? (
+            <Form.Item
+              label="获取任务统计时间段"
+              name="fetchTimeRange"
+              extra="默认随当前时间自动切换时段；也可固定为全天或某一段。“取到任务 / 无任务 / 取单成功率”会与昨天同一时段对比。"
+            >
+              <Select options={FETCH_TASK_TIME_RANGE_OPTIONS} />
             </Form.Item>
           ) : null}
 
@@ -1610,6 +1693,9 @@ function mergeDashboardConfig(
           ? true
           : (config?.visible ?? current[cardId].visible),
         categoryIds: Array.isArray(config?.categoryIds) ? config?.categoryIds : current[cardId].categoryIds,
+        fetchTimeRange: isFetchAssignmentMonitorWorkloadCard(cardId)
+          ? normalizeFetchTaskTimeRange(config?.fetchTimeRange ?? current[cardId].fetchTimeRange)
+          : current[cardId].fetchTimeRange,
         shopGroupIds: cardId === "pendingDetection"
           ? (Array.isArray(config?.shopGroupIds)
             ? normalizeShopGroupIds(config.shopGroupIds)
@@ -1659,10 +1745,14 @@ function applyDashboardConfigPresets(
       ? { ...cards.realManualSubmitted, categoryIds: [2, 18] }
       : undefined,
     realActualCompleted: cards.realActualCompleted
-      ? { ...cards.realActualCompleted, categoryIds: [7, 12] }
+      ? { ...cards.realActualCompleted, categoryIds: [7, 12], fetchTimeRange: DEFAULT_FETCH_TASK_TIME_RANGE }
       : undefined,
     lowPriceManualSubmitted: { visible: true, categoryIds: LOW_PRICE_MANUAL_PRODUCT_IDS },
-    lowPriceActualCompleted: { visible: true, categoryIds: LOW_PRICE_UPSTREAM_CATEGORY_IDS },
+    lowPriceActualCompleted: {
+      visible: true,
+      categoryIds: LOW_PRICE_UPSTREAM_CATEGORY_IDS,
+      fetchTimeRange: DEFAULT_FETCH_TASK_TIME_RANGE,
+    },
   };
 }
 
@@ -1694,13 +1784,22 @@ function renderDashboardCard({
     return (
       <article
         key={cardId}
-        className="manager-dashboard-card manager-dashboard-card--expanded manager-dashboard-card--real-workload"
+        className={`manager-dashboard-card manager-dashboard-card--expanded manager-dashboard-card--real-workload${
+          isLowPriceWorkload ? " manager-dashboard-card--low-price-workload" : ""
+        }`}
         onClick={() => onOpenDetail(cardId)}
       >
         <div className="manager-dashboard-card__backdrop" style={{ background: view.background }} />
         <div className="manager-dashboard-card__content manager-dashboard-card__content--real-workload">
           <div className="manager-dashboard-card__real-workload-header">
             <div className="manager-section-label manager-dashboard-card__scope">{view.scopeLabel}</div>
+            <div className="manager-dashboard-card__real-workload-header-spacer" />
+            <div
+              className="manager-dashboard-card__icon"
+              style={{ color: view.accent, background: `${view.accent}16` }}
+            >
+              {view.icon}
+            </div>
           </div>
 
           <div className="manager-dashboard-card__real-workload-groups">
@@ -1759,12 +1858,6 @@ function renderDashboardCard({
                       />
                     </Tooltip>
                   ) : null}
-                  <div
-                    className="manager-dashboard-card__icon"
-                    style={{ color: view.accent, background: `${view.accent}16` }}
-                  >
-                    {view.icon}
-                  </div>
                 </div>
               </div>
               <div className="manager-display-title manager-dashboard-card__real-workload-value">{view.value}</div>
@@ -1780,6 +1873,25 @@ function renderDashboardCard({
               </div>
             ))}
           </div>
+
+          {view.inlineMetrics?.length ? (
+            <div className="manager-dashboard-card__real-workload-inline">
+              {view.inlineMetricsLabel ? (
+                <div className="manager-dashboard-card__real-workload-inline-head">
+                  <span className="manager-dashboard-card__real-workload-inline-head-label">取单统计时段</span>
+                  <span className="manager-dashboard-card__real-workload-inline-tag">{view.inlineMetricsLabel}</span>
+                </div>
+              ) : null}
+              <div className="manager-dashboard-card__real-workload-inline-row">
+                {view.inlineMetrics.map((metric, index) => (
+                  <span key={`${metric.label}-${index}`} className="manager-dashboard-card__real-workload-inline-item">
+                    <span className="manager-dashboard-card__real-workload-inline-label">{metric.label}</span>
+                    <span className="manager-dashboard-card__real-workload-inline-value">{metric.value}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       </article>
     );
@@ -2127,15 +2239,29 @@ function DashboardComparisonSummary({ comparison }: { comparison: DashboardCompa
       ? "manager-dashboard-card__comparison-change--up"
       : comparison.change < 0
         ? "manager-dashboard-card__comparison-change--down"
-        : undefined;
+        : "manager-dashboard-card__comparison-change--flat";
   const changePrefix = comparison.change > 0 ? "+" : "";
 
   return (
     <div className="manager-dashboard-card__comparison">
       <span>{`${comparison.yesterdayLabel} ${comparison.yesterdayValue}`}</span>
-      <span className={directionClass}>{`较昨日 ${changePrefix}${comparison.changeValue} (${formatRate(comparison.changeRate)}%)`}</span>
+      <span className={`manager-dashboard-card__comparison-change ${directionClass}`}>
+        {renderTrendArrow(comparison.change)}
+        {`较昨日 ${changePrefix}${comparison.changeValue} (${formatRate(comparison.changeRate)}%)`}
+      </span>
     </div>
   );
+}
+
+/** 涨绿跌红：整个工作台的同比数字统一用这套箭头 */
+function renderTrendArrow(change: number): ReactNode {
+  if (change > 0) {
+    return <ArrowUpOutlined className="manager-dashboard-card__trend-arrow" />;
+  }
+  if (change < 0) {
+    return <ArrowDownOutlined className="manager-dashboard-card__trend-arrow" />;
+  }
+  return null;
 }
 
 function renderTotalPendingMetricValue(totalPendingCount: number, yesterdayPendingCount: number): ReactNode {
@@ -2177,7 +2303,9 @@ function renderDelayDetectionMetricValue(count: number, rate: number | undefined
 function renderDailyFetchMetricValue(
   todayCount: number,
   yesterdayCount: number,
-  increaseIsGood = true,
+  todayLabel = "今日",
+  yesterdayLabel = "昨日",
+  compact = false,
 ): ReactNode {
   const today = Math.max(0, Number(todayCount || 0));
   const yesterday = Math.max(0, Number(yesterdayCount || 0));
@@ -2185,25 +2313,37 @@ function renderDailyFetchMetricValue(
   const shouldShowComparison = yesterday > 0 && change !== 0;
   const directionClass = !shouldShowComparison
     ? undefined
-    : (change > 0) === increaseIsGood
+    : change > 0
       ? "manager-dashboard-card__comparison-change--up"
       : "manager-dashboard-card__comparison-change--down";
   const rateLabel = shouldShowComparison ? `${formatRate(Math.abs(change / yesterday) * 100)}%` : undefined;
   const comparisonDescription = rateLabel ? `，环比${change > 0 ? "增加" : "减少"} ${rateLabel}` : "";
   return (
-    <Tooltip title={`今日 ${formatCount(today)}，昨日 ${formatCount(yesterday)}${comparisonDescription}`}>
+    <Tooltip title={`${todayLabel} ${formatCount(today)}，${yesterdayLabel} ${formatCount(yesterday)}${comparisonDescription}`}>
       <span className="manager-dashboard-card__daily-fetch-value">
-        <span>{formatCount(today)}</span>
-        <span className="manager-dashboard-card__daily-fetch-yesterday">（{formatCount(yesterday)}）</span>
+        <span>{compact ? formatCompactCount(today) : formatCount(today)}</span>
+        <span className="manager-dashboard-card__daily-fetch-yesterday">
+          （{compact ? formatCompactCount(yesterday) : formatCount(yesterday)}）
+        </span>
         {rateLabel ? (
           <span className={`manager-dashboard-card__daily-fetch-rate ${directionClass}`}>
-            {change > 0 ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
+            {renderTrendArrow(change)}
             {rateLabel}
           </span>
         ) : null}
       </span>
     </Tooltip>
   );
+}
+
+function renderCompactCountValue(value: number): ReactNode {
+  const count = Math.round(value || 0);
+  const compact = formatCompactCount(count);
+  const full = formatCount(count);
+  if (compact === full) {
+    return compact;
+  }
+  return <Tooltip title={full}>{compact}</Tooltip>;
 }
 
 function buildDashboardComparison(
@@ -2411,6 +2551,7 @@ function buildDashboardCardView(
   lowPriceFetchAssignmentMonitor: FetchAssignmentMonitorSummary | null,
   realDelayAssignmentCount: DelayAssignmentCountSummary | null,
   lowPriceDelayAssignmentCount: DelayAssignmentCountSummary | null,
+  fetchTaskTimeRange: FetchTaskTimeRange,
   scopeLabel: string,
 ): DashboardCardView {
   const currencyTotal = detailRows.reduce((sum, item) => sum + item.todayConsume, 0);
@@ -2420,6 +2561,8 @@ function buildDashboardCardView(
   const manualSpeedPerSecond = detailRows.reduce((sum, item) => sum + item.manualSpeedPerSecond, 0);
   const actualSpeedPerSecond = detailRows.reduce((sum, item) => sum + item.actualSpeedPerSecond, 0);
   const averageSpeedPerSecond = (manualSpeedPerSecond + actualSpeedPerSecond) / 2;
+  const todayFetchTimeRangeLabel = formatFetchTaskTimeRangeLabel(fetchTaskTimeRange, "今日");
+  const yesterdayFetchTimeRangeLabel = formatFetchTaskTimeRangeLabel(fetchTaskTimeRange, "昨日");
 
   switch (cardId) {
     case "pendingDetection": {
@@ -2704,25 +2847,33 @@ function buildDashboardCardView(
               getDelayAssignmentDetectionRate(realDelayAssignmentCount),
             ),
           },
-          { label: "单任务建池待消费", value: formatCount(realFetchAssignmentMonitor?.singleInitPendingCount ?? 0) },
-          { label: "今日空队列次数", value: formatCount(realFetchAssignmentMonitor?.emptyQueueFetchCount ?? 0) },
-          { label: "今日触发建池用户", value: formatCount(realFetchAssignmentMonitor?.initSubmittedUserCount ?? 0) },
+        ],
+        inlineMetricsLabel: todayFetchTimeRangeLabel,
+        inlineMetrics: [
+          { label: "建池待消费", value: renderCompactCountValue(realFetchAssignmentMonitor?.singleInitPendingCount ?? 0) },
+          { label: "空队列", value: renderCompactCountValue(realFetchAssignmentMonitor?.emptyQueueFetchCount ?? 0) },
+          { label: "触发建池用户", value: renderCompactCountValue(realFetchAssignmentMonitor?.initSubmittedUserCount ?? 0) },
           {
-            label: "今日取到任务",
+            label: "取到任务",
             value: renderDailyFetchMetricValue(
               realFetchAssignmentMonitor?.dailyFetchHitCount ?? 0,
               realFetchAssignmentMonitor?.dailyFetchHitYesterdayCount ?? 0,
+              todayFetchTimeRangeLabel,
+              yesterdayFetchTimeRangeLabel,
+              true,
             ),
           },
           {
-            label: "今日无任务",
+            label: "无任务",
             value: renderDailyFetchMetricValue(
               realFetchAssignmentMonitor?.dailyFetchMissCount ?? 0,
               realFetchAssignmentMonitor?.dailyFetchMissYesterdayCount ?? 0,
-              false,
+              todayFetchTimeRangeLabel,
+              yesterdayFetchTimeRangeLabel,
+              true,
             ),
           },
-          { label: "今日取单成功率", value: formatPercent(realFetchAssignmentMonitor?.dailyFetchSuccessRate ?? 0) },
+          { label: "成功率", value: formatPercent(realFetchAssignmentMonitor?.dailyFetchSuccessRate ?? 0) },
         ],
         detailRows: realActualDetailRows,
         compact: true,
@@ -2784,25 +2935,33 @@ function buildDashboardCardView(
               getDelayAssignmentDetectionRate(lowPriceDelayAssignmentCount),
             ),
           },
-          { label: "单任务建池待消费", value: formatCount(lowPriceFetchAssignmentMonitor?.singleInitPendingCount ?? 0) },
-          { label: "今日空队列次数", value: formatCount(lowPriceFetchAssignmentMonitor?.emptyQueueFetchCount ?? 0) },
-          { label: "今日触发建池用户", value: formatCount(lowPriceFetchAssignmentMonitor?.initSubmittedUserCount ?? 0) },
+        ],
+        inlineMetricsLabel: todayFetchTimeRangeLabel,
+        inlineMetrics: [
+          { label: "建池待消费", value: renderCompactCountValue(lowPriceFetchAssignmentMonitor?.singleInitPendingCount ?? 0) },
+          { label: "空队列", value: renderCompactCountValue(lowPriceFetchAssignmentMonitor?.emptyQueueFetchCount ?? 0) },
+          { label: "触发建池用户", value: renderCompactCountValue(lowPriceFetchAssignmentMonitor?.initSubmittedUserCount ?? 0) },
           {
-            label: "今日取到任务",
+            label: "取到任务",
             value: renderDailyFetchMetricValue(
               lowPriceFetchAssignmentMonitor?.dailyFetchHitCount ?? 0,
               lowPriceFetchAssignmentMonitor?.dailyFetchHitYesterdayCount ?? 0,
+              todayFetchTimeRangeLabel,
+              yesterdayFetchTimeRangeLabel,
+              true,
             ),
           },
           {
-            label: "今日无任务",
+            label: "无任务",
             value: renderDailyFetchMetricValue(
               lowPriceFetchAssignmentMonitor?.dailyFetchMissCount ?? 0,
               lowPriceFetchAssignmentMonitor?.dailyFetchMissYesterdayCount ?? 0,
-              false,
+              todayFetchTimeRangeLabel,
+              yesterdayFetchTimeRangeLabel,
+              true,
             ),
           },
-          { label: "今日取单成功率", value: formatPercent(lowPriceFetchAssignmentMonitor?.dailyFetchSuccessRate ?? 0) },
+          { label: "成功率", value: formatPercent(lowPriceFetchAssignmentMonitor?.dailyFetchSuccessRate ?? 0) },
         ],
         detailRows: actualDetailRows,
         compact: true,
@@ -3210,6 +3369,61 @@ function normalizeShopGroupIds(value: unknown): number[] {
         .filter((item) => Number.isSafeInteger(item) && item > 0),
     ),
   ).sort((left, right) => left - right);
+}
+
+function isFetchAssignmentMonitorWorkloadCard(cardId: DashboardCardId | null): boolean {
+  return cardId === "realActualCompleted" || cardId === "lowPriceActualCompleted";
+}
+
+function normalizeFetchTaskTimeRange(value: unknown): FetchTaskTimeRangeSelection {
+  return FETCH_TASK_TIME_RANGE_OPTIONS.some((option) => option.value === value)
+    ? value as FetchTaskTimeRangeSelection
+    : DEFAULT_FETCH_TASK_TIME_RANGE;
+}
+
+function resolveFetchTaskTimeRange(
+  selection: FetchTaskTimeRangeSelection,
+  currentTimeRange: FetchTaskTimeRange,
+): FetchTaskTimeRange {
+  return selection === "CURRENT" ? currentTimeRange : selection;
+}
+
+function resolveFetchTaskTimeRangeByDate(date: Date): FetchTaskTimeRange {
+  const hour = date.getHours();
+  if (hour < 6) {
+    return "ZERO_TO_SIX";
+  }
+  if (hour < 10) {
+    return "SIX_TO_TEN";
+  }
+  return "TEN_TO_TWENTY_FOUR";
+}
+
+function millisecondsUntilNextFetchTaskTimeRange(now: Date): number {
+  const next = new Date(now);
+  const hour = now.getHours();
+  if (hour < 6) {
+    next.setHours(6, 0, 0, 100);
+  } else if (hour < 10) {
+    next.setHours(10, 0, 0, 100);
+  } else {
+    next.setDate(next.getDate() + 1);
+    next.setHours(0, 0, 0, 100);
+  }
+  return Math.max(next.getTime() - now.getTime(), 1_000);
+}
+
+function formatFetchTaskTimeRangeLabel(timeRange: FetchTaskTimeRange, dayLabel: string): string {
+  switch (timeRange) {
+    case "ZERO_TO_SIX":
+      return `${dayLabel} 00:00–06:00`;
+    case "SIX_TO_TEN":
+      return `${dayLabel} 06:00–10:00`;
+    case "TEN_TO_TWENTY_FOUR":
+      return `${dayLabel} 10:00–24:00`;
+    default:
+      return `${dayLabel}（全天）`;
+  }
 }
 
 function resolveBridgeStatisticScopes(config?: DashboardCardConfig): BridgeStatisticScope[] {
@@ -3665,6 +3879,23 @@ function formatCurrency(value: number) {
 
 function formatCount(value: number) {
   return integerFormatter.format(Math.round(value || 0));
+}
+
+/** 卡片上位置紧张的地方用「万 / 亿」缩写，完整数字放 Tooltip 里 */
+function formatCompactCount(value: number) {
+  const count = Math.round(value || 0);
+  const abs = Math.abs(count);
+  if (abs >= 100_000_000) {
+    return `${trimTrailingZero((count / 100_000_000).toFixed(2))}亿`;
+  }
+  if (abs >= 10_000) {
+    return `${trimTrailingZero((count / 10_000).toFixed(1))}万`;
+  }
+  return formatCount(count);
+}
+
+function trimTrailingZero(value: string) {
+  return value.replace(/\.0+$/, "").replace(/(\.\d*[1-9])0+$/, "$1");
 }
 
 function formatRate(value: number) {
