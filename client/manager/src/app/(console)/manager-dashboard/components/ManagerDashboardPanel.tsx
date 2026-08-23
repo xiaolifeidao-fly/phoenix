@@ -5,6 +5,7 @@ import {
   AppstoreOutlined,
   ArrowDownOutlined,
   ArrowUpOutlined,
+  CheckCircleOutlined,
   ClockCircleOutlined,
   DeleteOutlined,
   EditOutlined,
@@ -177,6 +178,7 @@ interface DashboardCardView {
     description?: string;
   }>;
   inlineMetricsLabel?: string;
+  inlineMetricsStatus?: FetchTaskSuccessStatus;
   detailRows: DerivedCategoryDetail[];
   comparison?: DashboardComparison;
   editable?: boolean;
@@ -184,6 +186,12 @@ interface DashboardCardView {
   expanded?: boolean;
   disableDetail?: boolean;
   hideIcon?: boolean;
+}
+
+interface FetchTaskSuccessStatus {
+  color: "error" | "warning" | "success";
+  label: string;
+  message: string;
 }
 
 interface DashboardComparison {
@@ -257,6 +265,11 @@ const DASHBOARD_WORKLOAD_CARD_IDS: DashboardCardId[] = ["realActualCompleted", "
 const LOW_PRICE_MANUAL_PRODUCT_IDS = [15];
 const LOW_PRICE_UPSTREAM_CATEGORY_IDS = [8, 10];
 const DEFAULT_FETCH_TASK_TIME_RANGE: FetchTaskTimeRangeSelection = "CURRENT";
+const FETCH_TASK_EXTREMELY_POOR_SUCCESS_RATE = 0.1;
+const FETCH_TASK_POOR_SUCCESS_RATE = 0.5;
+const FETCH_TASK_GOOD_SUCCESS_RATE = 0.9;
+const FETCH_TASK_EXCELLENT_SUCCESS_RATE = 0.99;
+const FETCH_TASK_LOW_REMAINING_COUNT = 50_000;
 const FETCH_TASK_TIME_RANGE_OPTIONS: Array<{ label: string; value: FetchTaskTimeRangeSelection }> = [
   { label: "跟随当前时段（默认，自动滚动）", value: "CURRENT" },
   { label: "全天（00:00–24:00）", value: "ALL" },
@@ -1880,6 +1893,18 @@ function renderDashboardCard({
                 <div className="manager-dashboard-card__real-workload-inline-head">
                   <span className="manager-dashboard-card__real-workload-inline-head-label">取单统计时段</span>
                   <span className="manager-dashboard-card__real-workload-inline-tag">{view.inlineMetricsLabel}</span>
+                  {view.inlineMetricsStatus ? (
+                    <Tooltip title={view.inlineMetricsStatus.message}>
+                      <Tag
+                        className="manager-dashboard-card__fetch-status-tag"
+                        color={view.inlineMetricsStatus.color}
+                        icon={view.inlineMetricsStatus.color === "success" ? <CheckCircleOutlined /> : <WarningOutlined />}
+                      >
+                        <span className="manager-dashboard-card__fetch-status-label">{view.inlineMetricsStatus.label}</span>
+                        <span className="manager-dashboard-card__fetch-status-message">{view.inlineMetricsStatus.message}</span>
+                      </Tag>
+                    </Tooltip>
+                  ) : null}
                 </div>
               ) : null}
               <div className="manager-dashboard-card__real-workload-inline-row">
@@ -2849,6 +2874,10 @@ function buildDashboardCardView(
           },
         ],
         inlineMetricsLabel: todayFetchTimeRangeLabel,
+        inlineMetricsStatus: buildFetchTaskSuccessStatus(
+          realFetchAssignmentMonitor?.dailyFetchSuccessRate,
+          realActualCompleted?.remainingOrderCount,
+        ),
         inlineMetrics: [
           { label: "建池待消费", value: renderCompactCountValue(realFetchAssignmentMonitor?.singleInitPendingCount ?? 0) },
           { label: "空队列", value: renderCompactCountValue(realFetchAssignmentMonitor?.emptyQueueFetchCount ?? 0) },
@@ -2937,6 +2966,10 @@ function buildDashboardCardView(
           },
         ],
         inlineMetricsLabel: todayFetchTimeRangeLabel,
+        inlineMetricsStatus: buildFetchTaskSuccessStatus(
+          lowPriceFetchAssignmentMonitor?.dailyFetchSuccessRate,
+          lowPriceActualCompleted?.remainingOrderCount,
+        ),
         inlineMetrics: [
           { label: "建池待消费", value: renderCompactCountValue(lowPriceFetchAssignmentMonitor?.singleInitPendingCount ?? 0) },
           { label: "空队列", value: renderCompactCountValue(lowPriceFetchAssignmentMonitor?.emptyQueueFetchCount ?? 0) },
@@ -3727,6 +3760,34 @@ function safeDivide(a: number, b: number) {
     return 0;
   }
   return a / b;
+}
+
+function buildFetchTaskSuccessStatus(
+  successRate: number | undefined,
+  remainingOrderCount: number | undefined,
+): FetchTaskSuccessStatus | undefined {
+  const normalizedSuccessRate = Number(successRate);
+  const normalizedRemainingOrderCount = Number(remainingOrderCount);
+  if (!Number.isFinite(normalizedSuccessRate) || !Number.isFinite(normalizedRemainingOrderCount)) {
+    return undefined;
+  }
+
+  if (normalizedSuccessRate > FETCH_TASK_EXCELLENT_SUCCESS_RATE) {
+    return { color: "success", label: "极好", message: "当前获取任务极好" };
+  }
+  if (normalizedSuccessRate > FETCH_TASK_GOOD_SUCCESS_RATE) {
+    return { color: "success", label: "良好", message: "当前获取任务良好" };
+  }
+  if (normalizedSuccessRate > FETCH_TASK_POOR_SUCCESS_RATE) {
+    return { color: "warning", label: "成功率不良", message: "请监控上号情况、获取任务成功情况" };
+  }
+  if (
+    normalizedSuccessRate < FETCH_TASK_EXTREMELY_POOR_SUCCESS_RATE &&
+    normalizedRemainingOrderCount < FETCH_TASK_LOW_REMAINING_COUNT
+  ) {
+    return { color: "error", label: "极差", message: "请补充上游单子" };
+  }
+  return { color: "warning", label: "差", message: "取单成功率低于 50%" };
 }
 
 function clampBarryWindowSeconds(value?: number) {

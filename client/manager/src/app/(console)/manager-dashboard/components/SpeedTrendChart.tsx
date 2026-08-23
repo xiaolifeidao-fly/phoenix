@@ -39,6 +39,11 @@ interface SpeedTrendChartProps {
 
 type SpeedUnit = "second" | "minute" | "hour";
 
+interface SpeedLevelStatus {
+  color: "warning" | "processing" | "success";
+  label: string;
+}
+
 const UNIT_OPTIONS: Array<{ label: string; value: SpeedUnit }> = [
   { label: "每秒", value: "second" },
   { label: "每分钟", value: "minute" },
@@ -382,11 +387,17 @@ function SpeedStatTile({
   perSecond: number;
   onClick?: () => void;
 }) {
+  const speedLevelStatus = resolveSpeedLevelStatus(perSecond);
   const content = (
     <>
       <div className="manager-speed-chart__stat-label">
         <span className="manager-speed-chart__dot" style={{ background: color }} />
         {label}
+        <Tooltip title={`当前速度 ${formatSpeed(perSecond)} /秒`}>
+          <Tag className="manager-speed-chart__speed-level-tag" color={speedLevelStatus.color}>
+            {speedLevelStatus.label}
+          </Tag>
+        </Tooltip>
       </div>
       <div className="manager-speed-chart__stat-values">
         <div>
@@ -416,6 +427,20 @@ function SpeedStatTile({
   }
 
   return <div className="manager-speed-chart__stat">{content}</div>;
+}
+
+function resolveSpeedLevelStatus(perSecond: number): SpeedLevelStatus {
+  const speedPerSecond = Number.isFinite(perSecond) ? perSecond : 0;
+  if (speedPerSecond < 20) {
+    return { color: "warning", label: "偏低" };
+  }
+  if (speedPerSecond < 40) {
+    return { color: "processing", label: "加油，保持" };
+  }
+  if (speedPerSecond < 60) {
+    return { color: "success", label: "良好" };
+  }
+  return { color: "success", label: "极好" };
 }
 
 function niceCeil(value: number) {
