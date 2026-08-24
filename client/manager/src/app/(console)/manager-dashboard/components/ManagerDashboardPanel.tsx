@@ -285,6 +285,8 @@ const FETCH_TASK_POOR_SUCCESS_RATE = 0.5;
 const FETCH_TASK_GOOD_SUCCESS_RATE = 0.9;
 const FETCH_TASK_EXCELLENT_SUCCESS_RATE = 0.99;
 const FETCH_TASK_LOW_REMAINING_COUNT = 50_000;
+const DOWNSTREAM_ACCOUNT_LOW_ONLINE_COUNT = 500;
+const DOWNSTREAM_ACCOUNT_HIGH_REMAINING_COUNT = 100_000;
 const FETCH_TASK_TIME_RANGE_OPTIONS: Array<{ label: string; value: FetchTaskTimeRangeSelection }> = [
   { label: "跟随当前时段（默认，自动滚动）", value: "CURRENT" },
   { label: "全天（00:00–24:00）", value: "ALL" },
@@ -2677,6 +2679,11 @@ function buildDashboardCardView(
   const averageSpeedPerSecond = (manualSpeedPerSecond + actualSpeedPerSecond) / 2;
   const todayFetchTimeRangeLabel = formatFetchTaskTimeRangeLabel(fetchTaskTimeRange, "今日");
   const yesterdayFetchTimeRangeLabel = formatFetchTaskTimeRangeLabel(fetchTaskTimeRange, "昨日");
+  const shouldNotifyDownstreamAccounts = hasDownstreamAccountShortage(
+    workbenchUserOverview?.onlineAccountCount,
+    dashboardStatistics?.realActualCompleted?.remainingOrderCount,
+    lowPriceActualCompleted?.remainingOrderCount,
+  );
 
   switch (cardId) {
     case "pendingDetection": {
@@ -2967,6 +2974,7 @@ function buildDashboardCardView(
         inlineMetricsStatus: buildFetchTaskSuccessStatus(
           realFetchTaskRefreshSummary,
           realActualCompleted?.remainingOrderCount,
+          shouldNotifyDownstreamAccounts,
         ),
         inlineMetrics: [
           { label: "建池待消费", value: renderCompactCountValue(realFetchAssignmentMonitor?.singleInitPendingCount ?? 0) },
@@ -3060,6 +3068,7 @@ function buildDashboardCardView(
         inlineMetricsStatus: buildFetchTaskSuccessStatus(
           lowPriceFetchTaskRefreshSummary,
           lowPriceActualCompleted?.remainingOrderCount,
+          shouldNotifyDownstreamAccounts,
         ),
         inlineMetrics: [
           { label: "建池待消费", value: renderCompactCountValue(lowPriceFetchAssignmentMonitor?.singleInitPendingCount ?? 0) },
@@ -3894,7 +3903,15 @@ function normalizeFetchTaskMonitorCount(value: number | undefined) {
 function buildFetchTaskSuccessStatus(
   refreshSummary: FetchTaskRefreshSummary | null,
   remainingOrderCount: number | undefined,
+  shouldNotifyDownstreamAccounts: boolean,
 ): FetchTaskSuccessStatus | undefined {
+  if (shouldNotifyDownstreamAccounts) {
+    return {
+      color: "error",
+      label: "提醒下游账号",
+      message: "当前下游账号不足",
+    };
+  }
   if (!refreshSummary) {
     return undefined;
   }
@@ -3933,6 +3950,22 @@ function buildFetchTaskSuccessStatus(
     return { color: "error", label: "极差", message: `本轮成功率 ${rateText}，请补充上游单子` };
   }
   return { color: "warning", label: "差", message: `本轮成功率 ${rateText}，无任务占比偏高` };
+}
+
+function hasDownstreamAccountShortage(
+  onlineAccountCount: number | undefined,
+  realRemainingOrderCount: number | undefined,
+  lowPriceRemainingOrderCount: number | undefined,
+) {
+  const normalizedOnlineAccountCount = Number(onlineAccountCount);
+  const normalizedRealRemainingOrderCount = Number(realRemainingOrderCount);
+  const normalizedLowPriceRemainingOrderCount = Number(lowPriceRemainingOrderCount);
+
+  return Number.isFinite(normalizedOnlineAccountCount)
+    && Number.isFinite(normalizedRealRemainingOrderCount)
+    && Number.isFinite(normalizedLowPriceRemainingOrderCount)
+    && normalizedOnlineAccountCount < DOWNSTREAM_ACCOUNT_LOW_ONLINE_COUNT
+    && normalizedRealRemainingOrderCount + normalizedLowPriceRemainingOrderCount > DOWNSTREAM_ACCOUNT_HIGH_REMAINING_COUNT;
 }
 
 function formatFetchTaskRefreshInterval(elapsedSeconds: number) {
