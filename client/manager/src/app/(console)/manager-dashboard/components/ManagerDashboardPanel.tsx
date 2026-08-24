@@ -195,6 +195,12 @@ interface FetchTaskSuccessStatus {
   message: string;
 }
 
+interface FetchTaskCallVolumeStatus {
+  color: string;
+  label: string;
+  callsPerTenSeconds: number;
+}
+
 interface FetchTaskMonitorSnapshot {
   hitCount: number;
   missCount: number;
@@ -1867,6 +1873,12 @@ function renderDashboardCard({
   const relatedCardId: DashboardCardId = isLowPriceWorkload ? "lowPriceManualSubmitted" : "realManualSubmitted";
   const relatedEditTooltip = isLowPriceWorkload ? "编辑低价点赞" : "编辑真人提交统计";
   const actualEditTooltip = isLowPriceWorkload ? "编辑低价实际完成" : "编辑真人实际完成统计";
+  const fetchTaskCallVolumeStatus = view.inlineMetricsRefreshSummary
+    ? resolveFetchTaskCallVolumeStatus(
+        view.inlineMetricsRefreshSummary.requestCount,
+        view.inlineMetricsRefreshSummary.elapsedSeconds,
+      )
+    : undefined;
 
   if ((cardId === "realActualCompleted" || cardId === "lowPriceActualCompleted") && relatedView) {
     return (
@@ -1982,6 +1994,18 @@ function renderDashboardCard({
                       正在建立刷新对比
                     </Tag>
                   )}
+                  {view.inlineMetricsRefreshSummary && fetchTaskCallVolumeStatus ? (
+                    <Tooltip
+                      title={`本轮 ${formatCount(view.inlineMetricsRefreshSummary.requestCount)} 次 / ${formatFetchTaskRefreshInterval(view.inlineMetricsRefreshSummary.elapsedSeconds)}，折算每 10 秒 ${formatCount(fetchTaskCallVolumeStatus.callsPerTenSeconds)} 次`}
+                    >
+                      <Tag
+                        className="manager-dashboard-card__fetch-volume-tag"
+                        color={fetchTaskCallVolumeStatus.color}
+                      >
+                        {fetchTaskCallVolumeStatus.label}
+                      </Tag>
+                    </Tooltip>
+                  ) : null}
                   {view.inlineMetricsStatus ? (
                     <Tooltip title={view.inlineMetricsStatus.message}>
                       <Tag
@@ -3970,6 +3994,31 @@ function hasDownstreamAccountShortage(
 
 function formatFetchTaskRefreshInterval(elapsedSeconds: number) {
   return `${Math.max(Math.round(elapsedSeconds), 1)} 秒`;
+}
+
+function resolveFetchTaskCallVolumeStatus(
+  requestCount: number,
+  elapsedSeconds: number,
+): FetchTaskCallVolumeStatus {
+  const normalizedElapsedSeconds = Math.max(Number(elapsedSeconds) || 0, 1);
+  const callsPerTenSeconds = Math.max(Math.round((Math.max(Number(requestCount) || 0, 0) * 10) / normalizedElapsedSeconds), 0);
+
+  if (callsPerTenSeconds < 100) {
+    return { color: "default", label: "调用量极低", callsPerTenSeconds };
+  }
+  if (callsPerTenSeconds < 300) {
+    return { color: "warning", label: "调用量偏低", callsPerTenSeconds };
+  }
+  if (callsPerTenSeconds < 400) {
+    return { color: "blue", label: "调用量一般", callsPerTenSeconds };
+  }
+  if (callsPerTenSeconds < 500) {
+    return { color: "cyan", label: "调用量良好", callsPerTenSeconds };
+  }
+  if (callsPerTenSeconds < 700) {
+    return { color: "success", label: "调用量较快", callsPerTenSeconds };
+  }
+  return { color: "magenta", label: "调用量极快", callsPerTenSeconds };
 }
 
 function clampBarryWindowSeconds(value?: number) {
