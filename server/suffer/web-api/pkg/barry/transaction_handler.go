@@ -4,9 +4,12 @@ import (
 	commonRouter "common/middleware/routers"
 	"context"
 	barryDTO "suffer/service/barry/dto"
+	webAuth "suffer/web-api/auth"
 
 	"github.com/gin-gonic/gin"
 )
+
+const defaultPublicUserOnlineWindowSeconds = 120
 
 func (h *BarryHandler) registerTransactionRoutes(engine *gin.RouterGroup) {
 	engine.GET("/barry/entries", h.listEntries)
@@ -28,6 +31,7 @@ func (h *BarryHandler) registerTransactionRoutes(engine *gin.RouterGroup) {
 	engine.GET("/barry/workbench-dashboard/bridge-daily-statistics", h.getWorkbenchBridgeDailyStatistics)
 	engine.GET("/barry/workbench-dashboard/bridge-types", h.listWorkbenchBridgeTypes)
 	engine.GET("/barry/manual-task-statistics/users", h.listManualTaskStatisticUsers)
+	webAuth.PublicGET(engine, "/barry/public/workbench-dashboard/user-online-overview", h.getPublicWorkbenchUserOnlineOverview)
 }
 
 func (h *BarryHandler) listEntries(c *gin.Context) {
@@ -138,6 +142,37 @@ func (h *BarryHandler) getWorkbenchUserOnlineOverview(c *gin.Context) {
 	}
 	response, err := h.barryService.WorkbenchDashboardStats.UserOnlineOverview(c.Request.Context(), q)
 	commonRouter.ToJson(c, response, err)
+}
+
+// getPublicWorkbenchUserOnlineOverview serves the token-free variant of
+// getWorkbenchUserOnlineOverview: same upstream data, aggregate counters only.
+func (h *BarryHandler) getPublicWorkbenchUserOnlineOverview(c *gin.Context) {
+	var q barryDTO.WorkbenchDashboardMetricQueryDTO
+	if c.ShouldBindQuery(&q) != nil {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	if q.WindowSeconds <= 0 {
+		q.WindowSeconds = defaultPublicUserOnlineWindowSeconds
+	}
+	response, err := h.barryService.WorkbenchDashboardStats.UserOnlineOverview(c.Request.Context(), q)
+	if err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	commonRouter.ToJson(c, toPublicWorkbenchUserOverview(response), nil)
+}
+
+func toPublicWorkbenchUserOverview(overview *barryDTO.WorkbenchUserOverviewDTO) *barryDTO.WorkbenchPublicUserOverviewDTO {
+	if overview == nil {
+		return nil
+	}
+	return &barryDTO.WorkbenchPublicUserOverviewDTO{
+		UserCount:          overview.UserCount,
+		AccountCount:       overview.AccountCount,
+		OnlineUserCount:    overview.OnlineUserCount,
+		OnlineAccountCount: overview.OnlineAccountCount,
+	}
 }
 
 func (h *BarryHandler) getWorkbenchTaskRemaining(c *gin.Context) {

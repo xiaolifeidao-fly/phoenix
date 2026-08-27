@@ -1366,3 +1366,12 @@ type WorkbenchUserOnlineDetailDTO struct {
 	Channel      string `json:"channel"`
 	AccountCount int64  `json:"accountCount"`
 }
+
+// WorkbenchPublicUserOverviewDTO is the token-free projection of WorkbenchUserOverviewDTO.
+// Only aggregate counters are exposed; per-user details stay behind the authenticated route.
+type WorkbenchPublicUserOverviewDTO struct {
+	UserCount          int64 `json:"userCount"`
+	AccountCount       int64 `json:"accountCount"`
+	OnlineUserCount    int64 `json:"onlineUserCount"`
+	OnlineAccountCount int64 `json:"onlineAccountCount"`
+}
