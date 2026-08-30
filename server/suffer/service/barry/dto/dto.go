@@ -535,11 +535,15 @@ func (dto *JudgeConfigActionResultDTO) UnmarshalJSON(data []byte) error {
 // AssignUidRuleDTO 分配策略-uid(投稿账号)维度过滤规则, 按品类(shopCategoryId)维护, user 域.
 type AssignUidRuleDTO struct {
 	BarryBaseDTO
-	ShopCategoryID  int64    `json:"shopCategoryId"`
-	Enabled         bool     `json:"enabled"`
-	MinFansNum      int64    `json:"minFansNum"`
-	MinItemNum      int64    `json:"minItemNum"`
-	MinInteractRate *float64 `json:"minInteractRate,omitempty"`
+	ShopCategoryID        int64    `json:"shopCategoryId"`
+	Enabled               bool     `json:"enabled"`
+	MinFansNum            int64    `json:"minFansNum"`
+	MinItemNum            int64    `json:"minItemNum"`
+	MinInteractRate       *float64 `json:"minInteractRate,omitempty"`
+	SubmitRateEnabled     bool     `json:"submitRateEnabled"`
+	SubmitRateURLKeywords string   `json:"submitRateUrlKeywords,omitempty"`
+	MinSubmitRate         float64  `json:"minSubmitRate"`
+	MinSampleNum          int64    `json:"minSampleNum"`
 }
 
 type AssignUidRuleQueryDTO struct {
@@ -548,12 +552,16 @@ type AssignUidRuleQueryDTO struct {
 }
 
 type SaveAssignUidRuleDTO struct {
-	ID              int      `json:"id,omitempty"`
-	ShopCategoryID  int64    `json:"shopCategoryId"`
-	Enabled         bool     `json:"enabled"`
-	MinFansNum      int64    `json:"minFansNum"`
-	MinItemNum      int64    `json:"minItemNum"`
-	MinInteractRate *float64 `json:"minInteractRate,omitempty"`
+	ID                    int      `json:"id,omitempty"`
+	ShopCategoryID        int64    `json:"shopCategoryId"`
+	Enabled               bool     `json:"enabled"`
+	MinFansNum            int64    `json:"minFansNum"`
+	MinItemNum            int64    `json:"minItemNum"`
+	MinInteractRate       *float64 `json:"minInteractRate,omitempty"`
+	SubmitRateEnabled     bool     `json:"submitRateEnabled"`
+	SubmitRateURLKeywords string   `json:"submitRateUrlKeywords,omitempty"`
+	MinSubmitRate         float64  `json:"minSubmitRate"`
+	MinSampleNum          int64    `json:"minSampleNum"`
 }
 
 // AssignVideoRuleDTO 分配策略-视频(候选任务)维度过滤规则, 按品类(shopCategoryId)维护, shop 域.
@@ -666,6 +674,38 @@ type SaveAssignVideoUserRuleDTO struct {
 }
 
 type DeleteAssignVideoUserRuleDTO struct {
+	ShopCategoryID int64 `json:"shopCategoryId" form:"shopCategoryId"`
+	UserID         int64 `json:"userId" form:"userId"`
+}
+
+// AssignUidSubmitRateUserRuleDTO 指定用户 uid 提交率规则，存在时整体覆盖品类全局规则。
+type AssignUidSubmitRateUserRuleDTO struct {
+	BarryBaseDTO
+	ShopCategoryID        int64   `json:"shopCategoryId"`
+	UserID                int64   `json:"userId"`
+	Username              string  `json:"username,omitempty"`
+	SubmitRateEnabled     bool    `json:"submitRateEnabled"`
+	SubmitRateURLKeywords string  `json:"submitRateUrlKeywords,omitempty"`
+	MinSubmitRate         float64 `json:"minSubmitRate"`
+	MinSampleNum          int64   `json:"minSampleNum"`
+}
+
+type AssignUidSubmitRateUserRuleQueryDTO struct {
+	RequestDTO
+	ShopCategoryID int64 `json:"shopCategoryId,omitempty" form:"shopCategoryId"`
+}
+
+type SaveAssignUidSubmitRateUserRuleDTO struct {
+	ID                    int     `json:"id,omitempty"`
+	ShopCategoryID        int64   `json:"shopCategoryId"`
+	UserID                int64   `json:"userId"`
+	SubmitRateEnabled     bool    `json:"submitRateEnabled"`
+	SubmitRateURLKeywords string  `json:"submitRateUrlKeywords,omitempty"`
+	MinSubmitRate         float64 `json:"minSubmitRate"`
+	MinSampleNum          int64   `json:"minSampleNum"`
+}
+
+type DeleteAssignUidSubmitRateUserRuleDTO struct {
 	ShopCategoryID int64 `json:"shopCategoryId" form:"shopCategoryId"`
 	UserID         int64 `json:"userId" form:"userId"`
 }

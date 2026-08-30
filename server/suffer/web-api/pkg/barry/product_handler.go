@@ -43,6 +43,9 @@ func (h *BarryHandler) registerProductRoutes(engine *gin.RouterGroup) {
 	engine.GET("/barry/assign-video-user-rules", h.listAssignVideoUserRules)
 	engine.POST("/barry/assign-video-user-rules", h.saveAssignVideoUserRule)
 	engine.DELETE("/barry/assign-video-user-rules", h.deleteAssignVideoUserRule)
+	engine.GET("/barry/assign-uid-submit-rate-user-rules", h.listAssignUidSubmitRateUserRules)
+	engine.POST("/barry/assign-uid-submit-rate-user-rules", h.saveAssignUidSubmitRateUserRule)
+	engine.DELETE("/barry/assign-uid-submit-rate-user-rules", h.deleteAssignUidSubmitRateUserRule)
 	engine.GET("/barry/assign-whitelist-switch", h.getAssignWhitelistSwitch)
 	engine.POST("/barry/assign-whitelist-switch", h.saveAssignWhitelistSwitch)
 	engine.GET("/barry/assign-whitelist-approval-rate", h.getAssignWhitelistApprovalRate)
@@ -398,7 +401,7 @@ func (h *BarryHandler) getAssignUidRule(c *gin.Context) {
 
 func (h *BarryHandler) saveAssignUidRule(c *gin.Context) {
 	var req barryDTO.SaveAssignUidRuleDTO
-	if c.ShouldBindJSON(&req) != nil || req.ShopCategoryID <= 0 {
+	if c.ShouldBindJSON(&req) != nil || req.ShopCategoryID <= 0 || req.MinSubmitRate < 0 || req.MinSubmitRate > 1 || req.MinSampleNum < 0 {
 		commonRouter.ToError(c, "参数错误")
 		return
 	}
@@ -569,6 +572,65 @@ func (h *BarryHandler) deleteAssignVideoUserRule(c *gin.Context) {
 		return
 	}
 	response, err := h.barryService.AssignVideoUserRule.Delete(c.Request.Context(), req)
+	if err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	if !response.Success {
+		if response.Message == "" {
+			commonRouter.ToError(c, "删除失败")
+			return
+		}
+		commonRouter.ToError(c, response.Message)
+		return
+	}
+	commonRouter.ToJson(c, response.Data, nil)
+}
+
+func (h *BarryHandler) listAssignUidSubmitRateUserRules(c *gin.Context) {
+	var q barryDTO.AssignUidSubmitRateUserRuleQueryDTO
+	if c.ShouldBindQuery(&q) != nil || q.ShopCategoryID <= 0 {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := h.barryService.AssignUidSubmitRateUserRule.List(c.Request.Context(), q)
+	if err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	commonRouter.ToJson(c, response.Data, nil)
+}
+
+func (h *BarryHandler) saveAssignUidSubmitRateUserRule(c *gin.Context) {
+	var req barryDTO.SaveAssignUidSubmitRateUserRuleDTO
+	if c.ShouldBindJSON(&req) != nil || req.ShopCategoryID <= 0 || req.UserID <= 0 ||
+		req.MinSubmitRate < 0 || req.MinSubmitRate > 1 || req.MinSampleNum < 0 {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := h.barryService.AssignUidSubmitRateUserRule.Save(c.Request.Context(), &req)
+	if err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	if !response.Success {
+		if response.Message == "" {
+			commonRouter.ToError(c, "保存失败")
+			return
+		}
+		commonRouter.ToError(c, response.Message)
+		return
+	}
+	commonRouter.ToJson(c, response.Data, nil)
+}
+
+func (h *BarryHandler) deleteAssignUidSubmitRateUserRule(c *gin.Context) {
+	var req barryDTO.DeleteAssignUidSubmitRateUserRuleDTO
+	if c.ShouldBindQuery(&req) != nil || req.ShopCategoryID <= 0 || req.UserID <= 0 {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := h.barryService.AssignUidSubmitRateUserRule.Delete(c.Request.Context(), req)
 	if err != nil {
 		commonRouter.ToJson(c, nil, err)
 		return

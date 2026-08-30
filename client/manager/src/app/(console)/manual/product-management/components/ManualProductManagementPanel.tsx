@@ -20,6 +20,7 @@ import { WorkspaceDrawer } from "@/components/manager-shell/WorkspaceDrawer";
 import {
   activateManualProduct,
   createManualProduct,
+  deleteAssignUidSubmitRateUserRule,
   deleteManualProduct,
   deleteVideoUserRule,
   expireManualProduct,
@@ -27,6 +28,7 @@ import {
   fetchAssignApprovalRateRule,
   fetchAssignRefundRule,
   fetchAssignUidRule,
+  fetchAssignUidSubmitRateUserRules,
   fetchAssignUidSwitch,
   fetchAssignVideoRule,
   fetchAssignWhitelistSwitch,
@@ -39,6 +41,7 @@ import {
   saveAssignApprovalRateRule,
   saveAssignRefundRule,
   saveAssignUidRule,
+  saveAssignUidSubmitRateUserRule,
   saveAssignUidSwitch,
   saveAssignVideoRule,
   saveAssignWhitelistSwitch,
@@ -207,11 +210,26 @@ interface VideoUserStrategyRecord {
   adFilterEnabled: boolean;
 }
 
+interface UidSubmitRateUserStrategyRecord {
+  id?: number;
+  userId: string;
+  username: string;
+  name: string;
+  submitRateEnabled: boolean;
+  submitRateUrlKeywords: string;
+  minSubmitRate: number;
+  minSampleNum: number;
+}
+
 interface UidRuleState {
   id?: number;
   minFansNum: number;
   minItemNum: number;
   minInteractRate?: number;
+  submitRateEnabled: boolean;
+  submitRateUrlKeywords: string;
+  minSubmitRate: number;
+  minSampleNum: number;
 }
 
 interface VideoRuleState {
@@ -245,11 +263,19 @@ const SHOP_GROUP_PAGE_SIZE = 8;
 const emptyUidRule: UidRuleState = {
   minFansNum: 0,
   minItemNum: 0,
+  submitRateEnabled: false,
+  submitRateUrlKeywords: "",
+  minSubmitRate: 0,
+  minSampleNum: 5,
 };
 
 const suggestedUidRule: UidRuleState = {
   minFansNum: 5000,
   minItemNum: 10,
+  submitRateEnabled: false,
+  submitRateUrlKeywords: "",
+  minSubmitRate: 0,
+  minSampleNum: 5,
 };
 
 const emptyVideoRule: VideoRuleState = {
@@ -364,6 +390,10 @@ export function ManualProductManagementPanel() {
   const [uidRule, setUidRule] = useState<UidRuleState>(emptyUidRule);
   const [uidRuleDirty, setUidRuleDirty] = useState(false);
   const [uidRuleSaving, setUidRuleSaving] = useState(false);
+  const [uidSubmitRateUserStrategies, setUidSubmitRateUserStrategies] = useState<UidSubmitRateUserStrategyRecord[]>([]);
+  const [selectedUidSubmitRateAppUserId, setSelectedUidSubmitRateAppUserId] = useState<string>();
+  const [uidSubmitRateUserStrategyModalOpen, setUidSubmitRateUserStrategyModalOpen] = useState(false);
+  const [editingUidSubmitRateUserStrategy, setEditingUidSubmitRateUserStrategy] = useState<UidSubmitRateUserStrategyRecord | null>(null);
   const [videoRuleEnabled, setVideoRuleEnabled] = useState(false);
   const [videoRule, setVideoRule] = useState<VideoRuleState>(emptyVideoRule);
   const [videoRuleDirty, setVideoRuleDirty] = useState(false);
@@ -598,13 +628,17 @@ export function ManualProductManagementPanel() {
     setWhitelistUserSearchKeyword("");
     setWhitelistStatusSortOrder(null);
     setWhitelistGroupSortOrder(null);
+    setUidSubmitRateUserStrategies([]);
     setVideoUserStrategies([]);
     setAppUserOptions([]);
     setSelectedAppUserId(undefined);
+    setSelectedUidSubmitRateAppUserId(undefined);
     setSelectedVideoAppUserId(undefined);
     setUidRuleEnabled(false);
     setUidRule(emptyUidRule);
     setUidRuleDirty(false);
+    setUidSubmitRateUserStrategyModalOpen(false);
+    setEditingUidSubmitRateUserStrategy(null);
     setVideoRuleEnabled(false);
     setVideoRule(emptyVideoRule);
     setVideoRuleDirty(false);
@@ -622,6 +656,7 @@ export function ManualProductManagementPanel() {
     void loadJudgeConfigs(record);
     void loadUserWhitelists(record, 1, 10, "", "", "");
     void loadAssignDimensionRules(record);
+    void loadUidSubmitRateUserStrategies(record);
     void loadVideoUserStrategies(record);
   };
 
@@ -665,6 +700,10 @@ export function ManualProductManagementPanel() {
           minFansNum: Number(loadedUidRule.minFansNum || 0),
           minItemNum: Number(loadedUidRule.minItemNum || 0),
           minInteractRate: loadedUidRule.minInteractRate ?? undefined,
+          submitRateEnabled: Boolean(loadedUidRule.submitRateEnabled),
+          submitRateUrlKeywords: loadedUidRule.submitRateUrlKeywords || "",
+          minSubmitRate: Number(loadedUidRule.minSubmitRate || 0),
+          minSampleNum: Number(loadedUidRule.minSampleNum ?? 5),
         });
       } else {
         setUidRule(emptyUidRule);
@@ -728,6 +767,32 @@ export function ManualProductManagementPanel() {
       setApprovalRateRuleEnabled(false);
       setApprovalRateRule(emptyApprovalRateRule);
       setApprovalRateRuleDirty(false);
+    }
+  };
+
+  const loadUidSubmitRateUserStrategies = async (record: ManualProductRecord) => {
+    const shopCategoryId = record.id;
+    if (!shopCategoryId) {
+      setUidSubmitRateUserStrategies([]);
+      return;
+    }
+    try {
+      const rules = await fetchAssignUidSubmitRateUserRules(shopCategoryId);
+      setUidSubmitRateUserStrategies(
+        (Array.isArray(rules) ? rules : []).map<UidSubmitRateUserStrategyRecord>((rule) => ({
+          id: Number(rule.id || 0) || undefined,
+          userId: String(rule.userId),
+          username: rule.username || "",
+          name: rule.username || "",
+          submitRateEnabled: Boolean(rule.submitRateEnabled),
+          submitRateUrlKeywords: rule.submitRateUrlKeywords || "",
+          minSubmitRate: Number(rule.minSubmitRate || 0),
+          minSampleNum: Number(rule.minSampleNum ?? 5),
+        })),
+      );
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "加载用户提交率策略失败");
+      setUidSubmitRateUserStrategies([]);
     }
   };
 
@@ -975,6 +1040,10 @@ export function ManualProductManagementPanel() {
         minFansNum: Number(uidRule.minFansNum || 0),
         minItemNum: Number(uidRule.minItemNum || 0),
         minInteractRate: uidRule.minInteractRate === undefined ? undefined : Number(uidRule.minInteractRate),
+        submitRateEnabled: uidRule.submitRateEnabled,
+        submitRateUrlKeywords: uidRule.submitRateUrlKeywords.trim(),
+        minSubmitRate: Number(uidRule.minSubmitRate || 0),
+        minSampleNum: Number(uidRule.minSampleNum || 0),
       });
       if (saved && typeof saved === "object") {
         setUidRule({
@@ -982,6 +1051,10 @@ export function ManualProductManagementPanel() {
           minFansNum: Number(saved.minFansNum || 0),
           minItemNum: Number(saved.minItemNum || 0),
           minInteractRate: saved.minInteractRate ?? undefined,
+          submitRateEnabled: Boolean(saved.submitRateEnabled),
+          submitRateUrlKeywords: saved.submitRateUrlKeywords || "",
+          minSubmitRate: Number(saved.minSubmitRate || 0),
+          minSampleNum: Number(saved.minSampleNum ?? 5),
         });
         setUidRuleEnabled(saved.enabled ?? uidRuleEnabled);
       }
@@ -1734,6 +1807,108 @@ export function ManualProductManagementPanel() {
       message.success("用户视频策略已保存");
     } catch (error) {
       message.error(error instanceof Error ? error.message : "保存用户视频策略失败");
+    }
+  };
+
+  const addSelectedUidSubmitRateAppUser = async () => {
+    if (!selectedUidSubmitRateAppUserId) {
+      message.warning("请先搜索并选择用户");
+      return;
+    }
+    const selected = appUserOptions.find((item) => String(item.userId) === selectedUidSubmitRateAppUserId);
+    if (!selected) {
+      message.warning("请选择有效用户");
+      return;
+    }
+    if (uidSubmitRateUserStrategies.some((item) => item.userId === selectedUidSubmitRateAppUserId)) {
+      message.warning("该用户已配置提交率策略");
+      return;
+    }
+    const shopCategoryId = strategyProduct?.id;
+    if (!shopCategoryId) {
+      message.error("缺少品类信息，无法分配");
+      return;
+    }
+    const record: UidSubmitRateUserStrategyRecord = {
+      userId: String(selected.userId),
+      username: selected.username,
+      name: selected.name,
+      submitRateEnabled: true,
+      submitRateUrlKeywords: "",
+      minSubmitRate: 0,
+      minSampleNum: 5,
+    };
+    try {
+      await saveAssignUidSubmitRateUserRule({
+        shopCategoryId: Number(shopCategoryId),
+        userId: Number(selected.userId),
+        submitRateEnabled: record.submitRateEnabled,
+        submitRateUrlKeywords: record.submitRateUrlKeywords,
+        minSubmitRate: record.minSubmitRate,
+        minSampleNum: record.minSampleNum,
+      });
+      await loadUidSubmitRateUserStrategies(strategyProduct);
+      setSelectedUidSubmitRateAppUserId(undefined);
+      message.success("已为该用户分配提交率策略");
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "分配用户提交率策略失败");
+    }
+  };
+
+  const removeUidSubmitRateUserStrategy = async (user: UidSubmitRateUserStrategyRecord) => {
+    const shopCategoryId = strategyProduct?.id;
+    if (!shopCategoryId) {
+      message.error("缺少品类信息，无法取消");
+      return;
+    }
+    try {
+      await deleteAssignUidSubmitRateUserRule(Number(shopCategoryId), Number(user.userId));
+      setUidSubmitRateUserStrategies((current) => current.filter((item) => item.userId !== user.userId));
+      message.success("已取消该用户的提交率策略");
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "取消用户提交率策略失败");
+    }
+  };
+
+  const openUidSubmitRateUserStrategyModal = (record: UidSubmitRateUserStrategyRecord) => {
+    setEditingUidSubmitRateUserStrategy(record);
+    setUidSubmitRateUserStrategyModalOpen(true);
+  };
+
+  const updateEditingUidSubmitRateUserStrategy = (patch: Partial<UidSubmitRateUserStrategyRecord>) => {
+    setEditingUidSubmitRateUserStrategy((current) => (current ? { ...current, ...patch } : current));
+    setStrategyDirty(true);
+  };
+
+  const saveUidSubmitRateUserStrategy = async () => {
+    if (!editingUidSubmitRateUserStrategy) {
+      setUidSubmitRateUserStrategyModalOpen(false);
+      return;
+    }
+    const shopCategoryId = strategyProduct?.id;
+    if (!shopCategoryId) {
+      message.error("缺少品类信息，无法保存");
+      return;
+    }
+    const target = editingUidSubmitRateUserStrategy;
+    try {
+      await saveAssignUidSubmitRateUserRule({
+        id: target.id,
+        shopCategoryId: Number(shopCategoryId),
+        userId: Number(target.userId),
+        submitRateEnabled: target.submitRateEnabled,
+        submitRateUrlKeywords: target.submitRateUrlKeywords.trim(),
+        minSubmitRate: Number(target.minSubmitRate || 0),
+        minSampleNum: Number(target.minSampleNum || 0),
+      });
+      setUidSubmitRateUserStrategies((current) =>
+        current.map((item) => (item.userId === target.userId ? target : item)),
+      );
+      setUidSubmitRateUserStrategyModalOpen(false);
+      setEditingUidSubmitRateUserStrategy(null);
+      message.success("用户提交率策略已保存");
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "保存用户提交率策略失败");
     }
   };
 
@@ -2916,9 +3091,9 @@ export function ManualProductManagementPanel() {
                 <div style={strategyStyles.cardHead}>
                   <div style={{ flex: 1 }}>
                     <div style={strategyStyles.cardTitle}>uid 维度过滤 · 账号质量</div>
-                    <div style={strategyStyles.cardDesc}>按投稿 uid（extUserId）的粉丝量等指标，决定该 uid 能否被分配本品类任务。</div>
+                    <div style={strategyStyles.cardDesc}>按投稿 uid（extUserId）的账号质量与提交率，决定该 uid 能否被分配本品类任务。</div>
                   </div>
-                  <span style={strategyStyles.phase}>前置 · 1分钟后生效</span>
+                  <span style={strategyStyles.phase}>开关 1分钟 · 规则 5分钟后生效</span>
                   <Switch
                     checked={uidRuleEnabled}
                     loading={updatingDimensionSwitches.has("uid")}
@@ -2989,6 +3164,134 @@ export function ManualProductManagementPanel() {
 	                      />
 	                    </div>
 	                  ))}
+	                  <div style={strategyStyles.criteriaRow}>
+	                    <Switch
+	                      checked={uidRule.submitRateEnabled}
+	                      onChange={(checked) => updateUidRule({ submitRateEnabled: checked })}
+	                    />
+	                    <div style={{ flex: 1 }}>
+	                      <div style={strategyStyles.criteriaName}>
+	                        链接关键字 <code style={strategyStyles.operator}>url contains</code>
+	                      </div>
+	                      <div style={strategyStyles.criteriaDesc}>候选链接命中任一关键字后，才按下方提交率门槛过滤 uid。</div>
+	                      <Select
+	                        mode="tags"
+	                        allowClear
+	                        value={parseUrlKeywords(uidRule.submitRateUrlKeywords)}
+	                        disabled={!uidRule.submitRateEnabled}
+	                        style={{ marginTop: 8, width: "100%", maxWidth: 360 }}
+	                        placeholder="选择图文/视频或输入关键词"
+	                        options={videoUrlKeywordOptions}
+	                        tokenSeparators={[",", "，"]}
+	                        onChange={(values) => updateUidRule({ submitRateUrlKeywords: stringifyUrlKeywords(values) })}
+	                      />
+	                    </div>
+	                  </div>
+	                  <div style={strategyStyles.criteriaRow}>
+	                    <span style={{ width: 44 }} />
+	                    <div style={{ flex: 1 }}>
+	                      <div style={strategyStyles.criteriaName}>
+	                        最低提交率 <code style={strategyStyles.operator}>提交率 ≥</code>
+	                      </div>
+	                      <div style={strategyStyles.criteriaDesc}>按同一用户、uid、商品类型的十分钟时间片计算；低于门槛的候选不进入 Init 建池。</div>
+	                    </div>
+	                    <InputNumber
+	                      value={uidRule.minSubmitRate * 100}
+	                      disabled={!uidRule.submitRateEnabled}
+	                      min={0}
+	                      max={100}
+	                      precision={2}
+	                      addonAfter="%"
+	                      style={{ width: 150 }}
+	                      onChange={(value) => updateUidRule({ minSubmitRate: Number(value || 0) / 100 })}
+	                    />
+	                  </div>
+	                  <div style={strategyStyles.criteriaRow}>
+	                    <span style={{ width: 44 }} />
+	                    <div style={{ flex: 1 }}>
+	                      <div style={strategyStyles.criteriaName}>
+	                        最小样本量 <code style={strategyStyles.operator}>取单数 ≥</code>
+	                      </div>
+	                      <div style={strategyStyles.criteriaDesc}>取单数小于该值时放行，默认 5，避免小样本造成误拦截。</div>
+	                    </div>
+	                    <InputNumber
+	                      value={uidRule.minSampleNum}
+	                      disabled={!uidRule.submitRateEnabled}
+	                      min={0}
+	                      precision={0}
+	                      style={{ width: 150 }}
+	                      onChange={(value) => updateUidRule({ minSampleNum: Number(value || 0) })}
+	                    />
+	                  </div>
+
+	                  <div style={strategyStyles.divider} />
+
+	                  <div style={strategyStyles.subhead}>
+	                    指定用户提交率策略 <span style={strategyStyles.subTag}>覆盖全局 · 仅对该用户生效</span>
+	                  </div>
+	                  <table style={{ ...strategyStyles.ruleTable, marginTop: 14 }}>
+	                    <thead>
+	                      <tr>
+	                        <th style={strategyStyles.th}>用户</th>
+	                        <th style={strategyStyles.th}>当前策略</th>
+	                        <th style={strategyStyles.th}>操作</th>
+	                      </tr>
+	                    </thead>
+	                    <tbody>
+	                      {uidSubmitRateUserStrategies.length > 0 ? (
+	                        uidSubmitRateUserStrategies.map((user) => (
+	                          <tr key={user.userId}>
+	                            <td style={strategyStyles.td}>
+	                              <Space direction="vertical" size={0}>
+	                                <Text strong>{user.username || user.name || "-"}</Text>
+	                                <Text type="secondary">{user.userId}</Text>
+	                              </Space>
+	                            </td>
+	                            <td style={strategyStyles.td}>{formatUidSubmitRateUserStrategySummary(user)}</td>
+	                            <td style={strategyStyles.td}>
+	                              <Space size={4}>
+	                                <Button type="link" size="small" onClick={() => openUidSubmitRateUserStrategyModal(user)}>
+	                                  策略
+	                                </Button>
+	                                <Button
+	                                  danger
+	                                  type="link"
+	                                  size="small"
+	                                  onClick={() => void removeUidSubmitRateUserStrategy(user)}
+	                                >
+	                                  取消分配
+	                                </Button>
+	                              </Space>
+	                            </td>
+	                          </tr>
+	                        ))
+	                      ) : (
+	                        <tr>
+	                          <td colSpan={3} style={strategyStyles.emptyCell}>
+	                            暂无指定用户，将回落商品全局配置；下方搜索 app_user 点「分配」为其单独配置。
+	                          </td>
+	                        </tr>
+	                      )}
+	                    </tbody>
+	                  </table>
+	                  <div style={strategyStyles.addRow}>
+	                    <Select
+	                      size="large"
+	                      showSearch
+	                      allowClear
+	                      filterOption={false}
+	                      value={selectedUidSubmitRateAppUserId}
+	                      placeholder="搜索用户名分配（app_user 表）"
+	                      loading={appUserSearching}
+	                      options={appUserSelectOptions}
+	                      notFoundContent={appUserSearching ? "搜索中..." : "请输入用户名搜索 app_user"}
+	                      onSearch={(value) => void searchAppUsers(value)}
+	                      onChange={(value) => setSelectedUidSubmitRateAppUserId(value)}
+	                    />
+	                    <Button type="primary" size="large" onClick={() => void addSelectedUidSubmitRateAppUser()}>
+	                      分配
+	                    </Button>
+	                  </div>
 	                </div>
               </section>
             ) : null}
@@ -3450,6 +3753,87 @@ export function ManualProductManagementPanel() {
       </Modal>
 
       <WorkspaceDrawer
+        title="用户 uid 提交率策略"
+        open={uidSubmitRateUserStrategyModalOpen}
+        width={620}
+        okText="保存"
+        cancelText="取消"
+        onClose={() => {
+          setUidSubmitRateUserStrategyModalOpen(false);
+          setEditingUidSubmitRateUserStrategy(null);
+        }}
+        onSubmit={saveUidSubmitRateUserStrategy}
+      >
+        {editingUidSubmitRateUserStrategy ? (
+          <Space direction="vertical" size={16} style={{ width: "100%" }}>
+            <div style={strategyStyles.preview}>
+              <Text strong>{editingUidSubmitRateUserStrategy.username || editingUidSubmitRateUserStrategy.name || "用户"}</Text>
+              <Text type="secondary" style={{ marginLeft: 8 }}>
+                {editingUidSubmitRateUserStrategy.userId}
+              </Text>
+            </div>
+            <div style={strategyStyles.criteriaRow}>
+              <Switch
+                checked={editingUidSubmitRateUserStrategy.submitRateEnabled}
+                onChange={(checked) => updateEditingUidSubmitRateUserStrategy({ submitRateEnabled: checked })}
+              />
+              <div style={{ flex: 1 }}>
+                <div style={strategyStyles.criteriaName}>
+                  链接关键字 <code style={strategyStyles.operator}>url contains</code>
+                </div>
+                <div style={strategyStyles.criteriaDesc}>候选链接命中任一关键字后，才按提交率门槛过滤该用户的 uid。</div>
+                <Select
+                  mode="tags"
+                  allowClear
+                  value={parseUrlKeywords(editingUidSubmitRateUserStrategy.submitRateUrlKeywords)}
+                  disabled={!editingUidSubmitRateUserStrategy.submitRateEnabled}
+                  style={{ marginTop: 8, width: "100%" }}
+                  placeholder="选择图文/视频或输入关键词"
+                  options={videoUrlKeywordOptions}
+                  tokenSeparators={[",", "，"]}
+                  onChange={(values) => updateEditingUidSubmitRateUserStrategy({ submitRateUrlKeywords: stringifyUrlKeywords(values) })}
+                />
+              </div>
+            </div>
+            <div style={strategyStyles.criteriaRow}>
+              <div style={{ flex: 1 }}>
+                <div style={strategyStyles.criteriaName}>
+                  最低提交率 <code style={strategyStyles.operator}>提交率 ≥</code>
+                </div>
+                <div style={strategyStyles.criteriaDesc}>按同一用户、uid、商品类型的十分钟时间片计算。</div>
+              </div>
+              <InputNumber
+                value={editingUidSubmitRateUserStrategy.minSubmitRate * 100}
+                disabled={!editingUidSubmitRateUserStrategy.submitRateEnabled}
+                min={0}
+                max={100}
+                precision={2}
+                addonAfter="%"
+                style={{ width: 150 }}
+                onChange={(value) => updateEditingUidSubmitRateUserStrategy({ minSubmitRate: Number(value || 0) / 100 })}
+              />
+            </div>
+            <div style={strategyStyles.criteriaRow}>
+              <div style={{ flex: 1 }}>
+                <div style={strategyStyles.criteriaName}>
+                  最小样本量 <code style={strategyStyles.operator}>取单数 ≥</code>
+                </div>
+                <div style={strategyStyles.criteriaDesc}>取单数小于该值时放行，默认 5。</div>
+              </div>
+              <InputNumber
+                value={editingUidSubmitRateUserStrategy.minSampleNum}
+                disabled={!editingUidSubmitRateUserStrategy.submitRateEnabled}
+                min={0}
+                precision={0}
+                style={{ width: 150 }}
+                onChange={(value) => updateEditingUidSubmitRateUserStrategy({ minSampleNum: Number(value || 0) })}
+              />
+            </div>
+          </Space>
+        ) : null}
+      </WorkspaceDrawer>
+
+      <WorkspaceDrawer
         title="用户视频策略"
         open={videoUserStrategyModalOpen}
         width={620}
@@ -3625,6 +4009,14 @@ function formatVideoUserStrategySummary(record: VideoUserStrategyRecord) {
     items.push("小广告拦截");
   }
   return items.length > 0 ? items.join(" · ") : "无拦截项";
+}
+
+function formatUidSubmitRateUserStrategySummary(record: UidSubmitRateUserStrategyRecord) {
+  if (!record.submitRateEnabled) {
+    return "提交率规则已关闭";
+  }
+  const keywords = record.submitRateUrlKeywords.trim() || "未设置关键字";
+  return `链接含 ${keywords} · 提交率 ≥ ${(record.minSubmitRate * 100).toFixed(2)}% · 取单数 ≥ ${record.minSampleNum}`;
 }
 
 function parseUrlKeywords(value?: string) {

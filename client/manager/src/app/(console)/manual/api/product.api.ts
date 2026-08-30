@@ -208,6 +208,32 @@ export class AssignUidRuleRecord {
   minItemNum = 0;
 
   minInteractRate?: number;
+
+  submitRateEnabled = false;
+
+  submitRateUrlKeywords = "";
+
+  minSubmitRate = 0;
+
+  minSampleNum = 5;
+}
+
+export class AssignUidSubmitRateUserRuleRecord {
+  id = 0;
+
+  shopCategoryId = 0;
+
+  userId = 0;
+
+  username = "";
+
+  submitRateEnabled = false;
+
+  submitRateUrlKeywords = "";
+
+  minSubmitRate = 0;
+
+  minSampleNum = 5;
 }
 
 export class AssignVideoRuleRecord {
@@ -271,6 +297,20 @@ export interface AssignUidRulePayload {
   minFansNum: number;
   minItemNum: number;
   minInteractRate?: number;
+  submitRateEnabled: boolean;
+  submitRateUrlKeywords?: string;
+  minSubmitRate: number;
+  minSampleNum: number;
+}
+
+export interface AssignUidSubmitRateUserRulePayload {
+  id?: number;
+  shopCategoryId: number;
+  userId: number;
+  submitRateEnabled: boolean;
+  submitRateUrlKeywords?: string;
+  minSubmitRate: number;
+  minSampleNum: number;
 }
 
 export interface AssignVideoRulePayload {
@@ -451,6 +491,30 @@ export async function saveVideoUserRule(payload: VideoUserRulePayload) {
 export async function deleteVideoUserRule(shopCategoryId: number, userId: number) {
   const response = await instance.delete<ApiResponse<VideoUserRuleRecord | null>>(
     "/barry/assign-video-user-rules",
+    { params: { shopCategoryId, userId } },
+  );
+  return unwrapApiResponse(response.data);
+}
+
+export async function fetchAssignUidSubmitRateUserRules(shopCategoryId: number) {
+  return getDataList(
+    AssignUidSubmitRateUserRuleRecord,
+    "/barry/assign-uid-submit-rate-user-rules",
+    { shopCategoryId },
+  );
+}
+
+export async function saveAssignUidSubmitRateUserRule(payload: AssignUidSubmitRateUserRulePayload) {
+  const response = await instance.post<ApiResponse<AssignUidSubmitRateUserRuleRecord | null>>(
+    "/barry/assign-uid-submit-rate-user-rules",
+    payload,
+  );
+  return unwrapApiResponse(response.data);
+}
+
+export async function deleteAssignUidSubmitRateUserRule(shopCategoryId: number, userId: number) {
+  const response = await instance.delete<ApiResponse<AssignUidSubmitRateUserRuleRecord | null>>(
+    "/barry/assign-uid-submit-rate-user-rules",
     { params: { shopCategoryId, userId } },
   );
   return unwrapApiResponse(response.data);
