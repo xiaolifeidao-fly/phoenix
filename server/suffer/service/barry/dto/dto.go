@@ -400,6 +400,7 @@ type AssignConfigDTO struct {
 	SpeedByHour     int      `json:"speedByHour,omitempty"`
 	AssignNum       int      `json:"assignNum,omitempty"`
 	BatchAssignNum  int      `json:"batchAssignNum,omitempty"`
+	AllowAssignTime string   `json:"allowAssignTime,omitempty"`
 	MonitorOrder    *bool    `json:"monitorOrder,omitempty"`
 	CheckNowNum     *bool    `json:"checkNowNum,omitempty"`
 	TodayDistinct   *bool    `json:"todayDistinct,omitempty"`
@@ -426,6 +427,7 @@ type SaveAssignConfigDTO struct {
 	SpeedByHour     int      `json:"speedByHour,omitempty"`
 	AssignNum       int      `json:"assignNum,omitempty"`
 	BatchAssignNum  int      `json:"batchAssignNum,omitempty"`
+	AllowAssignTime string   `json:"allowAssignTime,omitempty"`
 	MonitorOrder    *bool    `json:"monitorOrder,omitempty"`
 	CheckNowNum     *bool    `json:"checkNowNum,omitempty"`
 	TodayDistinct   *bool    `json:"todayDistinct,omitempty"`

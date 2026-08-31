@@ -61,6 +61,8 @@ export class AssignConfigRecord {
 
   batchAssignNum = 0;
 
+  allowAssignTime = "";
+
   monitorOrder = false;
 
   checkNowNum = false;
@@ -117,6 +119,7 @@ export interface AssignConfigPayload {
   speedByHour?: number;
   assignNum?: number;
   batchAssignNum?: number;
+  allowAssignTime: string;
   monitorOrder?: boolean;
   checkNowNum?: boolean;
   todayDistinct?: boolean;

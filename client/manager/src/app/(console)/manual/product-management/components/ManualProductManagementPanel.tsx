@@ -13,7 +13,7 @@ import {
   SearchOutlined,
   SettingOutlined,
 } from "@ant-design/icons";
-import { Button, Drawer, Form, Input, InputNumber, Modal, Pagination, Popconfirm, Select, Space, Switch, Table, Tabs, Tag, TimePicker, Transfer, Tooltip, Typography } from "antd";
+import { Button, DatePicker, Drawer, Form, Input, InputNumber, Modal, Pagination, Popconfirm, Select, Space, Switch, Table, Tabs, Tag, TimePicker, Transfer, Tooltip, Typography } from "antd";
 import { message } from "@/utils/notify";
 import type { ColumnsType } from "antd/es/table";
 import { WorkspaceDrawer } from "@/components/manager-shell/WorkspaceDrawer";
@@ -75,6 +75,7 @@ import {
 } from "../../api/user.api";
 
 const { Text, Title } = Typography;
+const assignConfigDateTimeFormat = "YYYY-MM-DD HH:mm:ss";
 
 interface ProductFormValues {
   name: string;
@@ -105,10 +106,15 @@ interface AssignConfigPreviewRecord {
   speedByHour: number;
   assignNum: number;
   batchAssignNum: number;
+  allowAssignTime: string;
   monitorOrder: boolean;
   checkNowNum: boolean;
   todayDistinct: boolean;
 }
+
+type AssignConfigFormValues = Omit<AssignConfigPreviewRecord, "allowAssignTime"> & {
+  allowAssignTime?: Dayjs | null;
+};
 
 interface JudgeConfigPreviewRecord {
   id: number;
@@ -159,6 +165,11 @@ const formatTimeRanges = (ranges: string[]) => ranges.join(",");
 const toTimeValue = (value: string) => {
   const [hour, minute] = value.split(":").map(Number);
   return dayjs().hour(hour).minute(minute).second(0).millisecond(0);
+};
+
+const toAssignConfigDateTimeValue = (value?: string) => {
+  const parsed = value ? dayjs(value) : null;
+  return parsed?.isValid() ? parsed : null;
 };
 
 function TimeRangeEditor({ value, onChange }: { value: string[]; onChange: (ranges: string[]) => void }) {
@@ -314,7 +325,7 @@ const videoUrlKeywordOptions = [
 export function ManualProductManagementPanel() {
   const [form] = Form.useForm<ProductFormValues>();
   const [shopGroupForm] = Form.useForm<ShopGroupFormValues>();
-  const [assignConfigForm] = Form.useForm<AssignConfigPreviewRecord>();
+  const [assignConfigForm] = Form.useForm<AssignConfigFormValues>();
   const [judgeConfigForm] = Form.useForm<JudgeConfigPreviewRecord>();
   const [products, setProducts] = useState<ManualProductRecord[]>([]);
   const [productTypes, setProductTypes] = useState<ManualProductTypeRecord[]>([]);
@@ -825,7 +836,10 @@ export function ManualProductManagementPanel() {
   const openAssignConfigModal = (mode: AssignConfigModalMode, record?: AssignConfigPreviewRecord) => {
     setAssignConfigModalMode(mode);
     setEditingAssignConfig(record ?? null);
-    assignConfigForm.setFieldsValue(record ?? {});
+    assignConfigForm.setFieldsValue(record ? {
+      ...record,
+      allowAssignTime: toAssignConfigDateTimeValue(record.allowAssignTime),
+    } : {});
     setAssignConfigModalOpen(true);
   };
 
@@ -1928,6 +1942,7 @@ export function ManualProductManagementPanel() {
       assignNum: Number(values.assignNum || 0),
       batchAssignNum: Number(values.batchAssignNum || 0),
       assignScale: String(values.assignScale || "0"),
+      allowAssignTime: values.allowAssignTime?.format(assignConfigDateTimeFormat) || "",
       monitorOrder: Boolean(values.monitorOrder),
       checkNowNum: Boolean(values.checkNowNum),
       todayDistinct: Boolean(values.todayDistinct),
@@ -1946,6 +1961,7 @@ export function ManualProductManagementPanel() {
       speedByHour: nextRecord.speedByHour,
       assignNum: nextRecord.assignNum,
       batchAssignNum: nextRecord.batchAssignNum,
+      allowAssignTime: nextRecord.allowAssignTime,
       monitorOrder: nextRecord.monitorOrder,
       checkNowNum: nextRecord.checkNowNum,
       todayDistinct: nextRecord.todayDistinct,
@@ -2401,7 +2417,7 @@ export function ManualProductManagementPanel() {
             : undefined
         }
       >
-        <Form<AssignConfigPreviewRecord>
+        <Form<AssignConfigFormValues>
           form={assignConfigForm}
           layout="vertical"
           preserve={false}
@@ -2467,6 +2483,14 @@ export function ManualProductManagementPanel() {
             </Form.Item>
             <Form.Item name="batchAssignNum" label="批量分配数">
               <InputNumber min={0} precision={0} style={{ width: "100%" }} />
+            </Form.Item>
+            <Form.Item name="allowAssignTime" label="允许分配时间">
+              <DatePicker
+                allowClear
+                format={assignConfigDateTimeFormat}
+                showTime
+                style={{ width: "100%" }}
+              />
             </Form.Item>
             <Form.Item name="monitorOrder" label="监控订单" valuePropName="checked">
               <Switch />
@@ -4051,6 +4075,7 @@ function buildEmptyAssignConfigRow(
     speedByHour: 0,
     assignNum: 0,
     batchAssignNum: 0,
+    allowAssignTime: "",
     monitorOrder: false,
     checkNowNum: false,
     todayDistinct: false,
@@ -4077,6 +4102,7 @@ function buildAssignConfigRow(
     speedByHour: Number(config.speedByHour || 0),
     assignNum: Number(config.assignNum || 0),
     batchAssignNum: Number(config.batchAssignNum || 0),
+    allowAssignTime: config.allowAssignTime || "",
     monitorOrder: Boolean(config.monitorOrder),
     checkNowNum: Boolean(config.checkNowNum),
     todayDistinct: Boolean(config.todayDistinct),
