@@ -38,9 +38,12 @@ const (
 	barryInnerAssignApprovalRateRuleGetPath  = "barry.url.inner.assign.approval.rate.rule.get.suffix"
 	barryInnerAssignApprovalRateRuleSavePath = "barry.url.inner.assign.approval.rate.rule.save.suffix"
 
-	barryInnerAssignVideoUserRuleListPath   = "barry.url.inner.assign.video.user.rule.list.suffix"
-	barryInnerAssignVideoUserRuleSavePath   = "barry.url.inner.assign.video.user.rule.save.suffix"
-	barryInnerAssignVideoUserRuleDeletePath = "barry.url.inner.assign.video.user.rule.delete.suffix"
+	barryInnerAssignVideoUserRuleListPath           = "barry.url.inner.assign.video.user.rule.list.suffix"
+	barryInnerAssignVideoUserRuleSavePath           = "barry.url.inner.assign.video.user.rule.save.suffix"
+	barryInnerAssignVideoUserRuleDeletePath         = "barry.url.inner.assign.video.user.rule.delete.suffix"
+	barryInnerAssignUidSubmitRateUserRuleListPath   = "barry.url.inner.assign.uid.submit.rate.user.rule.list.suffix"
+	barryInnerAssignUidSubmitRateUserRuleSavePath   = "barry.url.inner.assign.uid.submit.rate.user.rule.save.suffix"
+	barryInnerAssignUidSubmitRateUserRuleDeletePath = "barry.url.inner.assign.uid.submit.rate.user.rule.delete.suffix"
 
 	barryInnerAssignWhitelistSwitchGetPath                    = "barry.url.inner.assign.whitelist.switch.get.suffix"
 	barryInnerAssignWhitelistSwitchSavePath                   = "barry.url.inner.assign.whitelist.switch.save.suffix"

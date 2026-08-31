@@ -52,3 +52,33 @@ func TestSaveUserWhitelistCarriesPolicyFields(t *testing.T) {
 		}
 	}
 }
+
+func TestAssignConfigListResponseCarriesAllowAssignTime(t *testing.T) {
+	var response AssignConfigListResponseDTO
+	if err := json.Unmarshal([]byte(`{"code":"0","data":[{"id":42,"shopTypeId":18,"allowAssignTime":"2026-08-31 09:30:00"}]}`), &response); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if !response.Success || len(response.Data) != 1 || response.Data[0].AllowAssignTime != "2026-08-31 09:30:00" {
+		t.Fatalf("unexpected response: %+v", response)
+	}
+}
+
+func TestSaveAssignConfigCarriesAllowAssignTime(t *testing.T) {
+	payload := SaveAssignConfigDTO{
+		ShopTypeID:      18,
+		QueueCode:       "manual-queue",
+		AllowAssignTime: "2026-08-31 09:30:00",
+	}
+
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if got, ok := decoded["allowAssignTime"].(string); !ok || got != payload.AllowAssignTime {
+		t.Fatalf("saved assign config payload has allowAssignTime = %#v, want %q", decoded["allowAssignTime"], payload.AllowAssignTime)
+	}
+}
