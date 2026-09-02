@@ -34,7 +34,18 @@ WHERE NOT EXISTS (
   SELECT 1 FROM resource_new WHERE resource_url = '/barry/assign-video-user-rules' AND active = 1
 );
 
--- Bind all three resources to role_id = 1.
+-- 4) 分配策略 - 指定用户 uid 提交率规则  (/barry/assign-uid-submit-rate-user-rules)
+INSERT INTO resource_new (
+  active, created_time, updated_time, name, code, parent_id,
+  resource_type, resource_url, page_url, component, redirect, menu_name, meta, sort_id
+)
+SELECT 1, NOW(), NOW(), '分配策略-指定用户uid提交率规则', 'assignUidSubmitRateUserRule', 0,
+  'RESOURCE', '/barry/assign-uid-submit-rate-user-rules', '', '', '', '', '', 0
+WHERE NOT EXISTS (
+  SELECT 1 FROM resource_new WHERE resource_url = '/barry/assign-uid-submit-rate-user-rules' AND active = 1
+);
+
+-- Bind all four resources to role_id = 1.
 INSERT INTO role_resource_new (
   active, created_time, updated_time, role_id, resource_id
 )
@@ -43,7 +54,8 @@ FROM resource_new r
 WHERE r.resource_url IN (
     '/barry/assign-uid-rules',
     '/barry/assign-video-rules',
-    '/barry/assign-video-user-rules'
+    '/barry/assign-video-user-rules',
+    '/barry/assign-uid-submit-rate-user-rules'
   )
   AND r.active = 1
   AND NOT EXISTS (
