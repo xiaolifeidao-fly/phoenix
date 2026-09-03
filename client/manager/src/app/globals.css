@@ -1193,6 +1193,113 @@ select {
   font-family: "Segoe UI", "SF Mono", "Cascadia Mono", "PingFang SC", monospace;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
+  color: var(--manager-text);
+}
+
+/* =========================================================================
+   工作台视觉规范：卡片图标 / 文本 / 间距工具类
+   收敛 ManagerDashboardPanel 及工作台相关卡片、表格中原先散落的内联 style，
+   统一取用 --manager-space-* / --manager-text-* 等既有变量；供后续任务复用。
+   ========================================================================= */
+.manager-card-icon-lg {
+  font-size: 22px;
+}
+
+.manager-text-soft {
+  color: var(--manager-text-soft);
+}
+
+.manager-text-block {
+  display: block;
+}
+
+.manager-text-strong {
+  color: var(--manager-text);
+  font-weight: 700;
+}
+
+.manager-text-strong--bold {
+  font-weight: 800;
+}
+
+.manager-card-placeholder {
+  display: grid;
+  place-items: center;
+}
+
+.manager-card-placeholder--sm {
+  min-height: 180px;
+}
+
+.manager-card-placeholder--lg {
+  min-height: 260px;
+}
+
+.manager-row-between {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.manager-row-between--align-start {
+  align-items: flex-start;
+}
+
+.manager-card-pad-14 {
+  padding: 14px;
+}
+
+.manager-card-pad-18 {
+  padding: 18px;
+}
+
+.manager-card-pad-banner {
+  padding: 14px 18px;
+}
+
+/* 间距工具类：4/8/12px 直接复用间距尺度变量；6/10/14/18px 为历史遗留值，
+   原样保留以避免视觉回归，后续按各区域任务收敛到统一的 4 的倍数尺度。 */
+.manager-mt-4 {
+  margin-top: var(--manager-space-1);
+}
+
+.manager-mt-6 {
+  margin-top: 6px;
+}
+
+.manager-mt-8 {
+  margin-top: var(--manager-space-2);
+}
+
+.manager-mt-10 {
+  margin-top: 10px;
+}
+
+.manager-mt-12 {
+  margin-top: var(--manager-space-3);
+}
+
+.manager-mt-14 {
+  margin-top: 14px;
+}
+
+.manager-mt-18 {
+  margin-top: 18px;
+}
+
+.manager-mb-8 {
+  margin-bottom: var(--manager-space-2);
+}
+
+.manager-mb-12 {
+  margin-bottom: var(--manager-space-3);
+}
+
+.manager-mb-14 {
+  margin-bottom: 14px;
+}
+
+.manager-mb-18 {
+  margin-bottom: 18px;
 }
 
 /* =========================================================================
@@ -2919,6 +3026,8 @@ select {
 
 .manager-dashboard-card__real-workload-value {
   margin-top: 3px;
+  max-width: 100%;
+  overflow: hidden;
   font-family: var(--manager-mono);
   font-size: 25px;
   font-variant-numeric: tabular-nums;
@@ -2927,6 +3036,8 @@ select {
 }
 
 .manager-dashboard-card__real-workload-value > div {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -3253,6 +3364,20 @@ select {
   text-overflow: ellipsis;
 }
 
+.manager-dashboard-card__title-label {
+  letter-spacing: 0.12em;
+}
+
+/* 主数值：视觉权重最高，窄屏收窄时优雅省略而不是硬裁切 */
+.manager-dashboard-card__value {
+  margin-top: 6px;
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 24px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .manager-dashboard-card__icon {
   width: 42px;
   height: 42px;
@@ -3483,9 +3608,15 @@ select {
   cursor: help;
 }
 
+/* 辅助信息（如"昨日剩余""延迟率"）弱于主数值：非等宽字体、更浅色、不加粗，避免和主数值抢视觉焦点 */
 .manager-dashboard-card__metric-note {
   margin-left: 4px;
-  color: var(--manager-warning);
+  color: var(--manager-text-faint);
+  font-family: var(--manager-font-sans, inherit);
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: normal;
+  letter-spacing: 0;
   cursor: help;
 }
 

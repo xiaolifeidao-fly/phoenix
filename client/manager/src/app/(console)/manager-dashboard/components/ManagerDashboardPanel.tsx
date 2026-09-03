@@ -1298,15 +1298,15 @@ export function ManagerDashboardPanel() {
     <>
       <div className="manager-page-stack">
         {loading && !ready ? (
-          <section className="manager-data-card" style={{ minHeight: 260, display: "grid", placeItems: "center" }}>
+          <section className="manager-data-card manager-card-placeholder manager-card-placeholder--lg">
             <Spin size="large" />
           </section>
         ) : (
           <>
             {hiddenCardIds.length > 0 ? (
-              <section className="manager-data-card" style={{ padding: "14px 18px" }}>
+              <section className="manager-data-card manager-card-pad-banner">
                 <Space wrap size={[8, 8]}>
-                  <Text style={{ color: "var(--manager-text-soft)" }}>已隐藏卡片：</Text>
+                  <Text className="manager-text-soft">已隐藏卡片：</Text>
                   {hiddenCardIds.map((cardId) => (
                     <Button key={cardId} size="small" onClick={() => openEditModal(cardId)}>
                       恢复 {DASHBOARD_TITLES[cardId]}
@@ -1389,14 +1389,14 @@ export function ManagerDashboardPanel() {
           <div className="manager-page-stack">
             <section className="manager-data-card">
               <div className="manager-section-label">{detailCard.scopeLabel}</div>
-              <div className="manager-display-title" style={{ marginTop: 14, fontSize: 34 }}>
+              <div className="manager-display-title manager-mt-14" style={{ fontSize: 34 }}>
                 {detailCard.value}
               </div>
-              <Text style={{ display: "block", marginTop: 10, color: "var(--manager-text-soft)" }}>
+              <Text className="manager-text-block manager-text-soft manager-mt-10">
                 {detailCard.unitLabel}
               </Text>
               {detailMetricsInDrawer.length > 0 ? (
-                <div className="manager-dashboard-card__metrics" style={{ marginTop: 18 }}>
+                <div className="manager-dashboard-card__metrics manager-mt-18">
                   {detailMetricsInDrawer.map((metric, index) => (
                     <div key={`${metric.label}-${index}`} className="manager-dashboard-card__metric">
                       <div className="manager-dashboard-card__metric-label">{metric.label}</div>
@@ -1416,9 +1416,9 @@ export function ManagerDashboardPanel() {
               <Space
                 wrap
                 size={10}
-                style={{ width: "100%", justifyContent: "space-between", marginBottom: 18 }}
+                className="manager-row-between manager-mb-18"
               >
-                <Text style={{ color: "var(--manager-text-soft)" }}>
+                <Text className="manager-text-soft">
                   {getDetailListDescription(detailCardId)}
                 </Text>
                 <Space wrap size={8}>
@@ -1476,10 +1476,10 @@ export function ManagerDashboardPanel() {
           <div className="manager-page-stack">
             <section className="manager-data-card">
               <div className="manager-section-label">已配置 {bridgeStatisticDetails.length} 个商品分组 + BridgeType 组合</div>
-              <Text style={{ display: "block", marginTop: 12, color: "var(--manager-text-soft)" }}>
+              <Text className="manager-text-block manager-text-soft manager-mt-12">
                 首项是卡片默认展示项；可在编辑中通过上下移动调整默认项和展示顺序。
               </Text>
-              <Text style={{ display: "block", marginTop: 6, color: "var(--manager-text-soft)" }}>
+              <Text className="manager-text-block manager-text-soft manager-mt-6">
                 按 Bridge 调用完成日期汇总；统计采用 Redis 批量刷库，页面数据可能有约 5 分钟延迟。
               </Text>
             </section>
@@ -1489,7 +1489,7 @@ export function ManagerDashboardPanel() {
                 <Space
                   wrap
                   size={10}
-                  style={{ width: "100%", justifyContent: "space-between", marginBottom: 18 }}
+                  className="manager-row-between manager-mb-18"
                 >
                   <Space wrap size={8}>
                     <Tag color={index === 0 ? "blue" : "default"}>{index === 0 ? "默认展示" : `展示项 ${index + 1}`}</Tag>
@@ -1510,16 +1510,16 @@ export function ManagerDashboardPanel() {
                         </div>
                       ))}
                     </div>
-                    <Text style={{ display: "block", marginTop: 14, color: "var(--manager-text-soft)" }}>
+                    <Text className="manager-text-block manager-text-soft manager-mt-14">
                       统计日期：{formatStatisticDateRange(statistic.startDate, statistic.endDate)}
                     </Text>
                     {statistic.unmappedShopGroupIds.length > 0 ? (
-                      <Text style={{ display: "block", marginTop: 6, color: "var(--manager-warning)" }}>
+                      <Text className="manager-text-block manager-mt-6" style={{ color: "var(--manager-warning)" }}>
                         未关联 Bridge 的商品分组：{formatShopGroupLabels(statistic.unmappedShopGroupIds, shopGroupLabelMap)}
                       </Text>
                     ) : null}
                     <Table<BridgeDailyStatisticDetail>
-                      style={{ marginTop: 18 }}
+                      className="manager-mt-18"
                       rowKey={(record) => `${bridgeStatisticScopeKey(scope)}-${record.statDate}-${record.bridgeId}-${record.bridgeType}`}
                       pagination={false}
                       scroll={{ x: 1060 }}
@@ -1535,7 +1535,7 @@ export function ManagerDashboardPanel() {
             ))}
           </div>
         ) : (
-          <section className="manager-data-card" style={{ minHeight: 180, display: "grid", placeItems: "center" }}>
+          <section className="manager-data-card manager-card-placeholder manager-card-placeholder--sm">
             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未配置商品分组和 BridgeType 组合" />
           </section>
         )}
@@ -1625,19 +1625,18 @@ export function ManagerDashboardPanel() {
             >
               {(fields, { add, move, remove }, { errors }) => (
                 <>
-                  <Text style={{ display: "block", marginBottom: 8, color: "var(--manager-text)" }}>
+                  <Text className="manager-text-block manager-mb-8">
                     展示组合
                   </Text>
-                  <Text style={{ display: "block", marginBottom: 14, color: "var(--manager-text-soft)" }}>
+                  <Text className="manager-text-block manager-text-soft manager-mb-14">
                     第一项为卡片默认展示项；点击卡片可查看全部组合的每日统计。
                   </Text>
                   {fields.map((field, index) => (
                     <section
                       key={field.key}
-                      className="manager-data-card"
-                      style={{ padding: 14, marginBottom: 12 }}
+                      className="manager-data-card manager-card-pad-14 manager-mb-12"
                     >
-                      <Space style={{ width: "100%", justifyContent: "space-between", marginBottom: 12 }}>
+                      <Space className="manager-row-between manager-mb-12">
                         <Tag color={index === 0 ? "blue" : "default"}>
                           {index === 0 ? "默认展示" : `展示项 ${index + 1}`}
                         </Tag>
@@ -1736,12 +1735,12 @@ export function ManagerDashboardPanel() {
             </Form.Item>
           ) : null}
 
-          <section className="manager-data-card" style={{ padding: 18 }}>
+          <section className="manager-data-card manager-card-pad-18">
             <Space align="start">
               <AppstoreOutlined style={{ color: "var(--manager-primary)", fontSize: 18, marginTop: 3 }} />
               <div>
-                <Text style={{ color: "var(--manager-text)", fontWeight: 700 }}>配置说明</Text>
-                <Paragraph style={{ marginTop: 8, marginBottom: 0, color: "var(--manager-text-soft)" }}>
+                <Text className="manager-text-strong">配置说明</Text>
+                <Paragraph className="manager-text-soft manager-mt-8" style={{ marginBottom: 0 }}>
                   当前 dashboard 配置保存在浏览器 `localStorage` 中，只影响当前管理端页面展示，不会写入后端。
                 </Paragraph>
               </div>
@@ -2052,8 +2051,8 @@ function renderDashboardCard({
             </div>
             <div style={{ minWidth: 0 }}>
               <div className="manager-section-label manager-dashboard-card__scope">{view.scopeLabel}</div>
-              <Space size={12} wrap style={{ marginTop: 4 }}>
-                <Text style={{ color: "var(--manager-text)", fontWeight: 800 }}>{view.title}</Text>
+              <Space size={12} wrap className="manager-mt-4">
+                <Text className="manager-text-strong manager-text-strong--bold">{view.title}</Text>
                 <div className="manager-display-title manager-dashboard-card__featured-value">
                   {view.value}
                 </div>
@@ -2182,7 +2181,7 @@ function renderDashboardCard({
         {hasTopRow ? (
           <Space
             size={12}
-            style={{ width: "100%", justifyContent: "space-between", alignItems: "flex-start" }}
+            className="manager-row-between manager-row-between--align-start"
           >
             <div className="manager-section-label manager-dashboard-card__scope">{view.scopeLabel}</div>
 
@@ -2209,17 +2208,14 @@ function renderDashboardCard({
         <Space
           size={14}
           align="start"
-          style={{ width: "100%", justifyContent: "space-between", marginTop: hasTopRow ? (featured ? 10 : 8) : 0 }}
+          className={`manager-row-between${hasTopRow ? " manager-mt-8" : ""}`}
         >
           <div>
-            <div className="manager-section-label" style={{ letterSpacing: "0.12em" }}>
+            <div className="manager-section-label manager-dashboard-card__title-label">
               {view.title}
             </div>
             {view.value ? (
-              <div
-                className="manager-display-title"
-                style={{ fontSize: featured ? 28 : 24, marginTop: featured ? 8 : 6 }}
-              >
+              <div className="manager-display-title manager-dashboard-card__value">
                 {view.value}
               </div>
             ) : null}
@@ -2723,7 +2719,7 @@ function buildDashboardCardView(
         title: DASHBOARD_TITLES[cardId],
         scopeLabel,
         unitLabel: "双延迟待检测数量",
-        icon: <WarningOutlined style={{ fontSize: 22 }} />,
+        icon: <WarningOutlined className="manager-card-icon-lg" />,
         accent: "#d97706",
         background: "linear-gradient(135deg, rgba(217,119,6,0.1), rgba(255,255,255,0))",
         value: <AnimatedNumber value={finishAssignmentPendingDetectionCount + delayAssignmentPendingDetectionCount} format={formatCount} />,
@@ -2740,7 +2736,7 @@ function buildDashboardCardView(
         title: DASHBOARD_TITLES[cardId],
         scopeLabel: "",
         unitLabel: "实时上号情况",
-        icon: <TeamOutlined style={{ fontSize: 22 }} />,
+        icon: <TeamOutlined className="manager-card-icon-lg" />,
         accent: "#2563eb",
         background: "linear-gradient(135deg, rgba(37,99,235,0.1), rgba(255,255,255,0))",
         value: null,
@@ -2771,7 +2767,7 @@ function buildDashboardCardView(
         title: DASHBOARD_TITLES[cardId],
         scopeLabel: "",
         unitLabel: "消费金额",
-        icon: <PayCircleOutlined style={{ fontSize: 22 }} />,
+        icon: <PayCircleOutlined className="manager-card-icon-lg" />,
         accent: "#dc2626",
         background: "linear-gradient(135deg, rgba(220,38,38,0.08), rgba(255,255,255,0))",
         value: <AnimatedNumber value={dashboardStatistics?.todayConsume?.amount ?? 0} format={formatCurrency} />,
@@ -2791,7 +2787,7 @@ function buildDashboardCardView(
         title: DASHBOARD_TITLES[cardId],
         scopeLabel: "",
         unitLabel: "充值金额",
-        icon: <WalletOutlined style={{ fontSize: 22 }} />,
+        icon: <WalletOutlined className="manager-card-icon-lg" />,
         accent: "#2563eb",
         background: "linear-gradient(135deg, rgba(37,99,235,0.08), rgba(255,255,255,0))",
         value: <AnimatedNumber value={dashboardStatistics?.todayRecharge?.amount ?? 0} format={formatCurrency} />,
@@ -2811,7 +2807,7 @@ function buildDashboardCardView(
         title: DASHBOARD_TITLES[cardId],
         scopeLabel: "",
         unitLabel: "余额金额",
-        icon: <FundOutlined style={{ fontSize: 22 }} />,
+        icon: <FundOutlined className="manager-card-icon-lg" />,
         accent: "#d97706",
         background: "linear-gradient(135deg, rgba(217,119,6,0.1), rgba(255,255,255,0))",
         value: <AnimatedNumber value={dashboardStatistics?.systemBalance?.amount ?? 0} format={formatCurrency} />,
@@ -2841,7 +2837,7 @@ function buildDashboardCardView(
         title: DASHBOARD_TITLES[cardId],
         scopeLabel: "所有上游商品类目",
         unitLabel: "上游商品类目剩余任务量",
-        icon: <ShopOutlined style={{ fontSize: 22 }} />,
+        icon: <ShopOutlined className="manager-card-icon-lg" />,
         accent: "#4f46e5",
         background: "linear-gradient(135deg, rgba(79,70,229,0.09), rgba(255,255,255,0))",
         value: <AnimatedNumber value={actualTotalPending ?? remainingTotal} format={formatCount} />,
@@ -2856,7 +2852,7 @@ function buildDashboardCardView(
         title: DASHBOARD_TITLES[cardId],
         scopeLabel,
         unitLabel: "人工提交量",
-        icon: <TeamOutlined style={{ fontSize: 22 }} />,
+        icon: <TeamOutlined className="manager-card-icon-lg" />,
         accent: "#0f766e",
         background: "linear-gradient(135deg, rgba(15,118,110,0.1), rgba(255,255,255,0))",
         value: <AnimatedNumber value={workbenchStatistics?.submittedNum ?? manualTotal} format={formatCount} />,
@@ -2882,7 +2878,7 @@ function buildDashboardCardView(
         title: DASHBOARD_TITLES[cardId],
         scopeLabel: "",
         unitLabel: "完成数量",
-        icon: <AppstoreOutlined style={{ fontSize: 22 }} />,
+        icon: <AppstoreOutlined className="manager-card-icon-lg" />,
         accent: "#16a34a",
         background: "linear-gradient(135deg, rgba(22,163,74,0.1), rgba(255,255,255,0))",
         value: <AnimatedNumber value={dashboardStatistics?.actualCompleted?.count ?? 0} format={formatCount} />,
@@ -2903,7 +2899,7 @@ function buildDashboardCardView(
         title: DASHBOARD_TITLES[cardId],
         scopeLabel: "真人",
         unitLabel: "真人人工提交量",
-        icon: <TeamOutlined style={{ fontSize: 22 }} />,
+        icon: <TeamOutlined className="manager-card-icon-lg" />,
         accent: "#0f766e",
         background: "linear-gradient(135deg, rgba(15,118,110,0.1), rgba(255,255,255,0))",
         value: <AnimatedNumber value={realManualSubmittedStatistics?.submittedNum ?? manualTotal} format={formatCount} />,
@@ -2922,7 +2918,7 @@ function buildDashboardCardView(
         title: DASHBOARD_TITLES[cardId],
         scopeLabel: "低价",
         unitLabel: "低价提交量",
-        icon: <TeamOutlined style={{ fontSize: 22 }} />,
+        icon: <TeamOutlined className="manager-card-icon-lg" />,
         accent: "#0f766e",
         background: "linear-gradient(135deg, rgba(15,118,110,0.1), rgba(255,255,255,0))",
         value: <AnimatedNumber value={lowPriceManualSubmittedStatistics?.submittedNum ?? manualTotal} format={formatCount} />,
@@ -2949,7 +2945,7 @@ function buildDashboardCardView(
         title: DASHBOARD_TITLES[cardId],
         scopeLabel: "真人",
         unitLabel: "真人实际完成量",
-        icon: <AppstoreOutlined style={{ fontSize: 22 }} />,
+        icon: <AppstoreOutlined className="manager-card-icon-lg" />,
         accent: "#16a34a",
         background: "linear-gradient(135deg, rgba(22,163,74,0.1), rgba(255,255,255,0))",
         value: <AnimatedNumber value={realActualCompleted?.count ?? 0} format={formatCount} />,
@@ -3043,7 +3039,7 @@ function buildDashboardCardView(
         title: DASHBOARD_TITLES[cardId],
         scopeLabel: "低价",
         unitLabel: "低价实际完成量",
-        icon: <AppstoreOutlined style={{ fontSize: 22 }} />,
+        icon: <AppstoreOutlined className="manager-card-icon-lg" />,
         accent: "#16a34a",
         background: "linear-gradient(135deg, rgba(22,163,74,0.1), rgba(255,255,255,0))",
         value: <AnimatedNumber value={lowPriceActualCompleted?.count ?? 0} format={formatCount} />,
@@ -3130,7 +3126,7 @@ function buildDashboardCardView(
         title: DASHBOARD_TITLES[cardId],
         scopeLabel: "速度概览",
         unitLabel: "48 小时平均速度",
-        icon: <ClockCircleOutlined style={{ fontSize: 22 }} />,
+        icon: <ClockCircleOutlined className="manager-card-icon-lg" />,
         accent: "#0f766e",
         background: "linear-gradient(135deg, rgba(15,118,110,0.1), rgba(255,255,255,0))",
         value: (
@@ -3161,7 +3157,7 @@ function buildDashboardCardView(
         title: DASHBOARD_TITLES.todayConsume,
         scopeLabel,
         unitLabel: "消费金额",
-        icon: <PayCircleOutlined style={{ fontSize: 22 }} />,
+        icon: <PayCircleOutlined className="manager-card-icon-lg" />,
         accent: "#dc2626",
         background: "linear-gradient(135deg, rgba(220,38,38,0.08), rgba(255,255,255,0))",
         value: formatCurrency(currencyTotal),
@@ -3276,7 +3272,7 @@ function buildDetailColumns(cardId: DashboardCardId | null): ColumnsType<Derived
           <div>
             <div className="manager-value">{value || `商品分组 #${record.id}`}</div>
             {record.categoryName ? (
-              <div style={{ color: "var(--manager-text-soft)", marginTop: 4 }}>{record.categoryName}</div>
+              <div className="manager-text-soft manager-mt-4">{record.categoryName}</div>
             ) : null}
           </div>
         ),
@@ -3313,8 +3309,8 @@ function buildDetailColumns(cardId: DashboardCardId | null): ColumnsType<Derived
       width: 200,
       render: (_, record) => (
         <div>
-          <div style={{ color: "var(--manager-text)", fontWeight: 700 }}>{record.categoryName}</div>
-          <div style={{ color: "var(--manager-text-soft)", marginTop: 4 }}>{record.productName}</div>
+          <div className="manager-text-strong">{record.categoryName}</div>
+          <div className="manager-text-soft manager-mt-4">{record.productName}</div>
         </div>
       ),
     },
@@ -3323,7 +3319,7 @@ function buildDetailColumns(cardId: DashboardCardId | null): ColumnsType<Derived
       key: "metricValue",
       width: 150,
       render: (_, record) => (
-        <div className="manager-value" style={{ color: "var(--manager-text)" }}>
+        <div className="manager-value">
           {renderMetricValue(record, cardId)}
         </div>
       ),
@@ -3430,7 +3426,7 @@ function buildManualProductDetailColumns(): ColumnsType<DerivedCategoryDetail> {
       dataIndex: "categoryName",
       width: 220,
       render: (value: string) => (
-        <span className="manager-value" style={{ color: "var(--manager-text)" }}>{value || "-"}</span>
+        <span className="manager-value">{value || "-"}</span>
       ),
     },
     {
@@ -3438,7 +3434,7 @@ function buildManualProductDetailColumns(): ColumnsType<DerivedCategoryDetail> {
       key: "submitted",
       width: 140,
       render: (_, record) => (
-        <span className="manager-value" style={{ color: "var(--manager-text)" }}>
+        <span className="manager-value">
           {formatCount(record.manualSubmitted)}
         </span>
       ),
@@ -3484,7 +3480,7 @@ function buildBridgeDailyStatisticColumns(
         <div>
           <div className="manager-value">{record.bridgeName || record.bridgeCode || `Bridge#${record.bridgeId}`}</div>
           {record.bridgeCode && record.bridgeName ? (
-            <div style={{ color: "var(--manager-text-soft)", marginTop: 3 }}>{record.bridgeCode}</div>
+            <div className="manager-text-soft manager-mt-4">{record.bridgeCode}</div>
           ) : null}
         </div>
       ),
@@ -3682,7 +3678,7 @@ function buildUpstreamCategoryDetailColumns(): ColumnsType<DerivedCategoryDetail
       dataIndex: "categoryName",
       width: 220,
       render: (value: string) => (
-        <span className="manager-value" style={{ color: "var(--manager-text)" }}>{value || "-"}</span>
+        <span className="manager-value">{value || "-"}</span>
       ),
     },
     {
@@ -3690,7 +3686,7 @@ function buildUpstreamCategoryDetailColumns(): ColumnsType<DerivedCategoryDetail
       key: "completed",
       width: 140,
       render: (_, record) => (
-        <span className="manager-value" style={{ color: "var(--manager-text)" }}>
+        <span className="manager-value">
           {formatCount(record.actualCompleted)}
         </span>
       ),
@@ -3852,7 +3848,7 @@ function renderMetricValue(record: DerivedCategoryDetail, cardId: DashboardCardI
       return (
         <div>
           <div>{`人工 ${formatRate(record.manualSpeedPerSecond)} /秒`}</div>
-          <div style={{ marginTop: 4, color: "var(--manager-text-soft)" }}>
+          <div className="manager-text-soft manager-mt-4">
             {`实际 ${formatRate(record.actualSpeedPerSecond)} /秒`}
           </div>
         </div>
