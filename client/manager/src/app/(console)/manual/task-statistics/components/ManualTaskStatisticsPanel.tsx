@@ -26,12 +26,16 @@ dayjs.extend(weekday);
 dayjs.extend(localeData);
 
 const defaultDateRange: [Dayjs, Dayjs] = [dayjs().startOf("day"), dayjs().startOf("day")];
+const USER_SEARCH_DEBOUNCE_MS = 300;
 
 export function ManualTaskStatisticsPanel() {
   const [loading, setLoading] = useState(false);
   const [overview, setOverview] = useState<ManualTaskStatisticsOverview | null>(null);
   const [userOptions, setUserOptions] = useState<ManualUserOption[]>([]);
-  const userOptionCacheRef = useRef(new Map<number, ManualUserOption>());
+  const [userOptionsLoading, setUserOptionsLoading] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<ManualUserOption | null>(null);
+  const userSearchRequestIdRef = useRef(0);
+  const userSearchTimerRef = useRef<number | null>(null);
   const [filters, setFilters] = useState({ dateRange: defaultDateRange, shopCategoryIds: [] as number[], excludeWhitelistUsers: false, userId: undefined as number | undefined, page: 1, pageSize: 20 });
 
   const loadOverview = async (nextFilters = filters) => {
@@ -58,26 +62,32 @@ export function ManualTaskStatisticsPanel() {
   };
 
   const searchUsers = async (keyword?: string) => {
-    const normalizedKeyword = keyword?.trim().toLowerCase() ?? "";
-    const cachedOptions = Array.from(userOptionCacheRef.current.values()).filter((user) =>
-      !normalizedKeyword || user.username.toLowerCase().includes(normalizedKeyword) || user.nickname?.toLowerCase().includes(normalizedKeyword),
-    );
-    if (cachedOptions.length > 0) {
-      setUserOptions(cachedOptions);
-      return;
-    }
+    const searchRequestId = ++userSearchRequestIdRef.current;
+    setUserOptionsLoading(true);
     try {
       const fetchedOptions = await fetchManualTaskStatisticUsers(keyword);
-      fetchedOptions.forEach((user) => userOptionCacheRef.current.set(user.id, user));
+      if (searchRequestId !== userSearchRequestIdRef.current) return;
       setUserOptions(fetchedOptions);
     } catch (error) {
+      if (searchRequestId !== userSearchRequestIdRef.current) return;
+      setUserOptions([]);
       message.error(error instanceof Error ? error.message : "加载人工用户列表失败");
+    } finally {
+      if (searchRequestId === userSearchRequestIdRef.current) setUserOptionsLoading(false);
     }
+  };
+
+  const searchUsersDebounced = (keyword?: string) => {
+    if (userSearchTimerRef.current !== null) window.clearTimeout(userSearchTimerRef.current);
+    userSearchTimerRef.current = window.setTimeout(() => void searchUsers(keyword), USER_SEARCH_DEBOUNCE_MS);
   };
 
   useEffect(() => {
     void loadOverview();
     void searchUsers();
+    return () => {
+      if (userSearchTimerRef.current !== null) window.clearTimeout(userSearchTimerRef.current);
+    };
   }, []);
 
   const categoryOptions = useMemo(
@@ -85,7 +95,6 @@ export function ManualTaskStatisticsPanel() {
     [overview],
   );
 
-  const selectedUser = filters.userId ? userOptionCacheRef.current.get(filters.userId) : undefined;
   const resolvedUserOptions = selectedUser && !userOptions.some((user) => user.id === selectedUser.id) ? [selectedUser, ...userOptions] : userOptions;
 
   const categoryColumns: ColumnsType<ShopCategoryTaskSummary> = [
@@ -129,8 +138,8 @@ export function ManualTaskStatisticsPanel() {
             <div><Text type="secondary">日期范围</Text><RangePicker presets={dateRangePresets} style={{ width: "100%", marginTop: 8 }} value={filters.dateRange} allowClear={false} onChange={(value) => setFilters((current) => ({ ...current, dateRange: value && value[0] && value[1] ? ([value[0].startOf("day"), value[1].startOf("day")] as unknown as [Dayjs, Dayjs]) : defaultDateRange }))} /></div>
             <div><Text type="secondary">人工商品</Text><Select mode="multiple" allowClear maxTagCount="responsive" placeholder="全部人工商品" style={{ width: "100%", marginTop: 8 }} options={categoryOptions} value={filters.shopCategoryIds} onChange={(value) => setFilters((current) => ({ ...current, shopCategoryIds: value, excludeWhitelistUsers: value.length > 0 ? current.excludeWhitelistUsers : false }))} /></div>
             <div><Text type="secondary">是否过滤所选人工商品白名单用户</Text><div style={{ marginTop: 11 }}><Switch checked={filters.excludeWhitelistUsers} disabled={filters.shopCategoryIds.length === 0} checkedChildren="过滤" unCheckedChildren="不过滤" onChange={(value) => setFilters((current) => ({ ...current, excludeWhitelistUsers: value }))} /></div></div>
-            <div><Text type="secondary">人工用户</Text><Select allowClear showSearch filterOption={false} placeholder="输入用户名或昵称搜索" style={{ width: "100%", marginTop: 8 }} options={resolvedUserOptions.map((user) => ({ value: user.id, label: user.nickname ? `${user.username} (${user.nickname})` : user.username }))} value={filters.userId} onSearch={(value) => void searchUsers(value)} onChange={(value) => setFilters((current) => ({ ...current, userId: value }))} /></div>
-            <Space><Button type="primary" icon={<SearchOutlined />} loading={loading} onClick={() => { const next = { ...filters, page: 1 }; setFilters(next); void loadOverview(next); }}>查询</Button><Button icon={<ReloadOutlined />} onClick={() => { const reset = { dateRange: defaultDateRange, shopCategoryIds: [] as number[], excludeWhitelistUsers: false, userId: undefined, page: 1, pageSize: 20 }; setFilters(reset); void loadOverview(reset); }}>重置</Button></Space>
+            <div><Text type="secondary">人工用户</Text><Select allowClear showSearch filterOption={false} placeholder="输入用户名或昵称搜索" style={{ width: "100%", marginTop: 8 }} loading={userOptionsLoading} notFoundContent={userOptionsLoading ? "搜索中..." : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="无匹配用户" />} options={resolvedUserOptions.map((user) => ({ value: user.id, label: user.nickname ? `${user.username} (${user.nickname})` : user.username }))} value={filters.userId} onSearch={(value) => searchUsersDebounced(value)} onChange={(value) => { setSelectedUser(resolvedUserOptions.find((user) => user.id === value) ?? null); setFilters((current) => ({ ...current, userId: value })); }} onOpenChange={(open) => { if (open) searchUsersDebounced(); }} /></div>
+            <Space><Button type="primary" icon={<SearchOutlined />} loading={loading} onClick={() => { const next = { ...filters, page: 1 }; setFilters(next); void loadOverview(next); }}>查询</Button><Button icon={<ReloadOutlined />} onClick={() => { const reset = { dateRange: defaultDateRange, shopCategoryIds: [] as number[], excludeWhitelistUsers: false, userId: undefined, page: 1, pageSize: 20 }; setSelectedUser(null); setFilters(reset); void loadOverview(reset); }}>重置</Button></Space>
           </div>
         </Space>
       </section>
