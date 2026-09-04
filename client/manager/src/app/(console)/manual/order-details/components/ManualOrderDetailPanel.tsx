@@ -30,6 +30,7 @@ const getOrderFetchMonitorKey = (userId: number, uid: string) => `${userId}:${ui
 const getAssignQueueGroupKey = (row: UserAssignQueue) => row.shopGroupCode || `group-${row.shopGroupId ?? 0}`;
 const DEFAULT_ASSIGN_QUEUE_MONITOR_DURATION_SECONDS = 120;
 const ASSIGN_QUEUE_MONITOR_REFRESH_INTERVAL_MS = 2_000;
+const USER_SEARCH_DEBOUNCE_MS = 300;
 
 interface AssignQueueGroup {
   groupKey: string;
@@ -47,6 +48,8 @@ export function ManualOrderDetailPanel() {
   const [details, setDetails] = useState<ManualOrderDetailPage | null>(null);
   const [approvalRateOrder, setApprovalRateOrder] = useState<"ascend" | "descend" | null>(null);
   const [userOptions, setUserOptions] = useState<ManualUserOption[]>([]);
+  const [userOptionsLoading, setUserOptionsLoading] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<ManualUserOption | null>(null);
   const [shopCategoryOptions, setShopCategoryOptions] = useState<ManualShopCategoryOption[]>([]);
   const [orderFetchMonitors, setOrderFetchMonitors] = useState<Map<string, ManualOrderFetchMonitor>>(new Map());
   const [assignQueueRecord, setAssignQueueRecord] = useState<ManualOrderDetail | null>(null);
@@ -58,7 +61,8 @@ export function ManualOrderDetailPanel() {
   const [assignQueueMonitorDurationSeconds, setAssignQueueMonitorDurationSeconds] = useState(DEFAULT_ASSIGN_QUEUE_MONITOR_DURATION_SECONDS);
   const [assignQueueMonitoring, setAssignQueueMonitoring] = useState(false);
   const [assignQueueMonitorRemainingSeconds, setAssignQueueMonitorRemainingSeconds] = useState(0);
-  const userOptionCacheRef = useRef(new Map<number, ManualUserOption>());
+  const userSearchRequestIdRef = useRef(0);
+  const userSearchTimerRef = useRef<number | null>(null);
   const monitorRequestIdRef = useRef(0);
   const assignQueueMonitorTimerRef = useRef<number | null>(null);
   const assignQueueMonitorSessionRef = useRef(0);
@@ -129,21 +133,24 @@ export function ManualOrderDetailPanel() {
   };
 
   const searchUsers = async (keyword?: string) => {
-    const normalizedKeyword = keyword?.trim().toLowerCase() ?? "";
-    const cachedOptions = Array.from(userOptionCacheRef.current.values()).filter((user) =>
-      !normalizedKeyword || user.username.toLowerCase().includes(normalizedKeyword) || user.nickname?.toLowerCase().includes(normalizedKeyword),
-    );
-    if (cachedOptions.length > 0) {
-      setUserOptions(cachedOptions);
-      return;
-    }
+    const searchRequestId = ++userSearchRequestIdRef.current;
+    setUserOptionsLoading(true);
     try {
       const fetchedOptions = await fetchManualTaskStatisticUsers(keyword);
-      fetchedOptions.forEach((user) => userOptionCacheRef.current.set(user.id, user));
+      if (searchRequestId !== userSearchRequestIdRef.current) return;
       setUserOptions(fetchedOptions);
     } catch (error) {
+      if (searchRequestId !== userSearchRequestIdRef.current) return;
+      setUserOptions([]);
       message.error(error instanceof Error ? error.message : "加载人工用户列表失败");
+    } finally {
+      if (searchRequestId === userSearchRequestIdRef.current) setUserOptionsLoading(false);
     }
+  };
+
+  const searchUsersDebounced = (keyword?: string) => {
+    if (userSearchTimerRef.current !== null) window.clearTimeout(userSearchTimerRef.current);
+    userSearchTimerRef.current = window.setTimeout(() => void searchUsers(keyword), USER_SEARCH_DEBOUNCE_MS);
   };
 
   const loadShopCategories = async () => {
@@ -162,10 +169,10 @@ export function ManualOrderDetailPanel() {
     return () => {
       assignQueueMonitorSessionRef.current += 1;
       if (assignQueueMonitorTimerRef.current !== null) window.clearInterval(assignQueueMonitorTimerRef.current);
+      if (userSearchTimerRef.current !== null) window.clearTimeout(userSearchTimerRef.current);
     };
   }, []);
 
-  const selectedUser = filters.userId ? userOptionCacheRef.current.get(filters.userId) : undefined;
   const resolvedUserOptions = selectedUser && !userOptions.some((user) => user.id === selectedUser.id) ? [selectedUser, ...userOptions] : userOptions;
   const displayedRecords = useMemo(() => {
     const records = details?.records ?? [];
@@ -515,10 +522,18 @@ export function ManualOrderDetailPanel() {
                 filterOption={false}
                 placeholder="输入用户名或昵称搜索"
                 style={{ width: "100%", marginTop: 8 }}
+                loading={userOptionsLoading}
+                notFoundContent={userOptionsLoading ? "搜索中..." : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="无匹配用户" />}
                 options={resolvedUserOptions.map((user) => ({ value: user.id, label: user.nickname ? `${user.username} (${user.nickname})` : user.username }))}
                 value={filters.userId}
-                onSearch={(value) => void searchUsers(value)}
-                onChange={(value) => setFilters((current) => ({ ...current, userId: value }))}
+                onSearch={(value) => searchUsersDebounced(value)}
+                onChange={(value) => {
+                  setSelectedUser(resolvedUserOptions.find((user) => user.id === value) ?? null);
+                  setFilters((current) => ({ ...current, userId: value }));
+                }}
+                onOpenChange={(open) => {
+                  if (open) searchUsersDebounced();
+                }}
               />
             </div>
             <div className="manual-order-detail-filter-field"><Text type="secondary">UID</Text><Input allowClear placeholder="输入 UID" value={filters.uid} onChange={(event) => setFilters((current) => ({ ...current, uid: event.target.value }))} onPressEnter={() => { const next = { ...filters, page: 1 }; setFilters(next); void loadDetails(next); }} style={{ marginTop: 8 }} /></div>
@@ -551,7 +566,7 @@ export function ManualOrderDetailPanel() {
                 />
               </div>
             </div>
-            <div className="manual-order-detail-filter-actions"><Button type="primary" icon={<SearchOutlined />} loading={loading} onClick={() => { const next = { ...filters, page: 1 }; setFilters(next); void loadDetails(next); }}>查询</Button><Button icon={<ReloadOutlined />} onClick={() => { const reset = { dateRange: defaultDateRange, userId: undefined, uid: "", shopCategoryIds: [] as number[], excludeWhitelistUsers: false, fansNumOrder: undefined, fansNumMin: undefined, fansNumMax: undefined, approvalRateMin: undefined, approvalRateMax: undefined, page: 1, pageSize: 20 }; setFilters(reset); void loadDetails(reset); }}>重置</Button></div>
+            <div className="manual-order-detail-filter-actions"><Button type="primary" icon={<SearchOutlined />} loading={loading} onClick={() => { const next = { ...filters, page: 1 }; setFilters(next); void loadDetails(next); }}>查询</Button><Button icon={<ReloadOutlined />} onClick={() => { const reset = { dateRange: defaultDateRange, userId: undefined, uid: "", shopCategoryIds: [] as number[], excludeWhitelistUsers: false, fansNumOrder: undefined, fansNumMin: undefined, fansNumMax: undefined, approvalRateMin: undefined, approvalRateMax: undefined, page: 1, pageSize: 20 }; setSelectedUser(null); setFilters(reset); void loadDetails(reset); }}>重置</Button></div>
           </div>
         </Space>
       </section>
