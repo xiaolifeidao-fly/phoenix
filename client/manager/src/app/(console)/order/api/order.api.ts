@@ -178,6 +178,126 @@ export async function forceFinishOrders(orderIds: number[]) {
   return unwrapApiResponse(response.data);
 }
 
+/** 订单实时数据：barry 现调第三方平台取当前值 */
+export interface OrderRealDetail {
+  extOrderId: string;
+  shopInletRecordId?: number;
+  shopId?: number;
+  businessId?: string;
+  /** 平台当前值，如当前点赞总数；-1 表示没取到 */
+  nowNum: number;
+  /** 实际增量 = 当前值 - 起始值；没取到当前值时为空 */
+  factNum?: number;
+  shopStatus?: string;
+  disposeStatus?: string;
+  unCheckCount: number;
+  checkedCount: number;
+  /** barry 调第三方失败时的原因 */
+  getNowError?: string;
+}
+
+export async function fetchOrderRealDetail(orderId: number) {
+  const response = await instance.get<ApiResponse<OrderRealDetail>>("/barry/order-real-detail", {
+    params: { orderId },
+    timeout: 30_000,
+  });
+  return unwrapApiResponse(response.data);
+}
+
+/** 实时数据是否可用：barry 取不到平台当前值时 nowNum 为 -1 且 factNum 为空 */
+export function hasRealFactNum(detail: OrderRealDetail | null): detail is OrderRealDetail & { factNum: number } {
+  return Boolean(detail) && typeof detail!.factNum === "number" && detail!.nowNum >= 0;
+}
+
+/**
+ * 建议补款数量 = min(下单量, 目标增量) - 实际增量，小于 0 取 0。
+ * 与老管理端前端、kakrolot RefundBatchTask.calculateBkNum 的算法保持一致。
+ */
+export function calculateSuggestedBkNum(order: OrderRecord, factNum: number): number {
+  const targetAmount = Math.min(order.orderNum, order.endNum - order.initNum);
+  const result = targetAmount - factNum;
+  return result > 0 ? result : 0;
+}
+
+/** 做单人分布：barry order_record 按做单用户聚合 */
+export interface OrderManualUserSummary {
+  userId: number;
+  username: string;
+  channel?: string;
+  orderNum: number;
+  upAccountNum: number;
+  /** 未提交数：接了单还没提交审核（PENDING） */
+  pendingNum: number;
+  unCheckNum: number;
+  checkedNum: number;
+  checkErrorNum: number;
+}
+
+/** 做单明细：barry order_record 一行 */
+export interface OrderManualRecord {
+  id: number;
+  userId: number;
+  username: string;
+  uid: string;
+  uidType?: string;
+  channel?: string;
+  orderStatus: string;
+  orderScore: number;
+  startNum: number;
+  endNum: number;
+  assignmentId?: number;
+  tag?: string;
+  description?: string;
+  expireTime?: string;
+  createdTime?: string;
+  updatedTime?: string;
+}
+
+export interface OrderManualDetailPage {
+  orderId: string;
+  shopInletRecordId?: number;
+  /** barry 商品 ID，为空表示该订单在 barry 还没有进件/商品记录 */
+  shopId?: number;
+  total: number;
+  page: number;
+  pageSize: number;
+  records: OrderManualRecord[];
+}
+
+export interface OrderManualDetailQuery {
+  orderId: number;
+  userId?: number;
+  page?: number;
+  pageSize?: number;
+}
+
+/** barry order_record 的状态，与订单状态不同 */
+export const ORDER_MANUAL_STATUS_LABELS: Record<string, string> = {
+  PENDING: "进行中",
+  UN_CHECK: "审核中",
+  CHECKED: "审核成功",
+  CHECK_ERROR: "审核失败",
+  DELETE: "账户被封",
+  SECRET: "账户设置隐私",
+  UN_AUTHORIZE: "账户未授权",
+};
+
+export async function fetchOrderManualDetailUsers(orderId: number) {
+  const response = await instance.get<ApiResponse<OrderManualUserSummary[]>>(
+    "/barry/order-manual-details/users",
+    { params: { orderId }, timeout: 30_000 },
+  );
+  return unwrapApiResponse(response.data) ?? [];
+}
+
+export async function fetchOrderManualDetails(query: OrderManualDetailQuery) {
+  const response = await instance.get<ApiResponse<OrderManualDetailPage>>("/barry/order-manual-details", {
+    params: query,
+    timeout: 30_000,
+  });
+  return unwrapApiResponse(response.data);
+}
+
 export async function bkOrder(orderId: number, num: number) {
   const response = await instance.post<ApiResponse<unknown>>(`/order-records/${orderId}/bk`, {
     num,

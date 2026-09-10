@@ -22,6 +22,10 @@ func (h *BarryHandler) registerProductRoutes(engine *gin.RouterGroup) {
 	engine.PUT("/barry/shop-groups/:shopGroupId/bridge-configs/:bridgeConfigId/active", h.activateBridgeConfig)
 	engine.PUT("/barry/shop-groups/:shopGroupId/bridge-configs/:bridgeConfigId/disable", h.disableBridgeConfig)
 	engine.POST("/barry/shop-groups/:shopGroupId/bridge-configs/:bridgeConfigId/reset-statistics", h.resetBridgeConfigStatistics)
+	engine.GET("/barry/shop-groups/:shopGroupId/whitelist-groups", h.listWhitelistGroups)
+	engine.POST("/barry/shop-groups/:shopGroupId/whitelist-groups", h.createWhitelistGroup)
+	engine.PUT("/barry/shop-groups/:shopGroupId/whitelist-groups/:whitelistGroupId", h.updateWhitelistGroup)
+	engine.DELETE("/barry/shop-groups/:shopGroupId/whitelist-groups/:whitelistGroupId", h.deleteWhitelistGroup)
 	engine.GET("/barry/product-categories", h.listProductCategories)
 	engine.POST("/barry/product-categories", h.createProductCategory)
 	engine.PUT("/barry/product-categories/:id", h.updateProductCategory)
@@ -103,6 +107,58 @@ func (h *BarryHandler) deleteShopGroup(c *gin.Context) {
 		return
 	}
 	err := h.barryService.ShopGroup.Delete(c.Request.Context(), shopGroupID)
+	commonRouter.ToJson(c, map[string]bool{"deleted": err == nil}, err)
+}
+
+func (h *BarryHandler) listWhitelistGroups(c *gin.Context) {
+	shopGroupID, ok := parseBarryPositiveID(c, "shopGroupId")
+	if !ok {
+		return
+	}
+	response, err := h.barryService.WhitelistGroup.List(c.Request.Context(), shopGroupID)
+	commonRouter.ToJson(c, response, err)
+}
+
+func (h *BarryHandler) createWhitelistGroup(c *gin.Context) {
+	h.saveWhitelistGroup(c, 0)
+}
+
+func (h *BarryHandler) updateWhitelistGroup(c *gin.Context) {
+	whitelistGroupID, ok := parseBarryPositiveID(c, "whitelistGroupId")
+	if !ok {
+		return
+	}
+	h.saveWhitelistGroup(c, int(whitelistGroupID))
+}
+
+// Barry exposes a single save endpoint, so both create and update funnel here;
+// the id decides which one Barry performs.
+func (h *BarryHandler) saveWhitelistGroup(c *gin.Context, whitelistGroupID int) {
+	shopGroupID, ok := parseBarryPositiveID(c, "shopGroupId")
+	if !ok {
+		return
+	}
+	var request barryDTO.WhitelistGroupDTO
+	if c.ShouldBindJSON(&request) != nil || request.Code == "" || request.Name == "" {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	request.ID = whitelistGroupID
+	request.ShopGroupID = shopGroupID
+	response, err := h.barryService.WhitelistGroup.Save(c.Request.Context(), shopGroupID, &request)
+	commonRouter.ToJson(c, response, err)
+}
+
+func (h *BarryHandler) deleteWhitelistGroup(c *gin.Context) {
+	shopGroupID, ok := parseBarryPositiveID(c, "shopGroupId")
+	if !ok {
+		return
+	}
+	whitelistGroupID, ok := parseBarryPositiveID(c, "whitelistGroupId")
+	if !ok {
+		return
+	}
+	err := h.barryService.WhitelistGroup.Delete(c.Request.Context(), shopGroupID, whitelistGroupID)
 	commonRouter.ToJson(c, map[string]bool{"deleted": err == nil}, err)
 }
 

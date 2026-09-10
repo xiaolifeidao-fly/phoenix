@@ -9,6 +9,8 @@ interface WorkspaceDrawerProps {
   title: ReactNode;
   children: ReactNode;
   submitting?: boolean;
+  /** 确认按钮单独置灰，用于表单数据还没准备好、但仍允许关闭抽屉的场景 */
+  okDisabled?: boolean;
   okText?: string;
   cancelText?: string;
   width?: DrawerProps["width"];
@@ -21,6 +23,7 @@ export function WorkspaceDrawer({
   title,
   children,
   submitting = false,
+  okDisabled = false,
   okText = "保存",
   cancelText = "取消",
   width = 560,
@@ -43,7 +46,7 @@ export function WorkspaceDrawer({
               {cancelText}
             </Button>
             {onSubmit ? (
-              <Button type="primary" loading={submitting} onClick={() => void onSubmit()}>
+              <Button type="primary" loading={submitting} disabled={okDisabled} onClick={() => void onSubmit()}>
                 {okText}
               </Button>
             ) : null}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dayjs, { type Dayjs } from "dayjs";
 import {
   ArrowDownOutlined,
@@ -61,9 +61,11 @@ import {
   createShopGroup,
   deleteShopGroup,
   fetchShopGroups,
+  fetchWhitelistGroups,
   updateShopGroup,
   type ShopGroupPayload,
   type ShopGroupRecord,
+  type WhitelistGroupRecord,
 } from "../../product-group-management/api/product-group.api";
 import {
   fetchBarryAppUsers,
@@ -131,34 +133,12 @@ interface JudgeConfigPreviewRecord {
 type AssignConfigModalMode = "view" | "edit";
 type DimensionSwitchKey = "user" | "uid" | "approvalRate" | "video" | "refund";
 type WhitelistStatusSortOrder = "ascend" | "descend" | null;
-type WhitelistGroup = "BIG_CUSTOMER" | "SMALL_CUSTOMER" | "RETAILER";
-type BatchWhitelistGroup = WhitelistGroup | "UNGROUPED";
 
-const whitelistGroupOptions: { label: string; value: WhitelistGroup }[] = [
-  { label: "大户", value: "BIG_CUSTOMER" },
-  { label: "小户", value: "SMALL_CUSTOMER" },
-  { label: "散户", value: "RETAILER" },
-];
-
-const batchWhitelistGroupOptions: { label: string; value: BatchWhitelistGroup }[] = [
-  ...whitelistGroupOptions,
-  { label: "未分组", value: "UNGROUPED" },
-];
-
-const whitelistGroupLabels: Record<string, string> = {
-  BIG_CUSTOMER: "大户",
-  SMALL_CUSTOMER: "小户",
-  RETAILER: "散户",
-  大户: "大户",
-  小户: "小户",
-  散户: "散户",
-  UNGROUPED: "未分组",
-};
-
-const getWhitelistGroupLabel = (group?: string) => {
-  const normalizedGroup = group?.trim();
-  return normalizedGroup ? whitelistGroupLabels[normalizedGroup] || normalizedGroup : "未分组";
-};
+/**
+ * 服务端「未分组」哨兵值，不是字典里的分组。
+ * 白名单查询把它翻译成 group / group_name 皆空，所以不能拿它去建真实分组。
+ */
+const UNGROUPED_WHITELIST_GROUP = "UNGROUPED";
 
 const parseTimeRanges = (value?: string) => (value || "").split(",").map((item) => item.trim()).filter((item) => /^\d{2}:\d{2}-\d{2}:\d{2}$/.test(item));
 const formatTimeRanges = (ranges: string[]) => ranges.join(",");
@@ -366,11 +346,14 @@ export function ManualProductManagementPanel() {
   const [updatingDimensionSwitches, setUpdatingDimensionSwitches] = useState<Set<DimensionSwitchKey>>(() => new Set());
   const [updatingWhitelistIds, setUpdatingWhitelistIds] = useState<Set<number>>(() => new Set());
   const [whitelistUsers, setWhitelistUsers] = useState<WhitelistUserRecord[]>([]);
+  const whitelistGroupsRequestRef = useRef(0);
+  const [whitelistGroups, setWhitelistGroups] = useState<WhitelistGroupRecord[]>([]);
+  const [whitelistGroupsLoading, setWhitelistGroupsLoading] = useState(false);
   const [whitelistTotal, setWhitelistTotal] = useState(0);
   const [whitelistPageIndex, setWhitelistPageIndex] = useState(1);
   const [whitelistPageSize, setWhitelistPageSize] = useState(10);
   const [whitelistStatusFilter, setWhitelistStatusFilter] = useState("");
-  const [whitelistGroupFilter, setWhitelistGroupFilter] = useState<BatchWhitelistGroup | "">("");
+  const [whitelistGroupFilter, setWhitelistGroupFilter] = useState<string>("");
   const [whitelistUserSearchKeyword, setWhitelistUserSearchKeyword] = useState("");
   const [whitelistStatusSortOrder, setWhitelistStatusSortOrder] = useState<WhitelistStatusSortOrder>(null);
   const [whitelistGroupSortOrder, setWhitelistGroupSortOrder] = useState<WhitelistStatusSortOrder>(null);
@@ -383,9 +366,9 @@ export function ManualProductManagementPanel() {
   const [whitelistPolicyRateDays, setWhitelistPolicyRateDays] = useState<number | null>(null);
   const [whitelistPolicyLoopNum, setWhitelistPolicyLoopNum] = useState<number | null>(null);
   const [whitelistPolicyTimeRanges, setWhitelistPolicyTimeRanges] = useState<string[]>([]);
-  const [selectedWhitelistGroup, setSelectedWhitelistGroup] = useState<WhitelistGroup>("BIG_CUSTOMER");
+  const [selectedWhitelistGroup, setSelectedWhitelistGroup] = useState<string>("");
   const [batchWhitelistModalOpen, setBatchWhitelistModalOpen] = useState(false);
-  const [batchWhitelistGroup, setBatchWhitelistGroup] = useState<WhitelistGroup>("BIG_CUSTOMER");
+  const [batchWhitelistGroup, setBatchWhitelistGroup] = useState<string>("");
   const [batchWhitelistUsers, setBatchWhitelistUsers] = useState<BarryAppUserRecord[]>([]);
   const [batchWhitelistTargetKeys, setBatchWhitelistTargetKeys] = useState<string[]>([]);
   const [batchUnassignedPageIndex, setBatchUnassignedPageIndex] = useState(1);
@@ -467,13 +450,51 @@ export function ManualProductManagementPanel() {
     });
   }, [filters, products, selectedShopGroupId]);
 
+  // 分组候选项来自当前商品所属「商品分组」下配置的白名单分组字典；白名单里存的仍是 code。
+  const whitelistGroupOptions = useMemo(
+    () => whitelistGroups.map((group) => ({ label: group.name || group.code, value: group.code })),
+    [whitelistGroups],
+  );
+
+  const batchWhitelistGroupOptions = useMemo(
+    () => [...whitelistGroupOptions, { label: "未分组", value: UNGROUPED_WHITELIST_GROUP }],
+    [whitelistGroupOptions],
+  );
+
+  const whitelistGroupLabelMap = useMemo(
+    () => new Map(whitelistGroups.map((group) => [group.code, group.name || group.code])),
+    [whitelistGroups],
+  );
+
+  // 分组名称可以随时改，排序只能按字典自身的 sortId，不能按名称做本地化比较。
+  const whitelistGroupSortMap = useMemo(
+    () => new Map(whitelistGroups.map((group, index) => [group.code, group.sortId ?? index])),
+    [whitelistGroups],
+  );
+
+  const getWhitelistGroupLabel = useCallback(
+    (group?: string) => {
+      const normalizedGroup = group?.trim();
+      if (!normalizedGroup || normalizedGroup === UNGROUPED_WHITELIST_GROUP) {
+        return "未分组";
+      }
+      // 字典里找不到的 code（分组被删掉、或历史脏数据）原样展示，避免把数据显示成"未分组"。
+      return whitelistGroupLabelMap.get(normalizedGroup) || normalizedGroup;
+    },
+    [whitelistGroupLabelMap],
+  );
+
   const sortedWhitelistUsers = useMemo(() => {
     if (!whitelistStatusSortOrder && !whitelistGroupSortOrder) {
       return whitelistUsers;
     }
+    const groupRank = (group?: string) =>
+      whitelistGroupSortMap.get((group || "").trim()) ?? Number.MAX_SAFE_INTEGER;
     return [...whitelistUsers].sort((left, right) => {
       if (whitelistGroupSortOrder) {
-        const groupResult = getWhitelistGroupLabel(left.group).localeCompare(getWhitelistGroupLabel(right.group), "zh-CN");
+        const groupResult =
+          groupRank(left.group) - groupRank(right.group)
+          || getWhitelistGroupLabel(left.group).localeCompare(getWhitelistGroupLabel(right.group), "zh-CN");
         if (groupResult !== 0) {
           return whitelistGroupSortOrder === "ascend" ? groupResult : -groupResult;
         }
@@ -486,7 +507,7 @@ export function ManualProductManagementPanel() {
       }
       return 0;
     });
-  }, [whitelistGroupSortOrder, whitelistStatusSortOrder, whitelistUsers]);
+  }, [getWhitelistGroupLabel, whitelistGroupSortMap, whitelistGroupSortOrder, whitelistStatusSortOrder, whitelistUsers]);
 
   const productTypeOptions = useMemo(
     () =>
@@ -550,7 +571,7 @@ export function ManualProductManagementPanel() {
           .join(" / "),
         value: String(user.userId),
       })),
-    [appUserOptions],
+    [appUserOptions, getWhitelistGroupLabel],
   );
 
   const batchWhitelistDataSource = useMemo(
@@ -559,7 +580,7 @@ export function ManualProductManagementPanel() {
       title: user.username || user.name || `用户 ${user.userId}`,
       description: [user.userId, user.channel || "-", getWhitelistGroupLabel(user.group || user.groupName || batchWhitelistGroup)].join(" · "),
     })),
-    [batchWhitelistGroup, batchWhitelistUsers],
+    [batchWhitelistGroup, batchWhitelistUsers, getWhitelistGroupLabel],
   );
 
   const openCreateModal = () => {
@@ -636,6 +657,9 @@ export function ManualProductManagementPanel() {
     setWhitelistPageSize(10);
     setWhitelistStatusFilter("");
     setWhitelistGroupFilter("");
+    setWhitelistGroups([]);
+    setSelectedWhitelistGroup("");
+    setBatchWhitelistGroup("");
     setWhitelistUserSearchKeyword("");
     setWhitelistStatusSortOrder(null);
     setWhitelistGroupSortOrder(null);
@@ -666,6 +690,7 @@ export function ManualProductManagementPanel() {
     void loadAssignConfigs(record);
     void loadJudgeConfigs(record);
     void loadUserWhitelists(record, 1, 10, "", "", "");
+    void loadWhitelistGroups(record);
     void loadAssignDimensionRules(record);
     void loadUidSubmitRateUserStrategies(record);
     void loadVideoUserStrategies(record);
@@ -1160,6 +1185,32 @@ export function ManualProductManagementPanel() {
     }
   };
 
+  /** 加载该商品所属商品分组下的白名单分组字典，作为白名单维度的分组候选项。 */
+  const loadWhitelistGroups = async (record: ManualProductRecord) => {
+    const seq = ++whitelistGroupsRequestRef.current;
+    const shopGroupId = record.shopGroupId;
+    if (!shopGroupId) {
+      setWhitelistGroups([]);
+      setWhitelistGroupsLoading(false);
+      return;
+    }
+    setWhitelistGroupsLoading(true);
+    try {
+      const groups = await fetchWhitelistGroups(shopGroupId);
+      if (seq !== whitelistGroupsRequestRef.current) return;
+      setWhitelistGroups(groups);
+      const firstGroupCode = groups[0]?.code ?? "";
+      setSelectedWhitelistGroup(firstGroupCode);
+      setBatchWhitelistGroup(firstGroupCode);
+    } catch (error) {
+      if (seq !== whitelistGroupsRequestRef.current) return;
+      message.error(error instanceof Error ? error.message : "加载白名单分组失败");
+      setWhitelistGroups([]);
+    } finally {
+      if (seq === whitelistGroupsRequestRef.current) setWhitelistGroupsLoading(false);
+    }
+  };
+
   const loadUserWhitelists = async (
     record: ManualProductRecord,
     pageIndex = whitelistPageIndex,
@@ -1229,7 +1280,7 @@ export function ManualProductManagementPanel() {
     }
   };
 
-  const changeWhitelistGroupFilter = (group: BatchWhitelistGroup | "") => {
+  const changeWhitelistGroupFilter = (group: string) => {
     setWhitelistGroupFilter(group);
     setWhitelistPageIndex(1);
     if (strategyProduct) {
@@ -1419,7 +1470,11 @@ export function ManualProductManagementPanel() {
       message.warning("请先搜索并选择用户");
       return;
     }
-    setSelectedWhitelistGroup("BIG_CUSTOMER");
+    if (whitelistGroups.length === 0) {
+      message.warning("当前商品分组下还没有白名单分组，请先到「商品分组」页面创建");
+      return;
+    }
+    setSelectedWhitelistGroup(whitelistGroups[0].code);
     setAddWhitelistModalOpen(true);
   };
 
@@ -1454,7 +1509,7 @@ export function ManualProductManagementPanel() {
   };
 
   const loadBatchWhitelistUsers = async (
-    group: WhitelistGroup,
+    group: string,
     unassignedPageIndex = batchUnassignedPageIndex,
     groupedPageIndex = batchGroupedPageIndex,
   ) => {
@@ -1464,7 +1519,7 @@ export function ManualProductManagementPanel() {
     setBatchWhitelistLoading(true);
     try {
       const [unassigned, selected] = await Promise.all([
-        fetchBarryUserWhitelists({ pageIndex: unassignedPageIndex, pageSize: 50, shopCategoryId: strategyProduct.id, group: "UNGROUPED" }),
+        fetchBarryUserWhitelists({ pageIndex: unassignedPageIndex, pageSize: 50, shopCategoryId: strategyProduct.id, group: UNGROUPED_WHITELIST_GROUP }),
         fetchBarryUserWhitelists({ pageIndex: groupedPageIndex, pageSize: 50, shopCategoryId: strategyProduct.id, group }),
       ]);
       const users = new Map<string, BarryAppUserRecord>();
@@ -1526,13 +1581,18 @@ export function ManualProductManagementPanel() {
   };
 
   const openBatchWhitelistModal = () => {
-    setBatchWhitelistGroup("BIG_CUSTOMER");
+    if (whitelistGroups.length === 0) {
+      message.warning("当前商品分组下还没有白名单分组，请先到「商品分组」页面创建");
+      return;
+    }
+    const firstGroupCode = whitelistGroups[0].code;
+    setBatchWhitelistGroup(firstGroupCode);
     setBatchUnassignedPageIndex(1);
     setBatchGroupedPageIndex(1);
     setBatchGroupAddedIds(new Set());
     setBatchGroupRemovedIds(new Set());
     setBatchWhitelistModalOpen(true);
-    void loadBatchWhitelistUsers("BIG_CUSTOMER");
+    void loadBatchWhitelistUsers(firstGroupCode);
   };
 
   const searchBatchUnassignedUsers = async (keyword: string) => {
@@ -1555,7 +1615,7 @@ export function ManualProductManagementPanel() {
         pageIndex: 1,
         pageSize: 50,
         shopCategoryId: strategyProduct.id,
-        group: "UNGROUPED",
+        group: UNGROUPED_WHITELIST_GROUP,
         username: searchText,
       });
       const remoteUsers = Array.isArray(page.data) ? page.data : [];
@@ -1674,7 +1734,7 @@ export function ManualProductManagementPanel() {
     }
   };
 
-  const updateWhitelistUserGroup = async (user: WhitelistUserRecord, group: WhitelistGroup) => {
+  const updateWhitelistUserGroup = async (user: WhitelistUserRecord, group: string) => {
     if (!user.id || user.group === group) {
       return;
     }
@@ -2948,10 +3008,11 @@ export function ManualProductManagementPanel() {
                           { label: "失效", value: "INACTIVE" },
                         ]}
                       />
-                      <Select<BatchWhitelistGroup | "ALL">
+                      <Select<string>
                         size="small"
                         value={whitelistGroupFilter || "ALL"}
-                        style={{ width: 120 }}
+                        style={{ width: 140 }}
+                        loading={whitelistGroupsLoading}
                         onChange={(value) => changeWhitelistGroupFilter(value === "ALL" ? "" : value)}
                         options={[{ label: "全部分组", value: "ALL" }, ...batchWhitelistGroupOptions]}
                       />
@@ -2977,6 +3038,18 @@ export function ManualProductManagementPanel() {
                     </Space>
                   </div>
                   <table style={strategyStyles.ruleTable}>
+                    {/* tableLayout: fixed 下不给列宽就是 9 列平分，分组/状态这种带控件的列会被挤到互相重叠 */}
+                    <colgroup>
+                      <col style={{ width: "8%" }} />
+                      <col style={{ width: "13%" }} />
+                      <col style={{ width: "10%" }} />
+                      <col style={{ width: "13%" }} />
+                      <col style={{ width: "12%" }} />
+                      <col style={{ width: "14%" }} />
+                      <col style={{ width: "14%" }} />
+                      <col style={{ width: "8%" }} />
+                      <col style={{ width: "8%" }} />
+                    </colgroup>
                     <thead>
                       <tr>
                         <th style={strategyStyles.th}>USERID</th>
@@ -3038,14 +3111,14 @@ export function ManualProductManagementPanel() {
                             <td style={strategyStyles.td}>{user.username || user.name || "-"}</td>
                             <td style={strategyStyles.td}>{user.channel}</td>
                             <td style={strategyStyles.td}>
-                              <Select<WhitelistGroup>
+                              <Select<string>
                                 size="small"
-                                value={whitelistGroupOptions.some((option) => option.value === user.group) ? user.group as WhitelistGroup : undefined}
+                                value={whitelistGroupOptions.some((option) => option.value === user.group) ? user.group : undefined}
                                 placeholder={getWhitelistGroupLabel(user.group)}
                                 options={whitelistGroupOptions}
-                                loading={user.id ? updatingWhitelistIds.has(user.id) : false}
-                                disabled={!user.id}
-                                style={{ width: 110 }}
+                                loading={whitelistGroupsLoading || (user.id ? updatingWhitelistIds.has(user.id) : false)}
+                                disabled={!user.id || whitelistGroupOptions.length === 0}
+                                style={{ width: "100%" }}
                                 onChange={(group) => void updateWhitelistUserGroup(user, group)}
                               />
                             </td>
@@ -3660,9 +3733,11 @@ export function ManualProductManagementPanel() {
         onOk={() => void addSelectedAppUser()}
       >
         <div style={{ marginBottom: 12, color: "#4f5967" }}>请选择要放入的分组：</div>
-        <Select<WhitelistGroup>
-          value={selectedWhitelistGroup}
+        <Select<string>
+          value={selectedWhitelistGroup || undefined}
           options={whitelistGroupOptions}
+          loading={whitelistGroupsLoading}
+          placeholder="请选择分组"
           style={{ width: "100%" }}
           onChange={setSelectedWhitelistGroup}
         />
@@ -3719,10 +3794,12 @@ export function ManualProductManagementPanel() {
             "未分组用户",
             <Space key="group-filter" size={8}>
               <span>已有分组</span>
-              <Select<WhitelistGroup>
-                value={batchWhitelistGroup}
+              <Select<string>
+                value={batchWhitelistGroup || undefined}
                 options={whitelistGroupOptions}
-                style={{ width: 120 }}
+                loading={whitelistGroupsLoading}
+                placeholder="请选择分组"
+                style={{ width: 140 }}
                 onChange={(group) => {
                   setBatchWhitelistGroup(group);
                   setBatchUnassignedPageIndex(1);

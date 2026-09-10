@@ -4,6 +4,7 @@ import (
 	baseDTO "common/base/dto"
 	commonRouter "common/middleware/routers"
 	"strconv"
+	"strings"
 	barryDTO "suffer/service/barry/dto"
 
 	"github.com/gin-gonic/gin"
@@ -22,6 +23,8 @@ func (h *BarryHandler) registerUserRoutes(engine *gin.RouterGroup) {
 	engine.PUT("/barry/user-details", h.updateUserDetail)
 	engine.PUT("/barry/user-details/password", h.changeUserDetailPassword)
 	engine.GET("/barry/user-points", h.listUserPoints)
+	engine.POST("/barry/user-points/adjust", h.adjustUserPoints)
+	engine.GET("/barry/user-points/summary", h.getUserPointsSummary)
 	engine.GET("/barry/point-withdraws", h.listPointWithdraws)
 	engine.GET("/barry/user-withdraw-records", h.listUserWithdrawRecords)
 	engine.POST("/barry/user-withdraws/account", h.accountUserWithdraw)
@@ -144,6 +147,54 @@ func (h *BarryHandler) listUserPoints(c *gin.Context) {
 	response, err := h.barryService.UserPoint.List(c.Request.Context(), q)
 	if err != nil {
 		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	commonRouter.ToJson(c, response.Data, nil)
+}
+
+// 人工调整用户积分：正数增加、负数扣减，只作用于可用余额。
+func (h *BarryHandler) adjustUserPoints(c *gin.Context) {
+	var req barryDTO.AdjustUserPointsDTO
+	if c.ShouldBindJSON(&req) != nil || req.UserID <= 0 || req.Points == 0 || strings.TrimSpace(req.Description) == "" {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	req.Description = strings.TrimSpace(req.Description)
+	req.Serial = strings.TrimSpace(req.Serial)
+	response, err := h.barryService.UserPointsAdmin.Adjust(c.Request.Context(), &req)
+	if err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	if !response.Success {
+		if response.Message == "" {
+			commonRouter.ToError(c, "积分调整失败")
+			return
+		}
+		commonRouter.ToError(c, response.Message)
+		return
+	}
+	commonRouter.ToJson(c, "操作成功", nil)
+}
+
+// 全部账号余额汇总：更新时间下界 + 排除用户，两者都可留空。
+func (h *BarryHandler) getUserPointsSummary(c *gin.Context) {
+	var q barryDTO.UserPointsSummaryQueryDTO
+	if c.ShouldBindQuery(&q) != nil {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := h.barryService.UserPointsAdmin.Summary(c.Request.Context(), q)
+	if err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	if !response.Success {
+		if response.Message == "" {
+			commonRouter.ToError(c, "统计账号余额失败")
+			return
+		}
+		commonRouter.ToError(c, response.Message)
 		return
 	}
 	commonRouter.ToJson(c, response.Data, nil)

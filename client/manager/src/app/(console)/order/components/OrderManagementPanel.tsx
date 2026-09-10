@@ -18,6 +18,7 @@ import {
   ReloadOutlined,
   RollbackOutlined,
   SearchOutlined,
+  TeamOutlined,
   UpOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
@@ -47,6 +48,7 @@ import { useOrderManagement } from "../hooks/useOrderManagement";
 import { OrderAmountDetailDrawer } from "./OrderAmountDetailDrawer";
 import { OrderBkModal } from "./OrderBkModal";
 import { OrderExceptionModal } from "./OrderExceptionModal";
+import { OrderManualDetailModal } from "./OrderManualDetailModal";
 import {
   OrderMetricFilterFields,
   buildMetricQuery,
@@ -163,6 +165,8 @@ export function OrderManagementPanel() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [bkOrder, setBkOrder] = useState<OrderRecord | null>(null);
   const [bkOpen, setBkOpen] = useState(false);
+  const [manualDetailOrder, setManualDetailOrder] = useState<OrderRecord | null>(null);
+  const [manualDetailOpen, setManualDetailOpen] = useState(false);
   const [selectedOrderIds, setSelectedOrderIds] = useState<number[]>([]);
   const [exceptionOrder, setExceptionOrder] = useState<OrderRecord | null>(null);
   const [exceptionOpen, setExceptionOpen] = useState(false);
@@ -553,7 +557,7 @@ export function OrderManagementPanel() {
     {
       title: "操作",
       key: "actions",
-      width: 212,
+      width: 246,
       fixed: "right",
       align: "center",
       className: "order-actions-cell",
@@ -568,6 +572,18 @@ export function OrderManagementPanel() {
               onClick={() => {
                 setDetailOrder(record);
                 setDetailOpen(true);
+              }}
+            />
+          </Tooltip>
+          <Tooltip title="做单明细">
+            <Button
+              type="text"
+              className="order-row-action"
+              icon={<TeamOutlined />}
+              aria-label="做单明细"
+              onClick={() => {
+                setManualDetailOrder(record);
+                setManualDetailOpen(true);
               }}
             />
           </Tooltip>
@@ -1094,6 +1110,15 @@ export function OrderManagementPanel() {
         onClose={() => {
           setDetailOpen(false);
           setDetailOrder(null);
+        }}
+      />
+
+      <OrderManualDetailModal
+        open={manualDetailOpen}
+        order={manualDetailOrder}
+        onClose={() => {
+          setManualDetailOpen(false);
+          setManualDetailOrder(null);
         }}
       />
 

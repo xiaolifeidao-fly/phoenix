@@ -31,9 +31,27 @@ export class ManualUserRecord {
 
   paymentMethods: ManualPaymentMethodRecord[] = [];
 
+  /** 当前余额（user_points.active_points），单位：积分 */
+  activePoints = 0;
+
+  /** 当前冻结金额（user_points.block_points），单位：积分 */
+  blockPoints = 0;
+
   createdTime?: string;
 
   updatedTime?: string;
+}
+
+/** 全部账号积分汇总。 */
+export class ManualUserPointsSummaryRecord {
+  activePoints = 0;
+
+  blockPoints = 0;
+
+  /** 可用 + 冻结 */
+  totalPoints = 0;
+
+  accountNum = 0;
 }
 
 export class BarryAppUserRecord {
@@ -125,6 +143,22 @@ export interface BarryUserWhitelistPayload {
   recentApprovalRateDays?: number;
   dailyAssignTimeRanges?: string;
   fetchTaskLoopNum?: number;
+}
+
+export interface AdjustManualUserPointsPayload {
+  userId: number;
+  /** 正数增加、负数扣减，单位：积分。只作用于可用余额。 */
+  points: number;
+  description: string;
+  /** 前端生成，重复提交同一个 serial 服务端只会生效一次。 */
+  serial?: string;
+}
+
+export interface ManualUserPointsSummaryQuery {
+  /** 更新时间下界，格式 YYYY-MM-DD HH:mm:ss；留空表示全部账号。 */
+  updatedTime?: string;
+  /** 逗号分隔的排除用户ID。 */
+  excludedUserIds?: string;
 }
 
 export interface CreateManualUserPayload {
@@ -223,4 +257,16 @@ export async function updateManualUser(payload: UpdateManualUserPayload) {
 export async function changeManualUserPassword(payload: ChangeManualUserPasswordPayload) {
   const response = await instance.put<ApiResponse<string | null>>("/barry/user-details/password", payload);
   return unwrapApiResponse(response.data);
+}
+
+export async function adjustManualUserPoints(payload: AdjustManualUserPointsPayload) {
+  const response = await instance.post<ApiResponse<string | null>>("/barry/user-points/adjust", payload);
+  return unwrapApiResponse(response.data);
+}
+
+export async function fetchManualUserPointsSummary(query?: ManualUserPointsSummaryQuery) {
+  return getData(ManualUserPointsSummaryRecord, "/barry/user-points/summary", {
+    updatedTime: query?.updatedTime?.trim() || undefined,
+    excludedUserIds: query?.excludedUserIds?.trim() || undefined,
+  });
 }

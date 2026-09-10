@@ -6,6 +6,7 @@ type BarryService struct {
 	ProductType                 *ProductTypeService
 	ShopGroup                   *ShopGroupService
 	BridgeConfig                *BridgeConfigService
+	WhitelistGroup              *WhitelistGroupService
 	ProductCategory             *ProductCategoryService
 	AssignConfig                *AssignConfigService
 	JudgeConfig                 *JudgeConfigService
@@ -19,6 +20,7 @@ type BarryService struct {
 	AssignUidSwitch             *AssignUidSwitchService
 	Channel                     *ChannelService
 	UserPoint                   *UserPointService
+	UserPointsAdmin             *UserPointsAdminService
 	User                        *UserService
 	UserWhitelist               *UserWhitelistService
 	UserDetail                  *UserDetailService
@@ -29,6 +31,8 @@ type BarryService struct {
 	OrderSummary                *OrderSummaryService
 	ManualTaskStats             *ManualTaskStatisticsService
 	ManualOrderDetails          *ManualOrderDetailService
+	OrderManualDetails          *OrderManualDetailService
+	OrderRealDetail             *OrderRealDetailService
 	OrderFetchMonitor           *OrderFetchMonitorService
 	UserAssignQueue             *UserAssignQueueService
 	WorkbenchDashboardStats     *WorkbenchDashboardStatisticsService
@@ -43,6 +47,7 @@ func NewBarryService() *BarryService {
 		ProductType:                 NewProductTypeService(client),
 		ShopGroup:                   NewShopGroupService(client),
 		BridgeConfig:                NewBridgeConfigService(client),
+		WhitelistGroup:              NewWhitelistGroupService(client),
 		ProductCategory:             NewProductCategoryService(client),
 		AssignConfig:                NewAssignConfigService(client),
 		JudgeConfig:                 NewJudgeConfigService(client),
@@ -56,6 +61,7 @@ func NewBarryService() *BarryService {
 		AssignUidSwitch:             NewAssignUidSwitchService(client),
 		Channel:                     NewChannelService(client),
 		UserPoint:                   NewUserPointService(client),
+		UserPointsAdmin:             NewUserPointsAdminService(client),
 		User:                        NewUserService(client),
 		UserWhitelist:               NewUserWhitelistService(client),
 		UserDetail:                  NewUserDetailService(client),
@@ -66,6 +72,8 @@ func NewBarryService() *BarryService {
 		OrderSummary:                orderSummaryService,
 		ManualTaskStats:             NewManualTaskStatisticsService(client),
 		ManualOrderDetails:          NewManualOrderDetailService(client),
+		OrderManualDetails:          NewOrderManualDetailService(client),
+		OrderRealDetail:             NewOrderRealDetailService(client),
 		OrderFetchMonitor:           NewOrderFetchMonitorService(client),
 		UserAssignQueue:             NewUserAssignQueueService(client),
 		WorkbenchDashboardStats:     NewWorkbenchDashboardStatisticsService(client),

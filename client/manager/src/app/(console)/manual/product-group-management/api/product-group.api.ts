@@ -92,6 +92,37 @@ export interface ShopGroupPayload {
   code: string;
 }
 
+/**
+ * 白名单分组：分配策略「白名单维度」的分组字典，挂在商品分组下。
+ *
+ * 分配策略里存的是 code，name 只用于展示，因此改名不会影响已配置的白名单数据。
+ */
+export class WhitelistGroupRecord {
+  id = 0;
+
+  shopGroupId = 0;
+
+  code = "";
+
+  name = "";
+
+  sortId = 0;
+
+  status = "";
+
+  active = true;
+
+  createdTime?: string;
+
+  updatedTime?: string;
+}
+
+export interface WhitelistGroupPayload {
+  code: string;
+  name: string;
+  sortId?: number;
+}
+
 export async function fetchShopGroups() {
   return getDataList(ShopGroupRecord, "/barry/shop-groups");
 }
@@ -160,6 +191,37 @@ export async function disableBridgeConfig(shopGroupId: number, bridgeConfigId: n
 export async function resetBridgeConfigStatistics(shopGroupId: number, bridgeConfigId: number) {
   const response = await instance.post<ApiResponse<{ reset: boolean }>>(
     `/barry/shop-groups/${shopGroupId}/bridge-configs/${bridgeConfigId}/reset-statistics`,
+  );
+  return unwrapApiResponse(response.data);
+}
+
+export async function fetchWhitelistGroups(shopGroupId: number) {
+  return getDataList(WhitelistGroupRecord, `/barry/shop-groups/${shopGroupId}/whitelist-groups`);
+}
+
+export async function createWhitelistGroup(shopGroupId: number, payload: WhitelistGroupPayload) {
+  const response = await instance.post<ApiResponse<WhitelistGroupRecord>>(
+    `/barry/shop-groups/${shopGroupId}/whitelist-groups`,
+    payload,
+  );
+  return unwrapApiResponse(response.data);
+}
+
+export async function updateWhitelistGroup(
+  shopGroupId: number,
+  whitelistGroupId: number,
+  payload: WhitelistGroupPayload,
+) {
+  const response = await instance.put<ApiResponse<WhitelistGroupRecord>>(
+    `/barry/shop-groups/${shopGroupId}/whitelist-groups/${whitelistGroupId}`,
+    payload,
+  );
+  return unwrapApiResponse(response.data);
+}
+
+export async function deleteWhitelistGroup(shopGroupId: number, whitelistGroupId: number) {
+  const response = await instance.delete<ApiResponse<{ deleted: boolean }>>(
+    `/barry/shop-groups/${shopGroupId}/whitelist-groups/${whitelistGroupId}`,
   );
   return unwrapApiResponse(response.data);
 }

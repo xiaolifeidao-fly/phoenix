@@ -56,6 +56,11 @@ const (
 	barryInnerUserWhitelistSavePath                           = "barry.url.inner.user.whitelist.save.suffix"
 	barryInnerUserWhitelistActivePath                         = "barry.url.inner.user.whitelist.active.suffix"
 	barryInnerUserWhitelistGroupPath                          = "barry.url.inner.user.whitelist.group.suffix"
+	barryInnerWhitelistGroupListPath                          = "barry.url.inner.whitelist.group.list.suffix"
+	barryInnerWhitelistGroupSavePath                          = "barry.url.inner.whitelist.group.save.suffix"
+	barryInnerWhitelistGroupDeletePath                        = "barry.url.inner.whitelist.group.delete.suffix"
+	barryInnerUserPointsAdjustPath                            = "barry.url.inner.point.user.adjust.suffix"
+	barryInnerUserPointsSummaryPath                           = "barry.url.inner.point.summary.suffix"
 	barryInnerChannelDetailListPath                           = "barry.url.inner.channel.detail.list.suffix"
 	barryInnerChannelDetailSavePath                           = "barry.url.inner.channel.detail.save.list.suffix"
 	barryInnerChannelDetailUpdatePath                         = "barry.url.inner.channel.detail.update.list.suffix"
@@ -94,6 +99,9 @@ const (
 	barryInnerUserWithdrawFinishPath                          = "barry.url.inner.point.user.withdraw.finish.suffix"
 	barryInnerUserWithdrawCancelPath                          = "barry.url.inner.point.user.withdraw.cancel.suffix"
 	barryInnerOrderStopAssignPath                             = "barry.url.inner.order.stop.assign.suffix"
+	barryInnerOrderManualDetailsPath                          = "barry.url.inner.order.manual.details.suffix"
+	barryInnerOrderManualDetailUsersPath                      = "barry.url.inner.order.manual.detail.users.suffix"
+	barryInnerOrderRealDetailPath                             = "barry.url.inner.order.real.detail.suffix"
 )
 
 func servicePath(configKey string) string {

@@ -9,6 +9,7 @@ import {
   PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
+  TeamOutlined,
 } from "@ant-design/icons";
 import {
   Button,
@@ -32,10 +33,13 @@ import {
   type BridgeConfigPayload,
   type BridgeConfigRecord,
   type ShopGroupRecord,
+  type WhitelistGroupPayload,
+  type WhitelistGroupRecord,
   fetchBridgeTypes,
 } from "../api/product-group.api";
 import { useBridgeConfigManagement } from "../hooks/useBridgeConfigManagement";
 import { useProductGroupManagement } from "../hooks/useProductGroupManagement";
+import { useWhitelistGroupManagement } from "../hooks/useWhitelistGroupManagement";
 
 const { Text } = Typography;
 
@@ -72,6 +76,21 @@ interface BridgeConfigFormValues {
   fetchProxyUrl: string;
 }
 
+/** 服务端把这两个值当作哨兵（未分组 / 全部分组），不能被建成真实分组。 */
+const RESERVED_WHITELIST_GROUP_CODES = ["UNGROUPED", "ALL"];
+
+interface WhitelistGroupFormValues {
+  code: string;
+  name: string;
+  sortId: number;
+}
+
+const emptyWhitelistGroupForm: WhitelistGroupFormValues = {
+  code: "",
+  name: "",
+  sortId: 0,
+};
+
 const emptyBridgeConfigForm: BridgeConfigFormValues = {
   alias: "",
   mapperUrl: "",
@@ -91,12 +110,24 @@ const emptyBridgeConfigForm: BridgeConfigFormValues = {
 
 export function ProductGroupManagementPanel() {
   const [bridgeForm] = Form.useForm<BridgeConfigFormValues>();
+  const [whitelistGroupForm] = Form.useForm<WhitelistGroupFormValues>();
   const { groups, loading: groupsLoading, refresh: refreshGroups } = useProductGroupManagement();
   const [keyword, setKeyword] = useState("");
   const [selectedGroup, setSelectedGroup] = useState<ShopGroupRecord | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingConfig, setEditingConfig] = useState<BridgeConfigRecord | null>(null);
   const [bridgeTypes, setBridgeTypes] = useState<string[]>([]);
+  const [whitelistGroupTarget, setWhitelistGroupTarget] = useState<ShopGroupRecord | null>(null);
+  const [whitelistGroupFormOpen, setWhitelistGroupFormOpen] = useState(false);
+  const [editingWhitelistGroup, setEditingWhitelistGroup] = useState<WhitelistGroupRecord | null>(null);
+  const {
+    whitelistGroups,
+    loading: whitelistGroupsLoading,
+    submitting: whitelistGroupSubmitting,
+    refresh: refreshWhitelistGroups,
+    save: saveWhitelistGroup,
+    remove: removeWhitelistGroup,
+  } = useWhitelistGroupManagement(whitelistGroupTarget?.id ?? null);
   const {
     configs,
     loading: configsLoading,
@@ -205,6 +236,98 @@ export function ProductGroupManagementPanel() {
     }
   };
 
+  const openCreateWhitelistGroupForm = () => {
+    setEditingWhitelistGroup(null);
+    whitelistGroupForm.setFieldsValue(emptyWhitelistGroupForm);
+    setWhitelistGroupFormOpen(true);
+  };
+
+  const openEditWhitelistGroupForm = (record: WhitelistGroupRecord) => {
+    setEditingWhitelistGroup(record);
+    whitelistGroupForm.setFieldsValue({
+      code: record.code,
+      name: record.name,
+      sortId: record.sortId ?? 0,
+    });
+    setWhitelistGroupFormOpen(true);
+  };
+
+  const submitWhitelistGroup = async () => {
+    const values = await whitelistGroupForm.validateFields();
+    const payload: WhitelistGroupPayload = {
+      // 分配策略存的就是这个 code，统一大写去空格，避免出现只差大小写的两个"同一个"分组。
+      code: values.code.trim().toUpperCase(),
+      name: values.name.trim(),
+      sortId: Number(values.sortId ?? 0),
+    };
+    try {
+      await saveWhitelistGroup(editingWhitelistGroup?.id ?? null, payload);
+      message.success(editingWhitelistGroup ? "白名单分组已更新" : "白名单分组已创建");
+      setWhitelistGroupFormOpen(false);
+      setEditingWhitelistGroup(null);
+    } catch (error) {
+      message.error(getErrorMessage(error, "保存白名单分组失败"));
+    }
+  };
+
+  const whitelistGroupColumns: ColumnsType<WhitelistGroupRecord> = [
+    { title: "ID", dataIndex: "id", width: 82 },
+    {
+      title: "分组编码",
+      dataIndex: "code",
+      width: 200,
+      render: (value: string) => <span className="manager-value">{value || "-"}</span>,
+    },
+    {
+      title: "分组名称",
+      dataIndex: "name",
+      render: (value: string) => <Text style={{ color: "var(--manager-text)", fontWeight: 600 }}>{value || "-"}</Text>,
+    },
+    { title: "排序", dataIndex: "sortId", width: 90, render: (value?: number) => value ?? 0 },
+    {
+      title: "更新时间",
+      dataIndex: "updatedTime",
+      width: 180,
+      render: (value?: string) => formatDateTime(value),
+    },
+    {
+      title: "操作",
+      key: "actions",
+      width: 140,
+      render: (_, record) => (
+        <Space size={2}>
+          <Tooltip title="编辑分组">
+            <Button
+              type="text"
+              icon={<EditOutlined />}
+              onClick={() => openEditWhitelistGroupForm(record)}
+              disabled={whitelistGroupSubmitting}
+            />
+          </Tooltip>
+          <Popconfirm
+            title="确认删除这个白名单分组吗？"
+            description="已经放进该分组的白名单用户不会被清空，但分组下拉里不再出现这个选项。"
+            okText="删除"
+            cancelText="取消"
+            okButtonProps={{ danger: true }}
+            onConfirm={async () => {
+              try {
+                await removeWhitelistGroup(record.id);
+                message.success("白名单分组已删除");
+              } catch (error) {
+                message.error(getErrorMessage(error, "删除白名单分组失败"));
+              }
+            }}
+          >
+            <Tooltip title="删除分组">
+              <Button danger type="text" icon={<DeleteOutlined />} disabled={whitelistGroupSubmitting} />
+            </Tooltip>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
   const groupColumns: ColumnsType<ShopGroupRecord> = [
     { title: "分组 ID", dataIndex: "id", width: 110 },
     {
@@ -235,11 +358,16 @@ export function ProductGroupManagementPanel() {
     {
       title: "操作",
       key: "actions",
-      width: 150,
+      width: 260,
       render: (_, record) => (
-        <Button type="link" icon={<LinkOutlined />} onClick={() => setSelectedGroup(record)}>
-          管理桥接器
-        </Button>
+        <Space size={2}>
+          <Button type="link" icon={<LinkOutlined />} onClick={() => setSelectedGroup(record)}>
+            管理桥接器
+          </Button>
+          <Button type="link" icon={<TeamOutlined />} onClick={() => setWhitelistGroupTarget(record)}>
+            白名单分组
+          </Button>
+        </Space>
       ),
     },
   ];
@@ -425,6 +553,127 @@ export function ProductGroupManagementPanel() {
           scroll={{ x: 900 }}
         />
       </section>
+
+      <WorkspaceDrawer
+        title={
+          whitelistGroupTarget
+            ? `白名单分组 · ${whitelistGroupTarget.name || whitelistGroupTarget.code || whitelistGroupTarget.id}`
+            : "白名单分组"
+        }
+        open={whitelistGroupTarget !== null}
+        width={860}
+        cancelText="关闭"
+        onClose={() => {
+          setWhitelistGroupTarget(null);
+          setWhitelistGroupFormOpen(false);
+          setEditingWhitelistGroup(null);
+        }}
+      >
+        {whitelistGroupTarget ? (
+          <div className="manager-page-stack">
+            <section className="manager-data-card" style={{ padding: "16px 20px" }}>
+              <Descriptions size="small" column={{ xs: 1, sm: 2, lg: 4 }}>
+                <Descriptions.Item label="商品分组">{whitelistGroupTarget.name || "-"}</Descriptions.Item>
+                <Descriptions.Item label="分组编码">
+                  <span className="manager-value">{whitelistGroupTarget.code || "-"}</span>
+                </Descriptions.Item>
+                <Descriptions.Item label="分组 ID">{whitelistGroupTarget.id}</Descriptions.Item>
+                <Descriptions.Item label="白名单分组数">{whitelistGroups.length}</Descriptions.Item>
+              </Descriptions>
+            </section>
+
+            <section className="manager-data-card manager-toolbar-panel">
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "space-between" }}>
+                <Text style={{ color: "var(--manager-text-soft)" }}>
+                  这里维护的分组会成为「人工商品 · 分配策略 · 白名单维度」的分组候选项。白名单里存的是分组编码，改名不影响已配置数据。
+                </Text>
+                <Space>
+                  <Button
+                    icon={<ReloadOutlined />}
+                    onClick={() =>
+                      void refreshWhitelistGroups().catch((error: unknown) =>
+                        message.error(getErrorMessage(error, "刷新白名单分组失败")),
+                      )
+                    }
+                  >
+                    刷新
+                  </Button>
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={openCreateWhitelistGroupForm}
+                    disabled={whitelistGroupSubmitting}
+                  >
+                    新建白名单分组
+                  </Button>
+                </Space>
+              </div>
+            </section>
+
+            <section className="manager-data-card manager-table">
+              <Table<WhitelistGroupRecord>
+                rowKey="id"
+                loading={whitelistGroupsLoading}
+                dataSource={whitelistGroups}
+                columns={whitelistGroupColumns}
+                pagination={false}
+                scroll={{ x: 900 }}
+              />
+            </section>
+          </div>
+        ) : null}
+      </WorkspaceDrawer>
+
+      <WorkspaceDrawer
+        title={editingWhitelistGroup ? "编辑白名单分组" : "新建白名单分组"}
+        open={whitelistGroupFormOpen}
+        width={520}
+        submitting={whitelistGroupSubmitting}
+        okText={editingWhitelistGroup ? "保存分组" : "创建分组"}
+        onClose={() => {
+          setWhitelistGroupFormOpen(false);
+          setEditingWhitelistGroup(null);
+        }}
+        onSubmit={submitWhitelistGroup}
+      >
+        <Form<WhitelistGroupFormValues>
+          className="manager-form-skin"
+          form={whitelistGroupForm}
+          layout="vertical"
+          preserve={false}
+        >
+          <Form.Item
+            name="code"
+            label="分组编码"
+            extra={
+              editingWhitelistGroup
+                ? "白名单存的就是这个编码，创建后不可修改；需要改口径请新建一个分组。"
+                : "白名单实际存储的值，创建后不可修改，请谨慎填写。"
+            }
+            rules={[
+              { required: true, message: "请输入分组编码" },
+              {
+                pattern: /^[A-Za-z0-9_]+$/,
+                message: "只能使用字母、数字和下划线",
+              },
+              {
+                validator: (_, value?: string) =>
+                  RESERVED_WHITELIST_GROUP_CODES.includes((value || "").trim().toUpperCase())
+                    ? Promise.reject(new Error(`${(value || "").trim().toUpperCase()} 是系统保留编码，请换一个`))
+                    : Promise.resolve(),
+              },
+            ]}
+          >
+            <Input maxLength={64} placeholder="例如：BIG_CUSTOMER" disabled={Boolean(editingWhitelistGroup)} />
+          </Form.Item>
+          <Form.Item name="name" label="分组名称" rules={[{ required: true, whitespace: true, message: "请输入分组名称" }]}>
+            <Input maxLength={64} placeholder="例如：大户" />
+          </Form.Item>
+          <Form.Item name="sortId" label="排序" extra="数字越小越靠前，用于分组下拉的展示顺序。">
+            <InputNumber min={0} precision={0} style={{ width: "100%" }} />
+          </Form.Item>
+        </Form>
+      </WorkspaceDrawer>
 
       <WorkspaceDrawer
         title={selectedGroup ? `桥接器配置 · ${selectedGroup.name || selectedGroup.code || selectedGroup.id}` : "桥接器配置"}
