@@ -704,7 +704,7 @@ select {
 }
 
 /* --- 行内操作 --- */
-/* 操作列固定在右侧，5 个图标按钮必须完整放下，不能溢出到固定列外 */
+/* 操作列固定在右侧，6 个图标按钮必须完整放下，不能溢出到固定列外 */
 .order-actions-cell {
   padding-inline: 8px !important;
   white-space: nowrap;

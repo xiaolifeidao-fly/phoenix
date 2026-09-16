@@ -826,6 +826,70 @@ func (s *OrderService) MarkOrderExceptionBatch(ctx context.Context, ids []uint, 
 	return result
 }
 
+// ClearOrderException 管理端清除异常标识：把 exception_flag / exception_reason / exception_time 复位。
+//
+// 与打标不是对称操作：渠道方没有「取消异常」的接口，打标时停掉的分发也不会因此恢复，
+// 这里清掉的只是管理端的异常标识，用于误标或异常已人工处理完的场景。
+func (s *OrderService) ClearOrderException(id uint, operator string) error {
+	if s.orderRecordRepository.Db == nil {
+		return fmt.Errorf("database is not initialized")
+	}
+	entity, err := s.orderRecordRepository.FindById(id)
+	if err != nil {
+		return err
+	}
+	if entity.Active == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	if !entity.IsAbnormal {
+		return fmt.Errorf("订单未标记异常")
+	}
+
+	orderID := uint64(entity.Id)
+	updates := map[string]any{
+		"exception_flag":   0,
+		"exception_reason": "",
+		// exception_time 不在 gorm 模型里，map 的 key 会被当成原始列名直接下发
+		"exception_time": nil,
+	}
+	if op := strings.TrimSpace(operator); op != "" {
+		updates["updated_by"] = op
+	}
+	// 条件带「当前是异常」，与 kakrolot 的打标一样靠条件更新做并发幂等；
+	// coalesce 是因为该列可空，SQL 里 NULL = 1 结果是 UNKNOWN 不是 false
+	result := s.orderRecordRepository.Db.Model(&orderRepository.OrderRecord{}).
+		Where("id = ? and coalesce(exception_flag, 0) = 1", orderID).Updates(updates)
+	if result.Error != nil {
+		return fmt.Errorf("清除异常标识失败: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		// 并发下已被另一个请求清掉，语义上仍是成功
+		log.Printf("clear order exception hit no row, maybe cleared concurrently: orderId=%d", orderID)
+	}
+	return nil
+}
+
+// ClearOrderExceptionBatch 批量清除异常标识，逐单执行，返回每单的失败原因。
+func (s *OrderService) ClearOrderExceptionBatch(ids []uint, operator string) *orderDTO.OrderActionBatchResultDTO {
+	result := &orderDTO.OrderActionBatchResultDTO{Failures: []orderDTO.OrderActionFailureDTO{}}
+	for _, id := range ids {
+		if err := s.ClearOrderException(id, operator); err != nil {
+			message := err.Error()
+			if err == gorm.ErrRecordNotFound {
+				message = "订单不存在"
+			}
+			result.Failed++
+			result.Failures = append(result.Failures, orderDTO.OrderActionFailureDTO{
+				OrderID: uint64(id),
+				Message: message,
+			})
+			continue
+		}
+		result.Succeeded++
+	}
+	return result
+}
+
 // ForceFinishOrders 管理端强制完成：交给 barry 停止分发、将 assignment/shop 置为完成并通知 kak。
 // 一次请求把所有订单打包给 barry，barry 逐单处理并返回逐单结果。
 func (s *OrderService) ForceFinishOrders(ctx context.Context, ids []uint, operator string) (*orderDTO.OrderActionBatchResultDTO, error) {

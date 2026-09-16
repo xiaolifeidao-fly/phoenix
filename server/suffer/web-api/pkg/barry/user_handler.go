@@ -69,6 +69,16 @@ func (h *BarryHandler) saveUserWhitelist(c *gin.Context) {
 		commonRouter.ToError(c, "参数错误")
 		return
 	}
+	// 审核通过率是闭区间 [下限, 上限]，任一侧留空表示该侧不限制。
+	if !isValidApprovalRate(req.MinRecentApprovalRate) || !isValidApprovalRate(req.MaxRecentApprovalRate) {
+		commonRouter.ToError(c, "审核通过率需在0~100%之间")
+		return
+	}
+	if req.MinRecentApprovalRate != nil && req.MaxRecentApprovalRate != nil &&
+		*req.MinRecentApprovalRate > *req.MaxRecentApprovalRate {
+		commonRouter.ToError(c, "审核通过率下限不能大于上限")
+		return
+	}
 	response, err := h.barryService.UserWhitelist.Save(c.Request.Context(), &req)
 	if err != nil {
 		commonRouter.ToJson(c, nil, err)

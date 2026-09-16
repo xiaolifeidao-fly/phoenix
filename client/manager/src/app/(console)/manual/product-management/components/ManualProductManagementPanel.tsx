@@ -7,6 +7,7 @@ import {
   ArrowUpOutlined,
   DeleteOutlined,
   EditOutlined,
+  MonitorOutlined,
   PlusOutlined,
   ReloadOutlined,
   SaveOutlined,
@@ -15,6 +16,7 @@ import {
 } from "@ant-design/icons";
 import { Button, DatePicker, Drawer, Form, Input, InputNumber, Modal, Pagination, Popconfirm, Select, Space, Switch, Table, Tabs, Tag, TimePicker, Transfer, Tooltip, Typography } from "antd";
 import { message } from "@/utils/notify";
+import { DropMonitorRuleModal } from "./DropMonitorRuleModal";
 import type { ColumnsType } from "antd/es/table";
 import { WorkspaceDrawer } from "@/components/manager-shell/WorkspaceDrawer";
 import {
@@ -140,6 +142,43 @@ type WhitelistStatusSortOrder = "ascend" | "descend" | null;
  */
 const UNGROUPED_WHITELIST_GROUP = "UNGROUPED";
 
+/**
+ * 分配配置里的三个枚举，label 走中文、value 必须是后端枚举名。
+ * 后端拿 value 直接和枚举名做 equals（AssignModelConfig.getProcessClazz 等），存中文会匹配不上。
+ * 枚举源：barry AssignModel / AssignStrategyType / AssignType。
+ */
+const ASSIGN_MODEL_OPTIONS = [
+  { label: "按桶分配", value: "BUCKET_ASSIGN_MODEL" },
+  { label: "顺序分配", value: "SEQUENCE_ASSIGN_MODEL" },
+  { label: "批量分配", value: "BATCH_ASSIGN_MODEL" },
+  { label: "延迟分配", value: "DELAY_ASSIGN_MODEL" },
+  { label: "用户批量分配", value: "USER_BATCH_ASSIGN_MODEL" },
+];
+
+const ASSIGN_STRATEGY_OPTIONS = [
+  { label: "单条分配", value: "SINGLE_ASSIGN" },
+  { label: "批量分配", value: "BATCH_ASSIGN" },
+];
+
+const ASSIGN_TYPE_OPTIONS = [
+  { label: "单条", value: "SINGLE" },
+  { label: "批量", value: "BATCH" },
+];
+
+const formatEnumLabel = (options: { label: string; value: string }[], value?: string) =>
+  options.find((option) => option.value === value)?.label || value || "-";
+
+/**
+ * 存量数据里可能残留旧的非枚举值（早期这里的下拉把中文当 value 存过）。
+ * 只做展示兼容：把它临时补进 options，避免下拉显示空白，不自动改写成枚举。
+ */
+const withLegacyOption = (options: { label: string; value: string }[], value?: string) => {
+  if (!value || options.some((option) => option.value === value)) {
+    return options;
+  }
+  return [...options, { label: `${value}（历史值）`, value }];
+};
+
 const parseTimeRanges = (value?: string) => (value || "").split(",").map((item) => item.trim()).filter((item) => /^\d{2}:\d{2}-\d{2}:\d{2}$/.test(item));
 const formatTimeRanges = (ranges: string[]) => ranges.join(",");
 const toTimeValue = (value: string) => {
@@ -185,10 +224,26 @@ interface WhitelistUserRecord {
   shopCategoryId: string;
   active: boolean;
   minRecentApprovalRate?: number;
+  maxRecentApprovalRate?: number;
   recentApprovalRateDays?: number;
   dailyAssignTimeRanges: string;
   fetchTaskLoopNum?: number;
 }
+
+/**
+ * 白名单用户的通过率区间展示。上下限各自独立兜底，这里只呈现用户维度实际配置的那一侧，
+ * 两侧都没配时显示 "-"，表示整条区间都走全局配置。
+ */
+const formatWhitelistApprovalRange = (user: WhitelistUserRecord, globalDays: number | null) => {
+  const min = user.minRecentApprovalRate;
+  const max = user.maxRecentApprovalRate;
+  const days = user.recentApprovalRateDays || globalDays || 3;
+  const percent = (value: number) => `${(value * 100).toFixed(2)}%`;
+  if (min != null && max != null) return `近${days}日 ${percent(min)} ~ ${percent(max)}`;
+  if (min != null) return `近${days}日 ≥ ${percent(min)}`;
+  if (max != null) return `近${days}日 ≤ ${percent(max)}`;
+  return "-";
+};
 
 interface VideoUserStrategyRecord {
   userId: string;
@@ -335,6 +390,8 @@ export function ManualProductManagementPanel() {
   const [strategyDirty, setStrategyDirty] = useState(false);
   const [userWhitelistEnabled, setUserWhitelistEnabled] = useState(false);
   const [whitelistGlobalApprovalRate, setWhitelistGlobalApprovalRate] = useState(0);
+  /** 白名单全局通过率上限，null 表示不限上限。 */
+  const [whitelistGlobalApprovalMaxRate, setWhitelistGlobalApprovalMaxRate] = useState<number | null>(null);
   const [whitelistGlobalApprovalRateDays, setWhitelistGlobalApprovalRateDays] = useState<number | null>(3);
   const [whitelistGlobalApprovalRateSaving, setWhitelistGlobalApprovalRateSaving] = useState(false);
   const [approvalRateRuleEnabled, setApprovalRateRuleEnabled] = useState(false);
@@ -363,6 +420,7 @@ export function ManualProductManagementPanel() {
   const [addWhitelistModalOpen, setAddWhitelistModalOpen] = useState(false);
   const [editingWhitelistUser, setEditingWhitelistUser] = useState<WhitelistUserRecord | null>(null);
   const [whitelistPolicyRate, setWhitelistPolicyRate] = useState<number | null>(null);
+  const [whitelistPolicyMaxRate, setWhitelistPolicyMaxRate] = useState<number | null>(null);
   const [whitelistPolicyRateDays, setWhitelistPolicyRateDays] = useState<number | null>(null);
   const [whitelistPolicyLoopNum, setWhitelistPolicyLoopNum] = useState<number | null>(null);
   const [whitelistPolicyTimeRanges, setWhitelistPolicyTimeRanges] = useState<string[]>([]);
@@ -400,6 +458,7 @@ export function ManualProductManagementPanel() {
   const [refundRule, setRefundRule] = useState<RefundRuleState>(emptyRefundRule);
   const [refundRuleDirty, setRefundRuleDirty] = useState(false);
   const [refundRuleSaving, setRefundRuleSaving] = useState(false);
+  const [dropMonitorProduct, setDropMonitorProduct] = useState<ManualProductRecord | null>(null);
   const [editingProduct, setEditingProduct] = useState<ManualProductRecord | null>(null);
   const [filters, setFilters] = useState({
     keyword: "",
@@ -726,8 +785,10 @@ export function ManualProductManagementPanel() {
       ]);
       setUserWhitelistEnabled(loadedWhitelistSwitch);
       const globalApprovalRate = Number(loadedWhitelistApprovalRate?.minRecentApprovalRate);
+      const globalApprovalMaxRate = loadedWhitelistApprovalRate?.maxRecentApprovalRate;
       const globalApprovalRateDays = Number(loadedWhitelistApprovalRate?.recentApprovalRateDays);
       setWhitelistGlobalApprovalRate(Number.isFinite(globalApprovalRate) ? globalApprovalRate * 100 : 0);
+      setWhitelistGlobalApprovalMaxRate(globalApprovalMaxRate == null ? null : Number(globalApprovalMaxRate) * 100);
       setWhitelistGlobalApprovalRateDays(Number.isFinite(globalApprovalRateDays) && globalApprovalRateDays > 0 ? globalApprovalRateDays : null);
       setUidRuleEnabled(loadedUidSwitch);
       if (loadedUidRule) {
@@ -1053,9 +1114,18 @@ export function ManualProductManagementPanel() {
       message.warning("审核通过率为 0% 时，统计天数不能为空");
       return;
     }
+    if (whitelistGlobalApprovalMaxRate !== null && whitelistGlobalApprovalRate > whitelistGlobalApprovalMaxRate) {
+      message.warning("审核通过率下限不能大于上限");
+      return;
+    }
     setWhitelistGlobalApprovalRateSaving(true);
     try {
-      await saveAssignWhitelistApprovalRate(Number(strategyProduct.id), whitelistGlobalApprovalRate / 100, whitelistGlobalApprovalRateDays);
+      await saveAssignWhitelistApprovalRate(
+        Number(strategyProduct.id),
+        whitelistGlobalApprovalRate / 100,
+        whitelistGlobalApprovalMaxRate === null ? null : whitelistGlobalApprovalMaxRate / 100,
+        whitelistGlobalApprovalRateDays,
+      );
       message.success("白名单全局审核通过率已保存");
     } catch (error) {
       message.error(error instanceof Error ? error.message : "保存白名单全局审核通过率失败");
@@ -1245,6 +1315,7 @@ export function ManualProductManagementPanel() {
         shopCategoryId: String(user.shopCategoryId || shopCategoryId),
         active: user.active !== false && user.status !== "EXPIRE" && user.status !== "INACTIVE",
         minRecentApprovalRate: user.minRecentApprovalRate ?? undefined,
+        maxRecentApprovalRate: user.maxRecentApprovalRate ?? undefined,
         recentApprovalRateDays: user.recentApprovalRateDays ?? undefined,
         dailyAssignTimeRanges: user.dailyAssignTimeRanges || "",
         fetchTaskLoopNum: user.fetchTaskLoopNum ?? undefined,
@@ -1758,6 +1829,10 @@ export function ManualProductManagementPanel() {
 
   const saveWhitelistUserPolicy = async () => {
     if (!editingWhitelistUser || !strategyProduct?.id) return;
+    if (whitelistPolicyRate !== null && whitelistPolicyMaxRate !== null && whitelistPolicyRate > whitelistPolicyMaxRate) {
+      message.warning("审核通过率下限不能大于上限");
+      return;
+    }
     setWhitelistSaving(true);
     try {
       await saveBarryUserWhitelist({
@@ -1766,6 +1841,7 @@ export function ManualProductManagementPanel() {
         group: editingWhitelistUser.group || undefined,
         updatePolicy: true,
         minRecentApprovalRate: whitelistPolicyRate === null ? undefined : whitelistPolicyRate / 100,
+        maxRecentApprovalRate: whitelistPolicyMaxRate === null ? undefined : whitelistPolicyMaxRate / 100,
         recentApprovalRateDays: whitelistPolicyRateDays === null ? undefined : whitelistPolicyRateDays,
         dailyAssignTimeRanges: formatTimeRanges(whitelistPolicyTimeRanges) || undefined,
         fetchTaskLoopNum: whitelistPolicyLoopNum === null ? undefined : whitelistPolicyLoopNum,
@@ -2002,6 +2078,8 @@ export function ManualProductManagementPanel() {
       assignNum: Number(values.assignNum || 0),
       batchAssignNum: Number(values.batchAssignNum || 0),
       assignScale: String(values.assignScale || "0"),
+      // 分配类型允许清空：传空串，后端 omitempty 后落库为 null，业务上等价于单条
+      assignType: values.assignType || "",
       allowAssignTime: values.allowAssignTime?.format(assignConfigDateTimeFormat) || "",
       monitorOrder: Boolean(values.monitorOrder),
       checkNowNum: Boolean(values.checkNowNum),
@@ -2166,12 +2244,17 @@ export function ManualProductManagementPanel() {
       title: "操作",
       key: "actions",
       fixed: "right",
-      width: 300,
+      width: 420,
       render: (_, record) => (
         <Space size={4}>
           <Tooltip title="分配策略">
             <Button type="text" icon={<SettingOutlined />} onClick={() => openStrategyDrawer(record)}>
               分配策略
+            </Button>
+          </Tooltip>
+          <Tooltip title="已完成单掉量监控与自动补单配置">
+            <Button type="text" icon={<MonitorOutlined />} onClick={() => setDropMonitorProduct(record)}>
+              监控配置
             </Button>
           </Tooltip>
           <Tooltip title="编辑">
@@ -2505,23 +2588,22 @@ export function ManualProductManagementPanel() {
             </Form.Item>
             <Form.Item name="strategyName" label="分配策略" rules={[{ required: true, message: "请选择分配策略" }]}>
               <Select
-                options={[
-                  { label: "单条分配", value: "SINGLE_ASSIGN" },
-                  { label: "批量分配", value: "BATCH_ASSIGN" },
-                ]}
+                placeholder="请选择分配策略"
+                options={withLegacyOption(ASSIGN_STRATEGY_OPTIONS, editingAssignConfig?.strategyName)}
               />
             </Form.Item>
             <Form.Item name="assignModel" label="分配模式" rules={[{ required: true, message: "请选择分配模式" }]}>
               <Select
-                options={[
-                  { label: "顺序分配", value: "顺序分配" },
-                  { label: "按桶分配", value: "按桶分配" },
-                  { label: "延迟分配", value: "延迟分配" },
-                ]}
+                placeholder="请选择分配模式"
+                options={withLegacyOption(ASSIGN_MODEL_OPTIONS, editingAssignConfig?.assignModel)}
               />
             </Form.Item>
             <Form.Item name="assignType" label="分配类型">
-              <Input placeholder="例如：普通 / 优先" />
+              <Select
+                allowClear
+                placeholder="不限制时可不选"
+                options={withLegacyOption(ASSIGN_TYPE_OPTIONS, editingAssignConfig?.assignType)}
+              />
             </Form.Item>
             <Form.Item name="queueSize" label="队列容量">
               <InputNumber min={0} precision={0} style={{ width: "100%" }} />
@@ -2649,7 +2731,7 @@ export function ManualProductManagementPanel() {
                 options={assignConfigRows
                   .filter((item) => item.shopTypeId === judgeConfigForm.getFieldValue("shopTypeId") && item.id > 0)
                   .map((item) => ({
-                    label: `${item.strategyName || item.queueCode || "未命名配置"}（ID ${item.id}）`,
+                    label: `${item.strategyName ? formatAssignStrategyName(item.strategyName) : item.queueCode || "未命名配置"}（ID ${item.id}）`,
                     value: item.id,
                   }))}
               />
@@ -2761,6 +2843,7 @@ export function ManualProductManagementPanel() {
                               title: "分配模式",
                               dataIndex: "assignModel",
                               width: 120,
+                              render: (value: string) => formatAssignModel(value),
                             },
                             {
                               title: "分配类型",
@@ -2959,12 +3042,14 @@ export function ManualProductManagementPanel() {
                 <div style={strategyStyles.cardBody}>
                   <div style={{ ...strategyStyles.criteriaRow, marginBottom: 20 }}>
                     <div style={{ flex: 1 }}>
-                      <div style={strategyStyles.criteriaName}>近几日审核通过率 <code style={strategyStyles.operator}>通过率 ≥</code></div>
-                      <div style={strategyStyles.criteriaDesc}>白名单用户的全局接单门槛；填 0% 表示不限制。通过率不为 0% 时统计天数可留空，留空按默认 3 日统计。</div>
+                      <div style={strategyStyles.criteriaName}>近几日审核通过率 <code style={strategyStyles.operator}>下限 ≤ 通过率 ≤ 上限</code></div>
+                      <div style={strategyStyles.criteriaDesc}>白名单用户的全局接单区间；下限填 0% 表示不限下限，上限留空表示不限上限。通过率不为 0% 时统计天数可留空，留空按默认 3 日统计。</div>
                     </div>
                     <Space size={8}>
                       <InputNumber value={whitelistGlobalApprovalRateDays} min={1} precision={0} addonAfter="日" placeholder="可留空" style={{ width: 110 }} onChange={(value) => setWhitelistGlobalApprovalRateDays(value === null ? null : Number(value))} />
-                      <InputNumber value={whitelistGlobalApprovalRate} min={0} max={100} precision={2} addonAfter="%" style={{ width: 150 }} onChange={(value) => setWhitelistGlobalApprovalRate(Number(value || 0))} />
+                      <InputNumber value={whitelistGlobalApprovalRate} min={0} max={100} precision={2} addonAfter="%" placeholder="下限" style={{ width: 130 }} onChange={(value) => setWhitelistGlobalApprovalRate(Number(value || 0))} />
+                      <span style={{ color: "#8a94a6" }}>~</span>
+                      <InputNumber value={whitelistGlobalApprovalMaxRate} min={0} max={100} precision={2} addonAfter="%" placeholder="不限" style={{ width: 130 }} onChange={(value) => setWhitelistGlobalApprovalMaxRate(value === null ? null : Number(value))} />
                       <Button icon={<SaveOutlined />} loading={whitelistGlobalApprovalRateSaving} onClick={() => void saveWhitelistGlobalApprovalRate()}>保存</Button>
                     </Space>
                   </div>
@@ -3133,7 +3218,7 @@ export function ManualProductManagementPanel() {
                                 <Tag color={user.active ? "green" : "default"}>{user.active ? "生效" : "失效"}</Tag>
                               </Space>
                             </td>
-                            <td style={strategyStyles.td}>{user.minRecentApprovalRate == null ? "-" : `近${user.recentApprovalRateDays || whitelistGlobalApprovalRateDays || 3}日 ≥ ${(user.minRecentApprovalRate * 100).toFixed(2)}%`}</td>
+                            <td style={strategyStyles.td}>{formatWhitelistApprovalRange(user, whitelistGlobalApprovalRateDays)}</td>
                             <td style={{ ...strategyStyles.td, maxWidth: 180 }}>
                               {user.dailyAssignTimeRanges ? <Tooltip title={user.dailyAssignTimeRanges}><span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.dailyAssignTimeRanges}</span></Tooltip> : "-"}
                             </td>
@@ -3144,6 +3229,7 @@ export function ManualProductManagementPanel() {
                                 onClick={() => {
                                   setEditingWhitelistUser(user);
                                   setWhitelistPolicyRate(user.minRecentApprovalRate == null ? null : user.minRecentApprovalRate * 100);
+                                  setWhitelistPolicyMaxRate(user.maxRecentApprovalRate == null ? null : user.maxRecentApprovalRate * 100);
                                   setWhitelistPolicyRateDays(user.recentApprovalRateDays ?? null);
                                   setWhitelistPolicyTimeRanges(parseTimeRanges(user.dailyAssignTimeRanges));
                                   setWhitelistPolicyLoopNum(user.fetchTaskLoopNum ?? null);
@@ -3723,6 +3809,12 @@ export function ManualProductManagementPanel() {
         ) : null}
       </Drawer>
 
+      <DropMonitorRuleModal
+        product={dropMonitorProduct}
+        open={dropMonitorProduct !== null}
+        onClose={() => setDropMonitorProduct(null)}
+      />
+
       <Modal
         title="添加白名单用户"
         open={addWhitelistModalOpen}
@@ -3753,10 +3845,12 @@ export function ManualProductManagementPanel() {
         onCancel={() => setEditingWhitelistUser(null)}
         onOk={() => void saveWhitelistUserPolicy()}
       >
-        <div style={{ marginBottom: 8 }}>近几日审核通过率 ≥（两项均留空则使用白名单全局配置）</div>
+        <div style={{ marginBottom: 8 }}>近几日审核通过率区间（每项留空则该项使用白名单全局配置）</div>
         <Space style={{ width: "100%", marginBottom: 18 }}>
-          <InputNumber value={whitelistPolicyRateDays} min={1} precision={0} addonAfter="日" placeholder="全局天数" style={{ width: 150 }} onChange={(value) => setWhitelistPolicyRateDays(value === null ? null : Number(value))} />
-          <InputNumber value={whitelistPolicyRate} min={0} max={100} precision={2} addonAfter="%" placeholder="全局通过率" style={{ width: 180 }} onChange={(value) => setWhitelistPolicyRate(value === null ? null : Number(value))} />
+          <InputNumber value={whitelistPolicyRateDays} min={1} precision={0} addonAfter="日" placeholder="全局天数" style={{ width: 130 }} onChange={(value) => setWhitelistPolicyRateDays(value === null ? null : Number(value))} />
+          <InputNumber value={whitelistPolicyRate} min={0} max={100} precision={2} addonAfter="%" placeholder="全局下限" style={{ width: 150 }} onChange={(value) => setWhitelistPolicyRate(value === null ? null : Number(value))} />
+          <span style={{ color: "#8a94a6" }}>~</span>
+          <InputNumber value={whitelistPolicyMaxRate} min={0} max={100} precision={2} addonAfter="%" placeholder="全局上限" style={{ width: 150 }} onChange={(value) => setWhitelistPolicyMaxRate(value === null ? null : Number(value))} />
         </Space>
         <div style={{ marginBottom: 8 }}>允许每日接单时间段</div>
         <TimeRangeEditor value={whitelistPolicyTimeRanges} onChange={setWhitelistPolicyTimeRanges} />
@@ -4056,23 +4150,15 @@ function getProductGlyph(product: ManualProductRecord) {
 }
 
 function formatAssignStrategyName(value?: string) {
-  if (value === "SINGLE_ASSIGN") {
-    return "单条分配";
-  }
-  if (value === "BATCH_ASSIGN") {
-    return "批量分配";
-  }
-  return value || "-";
+  return formatEnumLabel(ASSIGN_STRATEGY_OPTIONS, value);
+}
+
+function formatAssignModel(value?: string) {
+  return formatEnumLabel(ASSIGN_MODEL_OPTIONS, value);
 }
 
 function formatAssignType(value?: string) {
-  if (value === "NORMAL") {
-    return "普通";
-  }
-  if (value === "PRIORITY") {
-    return "优先";
-  }
-  return value || "-";
+  return formatEnumLabel(ASSIGN_TYPE_OPTIONS, value);
 }
 
 function formatJudgeType(value?: string) {

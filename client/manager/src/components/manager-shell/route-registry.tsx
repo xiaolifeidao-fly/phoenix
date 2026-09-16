@@ -77,6 +77,11 @@ export const routeRegistry: Record<string, ComponentType<any>> = {
       default: m.ManualOrderDetailPanel,
     })),
   ),
+  "/manual/drop-repair-data": lazyPanel(() =>
+    import("@/app/(console)/manual/drop-repair-data/components/DropRepairDataPanel").then((m) => ({
+      default: m.DropRepairDataPanel,
+    })),
+  ),
   "/manual/withdraw-approval": lazyPanel(() =>
     import("@/app/(console)/manual/withdraw-approval/components/ManualWithdrawApprovalPanel").then(
       (m) => ({ default: m.ManualWithdrawApprovalPanel }),

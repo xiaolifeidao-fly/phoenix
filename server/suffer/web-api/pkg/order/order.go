@@ -48,8 +48,10 @@ func (h *OrderHandler) RegisterHandler(engine *gin.RouterGroup) {
 	engine.POST("/order-records/:id/refund", h.refundOrderRecord)
 	engine.POST("/order-records/:id/bk", h.bkOrderRecord)
 	engine.POST("/order-records/:id/exception", h.markOrderRecordException)
+	engine.POST("/order-records/:id/exception/clear", h.clearOrderRecordException)
 	// 批量操作另起路径，避免与 /order-records/:id 的路由参数冲突
 	engine.POST("/order-record-exceptions/batch", h.batchMarkOrderRecordException)
+	engine.POST("/order-record-exceptions/batch-clear", h.batchClearOrderRecordException)
 	engine.POST("/order-record-refunds/batch", h.batchRefundOrderRecords)
 	engine.POST("/order-record-force-finish", h.forceFinishOrderRecords)
 	engine.GET("/refund-batch/tasks", h.listRefundBatchTasks)

@@ -452,13 +452,14 @@ export async function saveAssignWhitelistSwitch(payload: AssignSwitchPayload) {
   return unwrapApiResponse(response.data);
 }
 
+/** 白名单全局审核通过率区间；maxRecentApprovalRate 为 null 表示不限上限。 */
 export async function fetchAssignWhitelistApprovalRate(shopCategoryId: number) {
-  const response = await instance.get<ApiResponse<{ minRecentApprovalRate: number; recentApprovalRateDays: number | null } | null>>("/barry/assign-whitelist-approval-rate", { params: { shopCategoryId } });
-  return unwrapApiResponse(response.data) ?? { minRecentApprovalRate: 0, recentApprovalRateDays: 3 };
+  const response = await instance.get<ApiResponse<{ minRecentApprovalRate: number; maxRecentApprovalRate: number | null; recentApprovalRateDays: number | null } | null>>("/barry/assign-whitelist-approval-rate", { params: { shopCategoryId } });
+  return unwrapApiResponse(response.data) ?? { minRecentApprovalRate: 0, maxRecentApprovalRate: null, recentApprovalRateDays: 3 };
 }
 
-export async function saveAssignWhitelistApprovalRate(shopCategoryId: number, minRecentApprovalRate: number, recentApprovalRateDays: number | null) {
-  const response = await instance.post<ApiResponse<unknown>>("/barry/assign-whitelist-approval-rate", { shopCategoryId, minRecentApprovalRate, recentApprovalRateDays });
+export async function saveAssignWhitelistApprovalRate(shopCategoryId: number, minRecentApprovalRate: number, maxRecentApprovalRate: number | null, recentApprovalRateDays: number | null) {
+  const response = await instance.post<ApiResponse<unknown>>("/barry/assign-whitelist-approval-rate", { shopCategoryId, minRecentApprovalRate, maxRecentApprovalRate, recentApprovalRateDays });
   return unwrapApiResponse(response.data);
 }
 
@@ -530,5 +531,90 @@ export async function saveAssignConfig(payload: AssignConfigPayload) {
 
 export async function saveJudgeConfig(payload: JudgeConfigPayload) {
   const response = await instance.post<ApiResponse<JudgeConfigRecord | null>>("/barry/judge-configs", payload);
+  return unwrapApiResponse(response.data);
+}
+
+/**
+ * 已完成单掉量监控配置, 挂在人工商品上.
+ * 有效期/等待期/首检延迟/阈值/补单开关都在这里配, 建档时会把生效值快照进任务, 改配置只影响新任务.
+ */
+export class DropMonitorRuleRecord {
+  id = 0;
+
+  shopCategoryId = 0;
+
+  enabled = false;
+
+  /** 有效期(分钟), 从完成时刻起算 */
+  validMinute = 4320;
+
+  /** 等待期(分钟) */
+  intervalMinute = 360;
+
+  /** 阶梯等待期, 格式 经过小时:等待分钟, 如 24:360,72:1440; 空=固定等待期 */
+  intervalSteps = "";
+
+  /** 首检延迟(分钟): 完成后隔多久做第一次检测 */
+  firstCheckDelayMinute = 360;
+
+  /** 连续多少次无掉量即提前收档; 空=不启用 */
+  stableEndTimes?: number;
+
+  /** 掉量阈值-按单量 */
+  dropThresholdNum?: number;
+
+  /** 掉量阈值-按比例(乘本单总量) */
+  dropThresholdRatio?: number;
+
+  repairEnabled = false;
+
+  repairMaxTimes = 1;
+
+  repairMinNum?: number;
+
+  /** 掉量超过本单总量的该比例就不补 */
+  repairMaxDropRatio?: number;
+
+  /** 当前值跌破进单起始值就不补 */
+  repairSkipBelowStart = true;
+
+  minTotalNum?: number;
+
+  /** 起始值高于该值的单不监控 */
+  maxStartNum?: number;
+
+  remark = "";
+}
+
+export interface DropMonitorRulePayload {
+  id?: number;
+  shopCategoryId: number;
+  enabled: boolean;
+  validMinute: number;
+  intervalMinute: number;
+  intervalSteps?: string;
+  firstCheckDelayMinute: number;
+  stableEndTimes?: number;
+  dropThresholdNum?: number;
+  dropThresholdRatio?: number;
+  repairEnabled: boolean;
+  repairMaxTimes: number;
+  repairMinNum?: number;
+  repairMaxDropRatio?: number;
+  repairSkipBelowStart: boolean;
+  minTotalNum?: number;
+  maxStartNum?: number;
+  remark?: string;
+}
+
+export async function fetchDropMonitorRule(shopCategoryId: number) {
+  const response = await instance.get<ApiResponse<DropMonitorRuleRecord | null>>("/barry/drop-monitor-rules", {
+    params: { shopCategoryId },
+  });
+  return unwrapApiResponse(response.data);
+}
+
+export async function saveDropMonitorRule(payload: DropMonitorRulePayload) {
+  const response = await instance.post<ApiResponse<DropMonitorRuleRecord | null>>("/barry/drop-monitor-rules", payload);
   return unwrapApiResponse(response.data);
 }

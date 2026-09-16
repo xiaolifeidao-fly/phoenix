@@ -162,6 +162,11 @@ type BatchMarkOrderExceptionDTO struct {
 	Reason   string `json:"reason"`
 }
 
+// BatchClearOrderExceptionDTO 批量清除异常标识请求
+type BatchClearOrderExceptionDTO struct {
+	OrderIDs []uint `json:"orderIds"`
+}
+
 // BatchRefundOrderDTO 批量退单请求
 type BatchRefundOrderDTO struct {
 	OrderIDs []uint `json:"orderIds"`

@@ -18,6 +18,7 @@ import {
   type ShopCategoryTaskSummary,
   type UserTaskSummary,
 } from "../../api/task-statistics.api";
+import { fetchManualChannels, type ManualChannelRecord } from "../../api/channel.api";
 
 const { Text, Title } = Typography;
 const { RangePicker } = DatePicker;
@@ -28,16 +29,28 @@ dayjs.extend(localeData);
 const defaultDateRange: [Dayjs, Dayjs] = [dayjs().startOf("day"), dayjs().startOf("day")];
 const USER_SEARCH_DEBOUNCE_MS = 300;
 
+const defaultFilters = {
+  dateRange: defaultDateRange,
+  shopCategoryIds: [] as number[],
+  channel: undefined as string | undefined,
+  excludeWhitelistUsers: false,
+  userId: undefined as number | undefined,
+  page: 1,
+  pageSize: 20,
+};
+
 export function ManualTaskStatisticsPanel() {
   const [loading, setLoading] = useState(false);
   const [overview, setOverview] = useState<ManualTaskStatisticsOverview | null>(null);
   const [userOptions, setUserOptions] = useState<ManualUserOption[]>([]);
   const [userSearching, setUserSearching] = useState(false);
+  const [channels, setChannels] = useState<ManualChannelRecord[]>([]);
+  const [channelLoading, setChannelLoading] = useState(false);
   // 只用于回显已选中的用户（选中项可能不在当前搜索结果里），不参与模糊搜索
   const userOptionCacheRef = useRef(new Map<number, ManualUserOption>());
   const userSearchRequestIdRef = useRef(0);
   const userSearchTimerRef = useRef<number | null>(null);
-  const [filters, setFilters] = useState({ dateRange: defaultDateRange, shopCategoryIds: [] as number[], excludeWhitelistUsers: false, userId: undefined as number | undefined, page: 1, pageSize: 20 });
+  const [filters, setFilters] = useState(defaultFilters);
 
   const loadOverview = async (nextFilters = filters) => {
     setLoading(true);
@@ -48,6 +61,7 @@ export function ManualTaskStatisticsPanel() {
           startDate: startDate.format("YYYY-MM-DD"),
           endDate: endDate.format("YYYY-MM-DD"),
           shopCategoryIds: nextFilters.shopCategoryIds.length ? nextFilters.shopCategoryIds.join(",") : undefined,
+          channel: nextFilters.channel || undefined,
           excludeWhitelistUsers: nextFilters.excludeWhitelistUsers && nextFilters.shopCategoryIds.length > 0 ? true : undefined,
           userId: nextFilters.userId,
           page: nextFilters.page,
@@ -78,6 +92,18 @@ export function ManualTaskStatisticsPanel() {
     }
   };
 
+  const loadChannels = async () => {
+    setChannelLoading(true);
+    try {
+      setChannels(await fetchManualChannels());
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "加载渠道选项失败");
+      setChannels([]);
+    } finally {
+      setChannelLoading(false);
+    }
+  };
+
   const handleUserSearch = (keyword: string) => {
     setUserSearching(true);
     if (userSearchTimerRef.current !== null) window.clearTimeout(userSearchTimerRef.current);
@@ -90,6 +116,7 @@ export function ManualTaskStatisticsPanel() {
   useEffect(() => {
     void loadOverview();
     void searchUsers();
+    void loadChannels();
     return () => {
       if (userSearchTimerRef.current !== null) window.clearTimeout(userSearchTimerRef.current);
     };
@@ -98,6 +125,16 @@ export function ManualTaskStatisticsPanel() {
   const categoryOptions = useMemo(
     () => (overview?.shopCategoryOptions ?? []).map((item) => ({ value: item.id, label: item.code ? `${item.name} (${item.code})` : item.name })),
     [overview],
+  );
+
+  const channelOptions = useMemo(
+    () => channels.map((item) => ({ value: item.code, label: item.name ? `${item.name} (${item.code})` : item.code })),
+    [channels],
+  );
+
+  const channelLabelMap = useMemo(
+    () => new Map(channels.map((item) => [item.code, item.name ? `${item.name} (${item.code})` : item.code])),
+    [channels],
   );
 
   const selectedUser = filters.userId ? userOptionCacheRef.current.get(filters.userId) : undefined;
@@ -117,6 +154,7 @@ export function ManualTaskStatisticsPanel() {
 
   const userColumns: ColumnsType<UserTaskSummary> = [
     { title: "人工用户", dataIndex: "username", width: 160, render: (value) => <Text strong>{value || "-"}</Text> },
+    { title: "渠道", dataIndex: "channel", width: 150, render: (value: string) => (value ? channelLabelMap.get(value) || value : "-") },
     { title: "人工商品", dataIndex: "shopCategoryName", width: 180 },
     { title: "上号数量", dataIndex: "upAccountNum", width: 110, render: formatCount },
     { title: "总任务", dataIndex: "totalNum", width: 100, render: formatCount },
@@ -143,9 +181,10 @@ export function ManualTaskStatisticsPanel() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, alignItems: "end" }}>
             <div><Text type="secondary">日期范围</Text><RangePicker presets={dateRangePresets} style={{ width: "100%", marginTop: 8 }} value={filters.dateRange} allowClear={false} onChange={(value) => setFilters((current) => ({ ...current, dateRange: value && value[0] && value[1] ? ([value[0].startOf("day"), value[1].startOf("day")] as unknown as [Dayjs, Dayjs]) : defaultDateRange }))} /></div>
             <div><Text type="secondary">人工商品</Text><Select mode="multiple" allowClear maxTagCount="responsive" placeholder="全部人工商品" style={{ width: "100%", marginTop: 8 }} options={categoryOptions} value={filters.shopCategoryIds} onChange={(value) => setFilters((current) => ({ ...current, shopCategoryIds: value, excludeWhitelistUsers: value.length > 0 ? current.excludeWhitelistUsers : false }))} /></div>
+            <div><Text type="secondary">渠道</Text><Select allowClear showSearch optionFilterProp="label" placeholder="全部渠道" style={{ width: "100%", marginTop: 8 }} options={channelOptions} loading={channelLoading} value={filters.channel} onChange={(value) => setFilters((current) => ({ ...current, channel: value ?? undefined }))} /></div>
             <div><Text type="secondary">是否过滤所选人工商品白名单用户</Text><div style={{ marginTop: 11 }}><Switch checked={filters.excludeWhitelistUsers} disabled={filters.shopCategoryIds.length === 0} checkedChildren="过滤" unCheckedChildren="不过滤" onChange={(value) => setFilters((current) => ({ ...current, excludeWhitelistUsers: value }))} /></div></div>
             <div><Text type="secondary">人工用户</Text><Select allowClear showSearch filterOption={false} placeholder="输入用户名或昵称搜索" style={{ width: "100%", marginTop: 8 }} options={resolvedUserOptions.map((user) => ({ value: user.id, label: user.nickname ? `${user.username} (${user.nickname})` : user.username }))} value={filters.userId} loading={userSearching} notFoundContent={userSearching ? "搜索中..." : undefined} onSearch={handleUserSearch} onChange={(value) => setFilters((current) => ({ ...current, userId: value }))} onOpenChange={(open) => { if (open) handleUserSearch(""); }} /></div>
-            <Space><Button type="primary" icon={<SearchOutlined />} loading={loading} onClick={() => { const next = { ...filters, page: 1 }; setFilters(next); void loadOverview(next); }}>查询</Button><Button icon={<ReloadOutlined />} onClick={() => { const reset = { dateRange: defaultDateRange, shopCategoryIds: [] as number[], excludeWhitelistUsers: false, userId: undefined, page: 1, pageSize: 20 }; setFilters(reset); void loadOverview(reset); }}>重置</Button></Space>
+            <Space><Button type="primary" icon={<SearchOutlined />} loading={loading} onClick={() => { const next = { ...filters, page: 1 }; setFilters(next); void loadOverview(next); }}>查询</Button><Button icon={<ReloadOutlined />} onClick={() => { setFilters(defaultFilters); void loadOverview(defaultFilters); }}>重置</Button></Space>
           </div>
         </Space>
       </section>
@@ -161,7 +200,7 @@ export function ManualTaskStatisticsPanel() {
 }
 
 function StatisticTable<T extends object>({ title, description, loading, columns, data, rowKey, pagination = false }: { title: string; description: string; loading: boolean; columns: ColumnsType<T>; data: T[]; rowKey: (record: T) => string | number; pagination?: false | TablePaginationConfig }) {
-  return <section className="manager-shell-card" style={{ borderRadius: 28, padding: 24 }}><Space direction="vertical" size={18} style={{ width: "100%" }}><div><div className="manager-section-label">统计明细</div><Title level={4} style={{ margin: "10px 0 4px" }}>{title}</Title><Text type="secondary">{description}</Text></div><Table<T> rowKey={rowKey} loading={loading} columns={columns} dataSource={data} pagination={pagination} scroll={{ x: 1180 }} locale={{ emptyText: <Empty description="当前筛选条件下暂无任务数据" /> }} /></Space></section>;
+  return <section className="manager-shell-card" style={{ borderRadius: 28, padding: 24 }}><Space direction="vertical" size={18} style={{ width: "100%" }}><div><div className="manager-section-label">统计明细</div><Title level={4} style={{ margin: "10px 0 4px" }}>{title}</Title><Text type="secondary">{description}</Text></div><Table<T> rowKey={rowKey} loading={loading} columns={columns} dataSource={data} pagination={pagination} scroll={{ x: 1240 }} locale={{ emptyText: <Empty description="当前筛选条件下暂无任务数据" /> }} /></Space></section>;
 }
 
 function formatCount(value?: number) { return Number(value || 0).toLocaleString("zh-CN"); }

@@ -41,10 +41,14 @@ func (s *AssignWhitelistSwitchService) GetApprovalRate(ctx context.Context, quer
 	return response, err
 }
 
-func (s *AssignWhitelistSwitchService) SaveApprovalRate(ctx context.Context, shopCategoryID int64, rate float64, days *int) (*barryDTO.ActionResponseDTO, error) {
+// SaveApprovalRate 保存白名单全局审核通过率区间. maxRate 为 nil 时不下发该参数, barry 侧按不限上限处理.
+func (s *AssignWhitelistSwitchService) SaveApprovalRate(ctx context.Context, shopCategoryID int64, rate float64, maxRate *float64, days *int) (*barryDTO.ActionResponseDTO, error) {
 	response := &barryDTO.ActionResponseDTO{}
 	values := buildValues("shopCategoryId", shopCategoryID)
 	values.Set("minRecentApprovalRate", strconv.FormatFloat(rate, 'f', -1, 64))
+	if maxRate != nil {
+		values.Set("maxRecentApprovalRate", strconv.FormatFloat(*maxRate, 'f', -1, 64))
+	}
 	if days != nil {
 		values.Set("recentApprovalRateDays", strconv.Itoa(*days))
 	}

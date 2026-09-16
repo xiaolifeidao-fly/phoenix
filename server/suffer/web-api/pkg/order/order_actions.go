@@ -117,6 +117,39 @@ func (h *OrderHandler) batchMarkOrderRecordException(c *gin.Context) {
 	commonRouter.ToJson(c, result, nil)
 }
 
+// clearOrderRecordException 清除订单异常标识
+func (h *OrderHandler) clearOrderRecordException(c *gin.Context) {
+	id, ok := parseOrderID(c)
+	if !ok {
+		return
+	}
+	e := h.orderService.ClearOrderException(id, currentOperator(c))
+	if e == gorm.ErrRecordNotFound {
+		commonRouter.ToError(c, "订单不存在")
+		return
+	}
+	if e != nil {
+		commonRouter.ToError(c, e.Error())
+		return
+	}
+	commonRouter.ToJson(c, gin.H{"cleared": true}, nil)
+}
+
+// batchClearOrderRecordException 批量清除订单异常标识
+func (h *OrderHandler) batchClearOrderRecordException(c *gin.Context) {
+	var req orderDTO.BatchClearOrderExceptionDTO
+	if c.ShouldBindJSON(&req) != nil {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	if len(req.OrderIDs) == 0 {
+		commonRouter.ToError(c, "请选择需要清除异常标识的订单")
+		return
+	}
+	result := h.orderService.ClearOrderExceptionBatch(req.OrderIDs, currentOperator(c))
+	commonRouter.ToJson(c, result, nil)
+}
+
 // currentToken 取当前登录 token，用于透传给 kakrolot
 // forceFinishOrderRecords 强制完成（单笔与批量共用）
 func (h *OrderHandler) forceFinishOrderRecords(c *gin.Context) {

@@ -741,8 +741,10 @@ type AssignSwitchQueryDTO struct {
 }
 
 type WhitelistApprovalRateRuleDTO struct {
-	MinRecentApprovalRate  float64 `json:"minRecentApprovalRate"`
-	RecentApprovalRateDays *int    `json:"recentApprovalRateDays"`
+	MinRecentApprovalRate float64 `json:"minRecentApprovalRate"`
+	// 通过率上限, nil 表示不限上限。
+	MaxRecentApprovalRate  *float64 `json:"maxRecentApprovalRate"`
+	RecentApprovalRateDays *int     `json:"recentApprovalRateDays"`
 }
 
 // SaveAssignSwitchDTO 开/关某品类的维度总开关. enabled=true 开(插入), false 关(删除).
@@ -839,6 +841,7 @@ type UserWhitelistDTO struct {
 	Status                 string   `json:"status,omitempty"`
 	Active                 *bool    `json:"active,omitempty"`
 	MinRecentApprovalRate  *float64 `json:"minRecentApprovalRate,omitempty"`
+	MaxRecentApprovalRate  *float64 `json:"maxRecentApprovalRate,omitempty"`
 	RecentApprovalRateDays *int     `json:"recentApprovalRateDays,omitempty"`
 	DailyAssignTimeRanges  string   `json:"dailyAssignTimeRanges,omitempty"`
 	FetchTaskLoopNum       *int     `json:"fetchTaskLoopNum,omitempty"`
@@ -870,6 +873,7 @@ type SaveUserWhitelistDTO struct {
 	Group                  string   `json:"group,omitempty"`
 	UpdatePolicy           bool     `json:"updatePolicy,omitempty"`
 	MinRecentApprovalRate  *float64 `json:"minRecentApprovalRate,omitempty"`
+	MaxRecentApprovalRate  *float64 `json:"maxRecentApprovalRate,omitempty"`
 	RecentApprovalRateDays *int     `json:"recentApprovalRateDays,omitempty"`
 	DailyAssignTimeRanges  *string  `json:"dailyAssignTimeRanges,omitempty"`
 	FetchTaskLoopNum       *int     `json:"fetchTaskLoopNum,omitempty"`
@@ -1093,6 +1097,7 @@ type ManualTaskStatisticsQueryDTO struct {
 	StartDate             string `json:"startDate,omitempty" form:"startDate"`
 	EndDate               string `json:"endDate,omitempty" form:"endDate"`
 	ShopCategoryIDs       string `json:"shopCategoryIds,omitempty" form:"shopCategoryIds"`
+	Channel               string `json:"channel,omitempty" form:"channel"`
 	ExcludeWhitelistUsers bool   `json:"excludeWhitelistUsers,omitempty" form:"excludeWhitelistUsers"`
 	UserID                int64  `json:"userId,omitempty" form:"userId"`
 	Page                  int    `json:"page,omitempty" form:"page"`
@@ -1319,6 +1324,7 @@ type UserTaskSummaryDTO struct {
 	ShopCategoryTaskSummaryDTO
 	UserID       int64  `json:"userId"`
 	Username     string `json:"username"`
+	Channel      string `json:"channel"`
 	UpAccountNum int64  `json:"upAccountNum"`
 }
 
@@ -1538,4 +1544,236 @@ type WorkbenchPublicUserOverviewDTO struct {
 	AccountCount       int64 `json:"accountCount"`
 	OnlineUserCount    int64 `json:"onlineUserCount"`
 	OnlineAccountCount int64 `json:"onlineAccountCount"`
+}
+
+// ShopDropMonitorRuleDTO 已完成单掉量监控配置, 按人工商品(shopCategoryId)维护, shop 域.
+type ShopDropMonitorRuleDTO struct {
+	BarryBaseDTO
+	ShopCategoryID        int64    `json:"shopCategoryId"`
+	Enabled               bool     `json:"enabled"`
+	ValidMinute           int      `json:"validMinute"`
+	IntervalMinute        int      `json:"intervalMinute"`
+	IntervalSteps         string   `json:"intervalSteps,omitempty"`
+	FirstCheckDelayMinute int      `json:"firstCheckDelayMinute"`
+	StableEndTimes        *int     `json:"stableEndTimes,omitempty"`
+	DropThresholdNum      *int64   `json:"dropThresholdNum,omitempty"`
+	DropThresholdRatio    *float64 `json:"dropThresholdRatio,omitempty"`
+	RepairEnabled         bool     `json:"repairEnabled"`
+	RepairMaxTimes        int      `json:"repairMaxTimes"`
+	RepairMinNum          *int64   `json:"repairMinNum,omitempty"`
+	RepairMaxDropRatio    *float64 `json:"repairMaxDropRatio,omitempty"`
+	RepairSkipBelowStart  bool     `json:"repairSkipBelowStart"`
+	MinTotalNum           *int64   `json:"minTotalNum,omitempty"`
+	MaxStartNum           *int64   `json:"maxStartNum,omitempty"`
+	Remark                string   `json:"remark,omitempty"`
+}
+
+type ShopDropMonitorRuleQueryDTO struct {
+	RequestDTO
+	ShopCategoryID int64 `json:"shopCategoryId,omitempty" form:"shopCategoryId"`
+}
+
+type SaveShopDropMonitorRuleDTO struct {
+	ID                    int      `json:"id,omitempty"`
+	ShopCategoryID        int64    `json:"shopCategoryId"`
+	Enabled               bool     `json:"enabled"`
+	ValidMinute           int      `json:"validMinute"`
+	IntervalMinute        int      `json:"intervalMinute"`
+	IntervalSteps         string   `json:"intervalSteps,omitempty"`
+	FirstCheckDelayMinute int      `json:"firstCheckDelayMinute"`
+	StableEndTimes        *int     `json:"stableEndTimes,omitempty"`
+	DropThresholdNum      *int64   `json:"dropThresholdNum,omitempty"`
+	DropThresholdRatio    *float64 `json:"dropThresholdRatio,omitempty"`
+	RepairEnabled         bool     `json:"repairEnabled"`
+	RepairMaxTimes        int      `json:"repairMaxTimes"`
+	RepairMinNum          *int64   `json:"repairMinNum,omitempty"`
+	RepairMaxDropRatio    *float64 `json:"repairMaxDropRatio,omitempty"`
+	RepairSkipBelowStart  bool     `json:"repairSkipBelowStart"`
+	MinTotalNum           *int64   `json:"minTotalNum,omitempty"`
+	MaxStartNum           *int64   `json:"maxStartNum,omitempty"`
+	Remark                string   `json:"remark,omitempty"`
+}
+
+// ShopDropRepairDTO 掉量补单明细.
+type ShopDropRepairDTO struct {
+	BarryBaseDTO
+	ShopDropMonitorID int64  `json:"shopDropMonitorId"`
+	Round             int    `json:"round"`
+	OriginShopID      int64  `json:"originShopId"`
+	OriginOriShopID   string `json:"originOriShopId,omitempty"`
+	BusinessID        string `json:"businessId,omitempty"`
+	ShopCategoryID    int64  `json:"shopCategoryId"`
+	ShopCategoryName  string `json:"shopCategoryName,omitempty"`
+	ShopTypeID        int64  `json:"shopTypeId"`
+	RepairShopID      int64  `json:"repairShopId"`
+	RepairOriShopID   string `json:"repairOriShopId,omitempty"`
+	DropNum           int64  `json:"dropNum"`
+	RepairNum         int64  `json:"repairNum"`
+	UnitScore         int64  `json:"unitScore"`
+	PlanCost          int64  `json:"planCost"`
+	ActualCost        int64  `json:"actualCost"`
+	FinishNum         int64  `json:"finishNum"`
+	Status            string `json:"status,omitempty"`
+	RepairTime        string `json:"repairTime,omitempty"`
+	FinishTime        string `json:"finishTime,omitempty"`
+	Remark            string `json:"remark,omitempty"`
+}
+
+// ShopDropRepairPageDTO 对应 barry 的 PageModel.
+type ShopDropRepairPageDTO struct {
+	Total int64                `json:"total"`
+	Data  []*ShopDropRepairDTO `json:"data"`
+}
+
+// ShopDropRepairSummaryDTO 补单数据概览, 成本双口径: planCost 下发即定, actualCost 随补单完成回填.
+type ShopDropRepairSummaryDTO struct {
+	RepairOrderNum int64 `json:"repairOrderNum"`
+	RepairTotalNum int64 `json:"repairTotalNum"`
+	PlanCost       int64 `json:"planCost"`
+	ActualCost     int64 `json:"actualCost"`
+	FinishNum      int64 `json:"finishNum"`
+}
+
+type ShopDropRepairQueryDTO struct {
+	RequestDTO
+	StartDate       string `json:"startDate,omitempty" form:"startDate"`
+	EndDate         string `json:"endDate,omitempty" form:"endDate"`
+	ShopCategoryIDs string `json:"shopCategoryIds,omitempty" form:"shopCategoryIds"`
+	OriShopID       string `json:"oriShopId,omitempty" form:"oriShopId"`
+	BusinessID      string `json:"businessId,omitempty" form:"businessId"`
+	Status          string `json:"status,omitempty" form:"status"`
+	PageIndex       int    `json:"pageIndex,omitempty" form:"pageIndex"`
+	PageSize        int    `json:"pageSize,omitempty" form:"pageSize"`
+}
+
+// ShopDropMonitorDTO 掉量监控任务明细, 不开补单也能看.
+type ShopDropMonitorDTO struct {
+	BarryBaseDTO
+	ShopID                int64  `json:"shopId"`
+	ShopCategoryID        int64  `json:"shopCategoryId"`
+	ShopCategoryName      string `json:"shopCategoryName,omitempty"`
+	OriShopID             string `json:"oriShopId,omitempty"`
+	BusinessID            string `json:"businessId,omitempty"`
+	StartNum              int64  `json:"startNum"`
+	TotalNum              int64  `json:"totalNum"`
+	BaselineNum           int64  `json:"baselineNum"`
+	FinishTime            string `json:"finishTime,omitempty"`
+	ExpireTime            string `json:"expireTime,omitempty"`
+	NextCheckTime         string `json:"nextCheckTime,omitempty"`
+	LastCheckTime         string `json:"lastCheckTime,omitempty"`
+	LastNum               int64  `json:"lastNum"`
+	MinNum                int64  `json:"minNum"`
+	CheckTimes            int    `json:"checkTimes"`
+	ContinuousNormalTimes int    `json:"continuousNormalTimes"`
+	FailTimes             int    `json:"failTimes"`
+	DropTimes             int    `json:"dropTimes"`
+	MaxDropNum            int64  `json:"maxDropNum"`
+	LastDropNum           int64  `json:"lastDropNum"`
+	FirstDropTime         string `json:"firstDropTime,omitempty"`
+	RepairTimes           int    `json:"repairTimes"`
+	RepairTotalNum        int64  `json:"repairTotalNum"`
+	Status                string `json:"status,omitempty"`
+	Remark                string `json:"remark,omitempty"`
+}
+
+type ShopDropMonitorPageDTO struct {
+	Total int64                 `json:"total"`
+	Data  []*ShopDropMonitorDTO `json:"data"`
+}
+
+// ShopDropMonitorSummaryDTO 掉量监控概览, 灰度期定参数的依据.
+type ShopDropMonitorSummaryDTO struct {
+	TotalNum           int64   `json:"totalNum"`
+	DropOrderNum       int64   `json:"dropOrderNum"`
+	DropCheckNum       int64   `json:"dropCheckNum"`
+	DropRate           float64 `json:"dropRate"`
+	RepairOrderNum     int64   `json:"repairOrderNum"`
+	RepairTotalNum     int64   `json:"repairTotalNum"`
+	DropNotRepairedNum int64   `json:"dropNotRepairedNum"`
+	MonitoringNum      int64   `json:"monitoringNum"`
+	StableEndNum       int64   `json:"stableEndNum"`
+	SupersededNum      int64   `json:"supersededNum"`
+	InvalidNum         int64   `json:"invalidNum"`
+	ErrorNum           int64   `json:"errorNum"`
+	AvgFirstDropMinute float64 `json:"avgFirstDropMinute"`
+	CheckTimesNum      int64   `json:"checkTimesNum"`
+}
+
+// ShopDropMonitorRecordDTO 单次检测明细.
+type ShopDropMonitorRecordDTO struct {
+	BarryBaseDTO
+	ShopDropMonitorID int64  `json:"shopDropMonitorId"`
+	ShopID            int64  `json:"shopId"`
+	OriShopID         string `json:"oriShopId,omitempty"`
+	Round             int    `json:"round"`
+	CheckTime         string `json:"checkTime,omitempty"`
+	BaselineNum       int64  `json:"baselineNum"`
+	NowNum            int64  `json:"nowNum"`
+	DropNum           int64  `json:"dropNum"`
+	CheckResult       string `json:"checkResult,omitempty"`
+	CostMs            int64  `json:"costMs"`
+	Message           string `json:"message,omitempty"`
+}
+
+type ShopDropMonitorQueryDTO struct {
+	RequestDTO
+	StartDate       string `json:"startDate,omitempty" form:"startDate"`
+	EndDate         string `json:"endDate,omitempty" form:"endDate"`
+	ShopCategoryIDs string `json:"shopCategoryIds,omitempty" form:"shopCategoryIds"`
+	OriShopID       string `json:"oriShopId,omitempty" form:"oriShopId"`
+	BusinessID      string `json:"businessId,omitempty" form:"businessId"`
+	Status          string `json:"status,omitempty" form:"status"`
+	OnlyDropped     bool   `json:"onlyDropped,omitempty" form:"onlyDropped"`
+	PageIndex       int    `json:"pageIndex,omitempty" form:"pageIndex"`
+	PageSize        int    `json:"pageSize,omitempty" form:"pageSize"`
+}
+
+// ShopDropMonitorRuntimeDTO 掉量监控运行健康度: 任务在不在跑、跑不跑得过来、有没有丢消息.
+type ShopDropMonitorRuntimeDTO struct {
+	BacklogNum              int64                     `json:"backlogNum"`
+	StuckQueuedNum          int64                     `json:"stuckQueuedNum"`
+	ZombieNum               int64                     `json:"zombieNum"`
+	CheckingNum             int64                     `json:"checkingNum"`
+	Nodes                   []*ShopDropMonitorNodeDTO `json:"nodes"`
+	LastJobRunTime          string                    `json:"lastJobRunTime,omitempty"`
+	LastJobNode             string                    `json:"lastJobNode,omitempty"`
+	RecentJobRuns           int64                     `json:"recentJobRuns"`
+	RecentDispatchSubmitted int64                     `json:"recentDispatchSubmitted"`
+	RecentRequeueSubmitted  int64                     `json:"recentRequeueSubmitted"`
+	RecentRecycled          int64                     `json:"recentRecycled"`
+	RecentJobErrors         int64                     `json:"recentJobErrors"`
+}
+
+type ShopDropMonitorNodeDTO struct {
+	OwnerNode   string `json:"ownerNode"`
+	CheckingNum int64  `json:"checkingNum"`
+}
+
+// ShopDropMonitorJobRecordDTO 定时任务每一轮的运行流水.
+type ShopDropMonitorJobRecordDTO struct {
+	BarryBaseDTO
+	Node               string `json:"node,omitempty"`
+	RunTime            string `json:"runTime,omitempty"`
+	CostMs             int64  `json:"costMs"`
+	DispatchFetched    int    `json:"dispatchFetched"`
+	DispatchMarked     int    `json:"dispatchMarked"`
+	DispatchSubmitted  int    `json:"dispatchSubmitted"`
+	RequeueFetched     int    `json:"requeueFetched"`
+	RequeueSubmitted   int    `json:"requeueSubmitted"`
+	Recycled           int    `json:"recycled"`
+	RepairFilled       int    `json:"repairFilled"`
+	ErrorMessage       string `json:"errorMessage,omitempty"`
+}
+
+type ShopDropMonitorJobRecordPageDTO struct {
+	Total int64                          `json:"total"`
+	Data  []*ShopDropMonitorJobRecordDTO `json:"data"`
+}
+
+type ShopDropMonitorJobRecordQueryDTO struct {
+	RequestDTO
+	StartDate string `json:"startDate,omitempty" form:"startDate"`
+	EndDate   string `json:"endDate,omitempty" form:"endDate"`
+	PageIndex int    `json:"pageIndex,omitempty" form:"pageIndex"`
+	PageSize  int    `json:"pageSize,omitempty" form:"pageSize"`
 }

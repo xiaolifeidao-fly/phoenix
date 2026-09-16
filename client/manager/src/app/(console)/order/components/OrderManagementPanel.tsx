@@ -12,6 +12,7 @@ import {
   DollarOutlined,
   DownOutlined,
   ExportOutlined,
+  IssuesCloseOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   ProfileOutlined,
@@ -90,6 +91,8 @@ const BK_STATUS = new Set(["REFUND", "DONE"]);
 const FORCE_FINISH_STATUS = new Set(["INIT", "PENDING"]);
 /** 仅进行中且未标记异常的订单允许打标 */
 const canMarkException = (record: OrderRecord) => record.orderStatus === "PENDING" && !record.isAbnormal;
+/** 已标记异常的订单才允许清除异常标识，不限订单状态 */
+const canClearException = (record: OrderRecord) => record.isAbnormal;
 
 const DENSITY_KEY = "manager.order.density";
 const CATEGORY_COLLAPSED_KEY = "manager.order.categoryCollapsed";
@@ -147,6 +150,8 @@ export function OrderManagementPanel() {
     doBk,
     doMarkException,
     doBatchMarkException,
+    doClearException,
+    doBatchClearException,
     doForceFinish,
   } = useOrderManagement(false);
   const [categories, setCategories] = useState<ShopCategoryRecord[]>([]);
@@ -557,7 +562,7 @@ export function OrderManagementPanel() {
     {
       title: "操作",
       key: "actions",
-      width: 246,
+      width: 280,
       fixed: "right",
       align: "center",
       className: "order-actions-cell",
@@ -619,6 +624,24 @@ export function OrderManagementPanel() {
               }}
             />
           </Tooltip>
+          <Tooltip title={canClearException(record) ? "清除异常标识" : "仅异常订单可清除异常标识"}>
+            <Popconfirm
+              title="确认清除该订单的异常标识？"
+              description="订单不再显示为异常，但打标时停掉的分发不会自动恢复。"
+              okText="清除"
+              cancelText="取消"
+              disabled={!canClearException(record)}
+              onConfirm={() => void handleClearException(record.id)}
+            >
+              <Button
+                type="text"
+                className="order-row-action order-row-action--success"
+                icon={<IssuesCloseOutlined />}
+                aria-label="清除异常标识"
+                disabled={!canClearException(record)}
+              />
+            </Popconfirm>
+          </Tooltip>
           <Tooltip title={REFUNDABLE_STATUS.has(record.orderStatus) ? "退单" : "当前状态不可退单"}>
             <Popconfirm
               title="确认对该订单发起退单？"
@@ -668,6 +691,7 @@ export function OrderManagementPanel() {
     .filter((order) => REFUNDABLE_STATUS.has(order.orderStatus))
     .map((order) => order.id);
   const exceptionSelectedIds = selectedOrders.filter(canMarkException).map((order) => order.id);
+  const clearExceptionSelectedIds = selectedOrders.filter(canClearException).map((order) => order.id);
   const forceFinishSelectedIds = selectedOrders
     .filter((order) => FORCE_FINISH_STATUS.has(order.orderStatus))
     .map((order) => order.id);
@@ -686,6 +710,32 @@ export function OrderManagementPanel() {
       );
     } catch (error) {
       message.error(error instanceof Error ? error.message : "强制完成失败");
+    }
+  };
+
+  const handleClearException = async (orderId: number) => {
+    try {
+      await doClearException(orderId);
+      message.success("已清除异常标识");
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "清除异常标识失败");
+    }
+  };
+
+  const handleBatchClearException = async () => {
+    try {
+      const result = await doBatchClearException(clearExceptionSelectedIds);
+      setSelectedOrderIds([]);
+      if (result.failed === 0) {
+        message.success(`已清除 ${result.succeeded} 笔订单的异常标识`);
+        return;
+      }
+      const firstFailure = result.failures[0];
+      message.warning(
+        `已清除 ${result.succeeded} 笔，${result.failed} 笔失败${firstFailure ? `：订单 #${firstFailure.orderId} ${firstFailure.message}` : ""}`,
+      );
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "批量清除异常标识失败");
     }
   };
 
@@ -727,10 +777,11 @@ export function OrderManagementPanel() {
     columnWidth: 44,
     fixed: "left",
     getCheckboxProps: (record: OrderRecord) => ({
-      // 可批量退单或可批量打标的订单都允许勾选，具体可执行的操作由按钮各自判断
+      // 可批量退单/打标/清除异常的订单都允许勾选，具体可执行的操作由按钮各自判断
       disabled:
         !REFUNDABLE_STATUS.has(record.orderStatus) &&
         !canMarkException(record) &&
+        !canClearException(record) &&
         !FORCE_FINISH_STATUS.has(record.orderStatus),
     }),
   };
@@ -1010,7 +1061,7 @@ export function OrderManagementPanel() {
                   style={{ background: "var(--manager-primary)" }}
                 />
                 <Text className="order-selection-bar__text">
-                  已选 {selectedOrderIds.length} 笔 · 可强制完成 {forceFinishSelectedIds.length} 笔 · 可退单 {refundableSelectedIds.length} 笔 · 可打标 {exceptionSelectedIds.length} 笔
+                  已选 {selectedOrderIds.length} 笔 · 可强制完成 {forceFinishSelectedIds.length} 笔 · 可退单 {refundableSelectedIds.length} 笔 · 可打标 {exceptionSelectedIds.length} 笔 · 可清除异常 {clearExceptionSelectedIds.length} 笔
                 </Text>
               </div>
               <Space wrap size={8}>
@@ -1046,6 +1097,24 @@ export function OrderManagementPanel() {
                     批量打标异常{exceptionSelectedIds.length > 0 ? ` (${exceptionSelectedIds.length})` : ""}
                   </Button>
                 </Tooltip>
+                <Popconfirm
+                  title={`确认清除已选的 ${clearExceptionSelectedIds.length} 笔订单的异常标识？`}
+                  description="订单不再显示为异常，但打标时停掉的分发不会自动恢复。"
+                  okText="批量清除"
+                  cancelText="取消"
+                  disabled={clearExceptionSelectedIds.length === 0}
+                  onConfirm={() => void handleBatchClearException()}
+                >
+                  <Tooltip title={clearExceptionSelectedIds.length === 0 ? "所选订单中没有异常订单" : ""}>
+                    <Button
+                      icon={<IssuesCloseOutlined />}
+                      disabled={clearExceptionSelectedIds.length === 0}
+                      loading={submitting}
+                    >
+                      批量清除异常{clearExceptionSelectedIds.length > 0 ? ` (${clearExceptionSelectedIds.length})` : ""}
+                    </Button>
+                  </Tooltip>
+                </Popconfirm>
                 <Popconfirm
                   title={`确认对已选的 ${refundableSelectedIds.length} 笔订单发起退单？`}
                   description="退单请求将逐笔同步给上游，失败的订单会单独提示。"

@@ -97,6 +97,9 @@ export class BarryUserWhitelistRecord {
 
   minRecentApprovalRate?: number;
 
+  /** 审核通过率上限，留空表示不限上限 */
+  maxRecentApprovalRate?: number;
+
   recentApprovalRateDays?: number;
 
   dailyAssignTimeRanges = "";
@@ -140,6 +143,7 @@ export interface BarryUserWhitelistPayload {
   group?: string;
   updatePolicy?: boolean;
   minRecentApprovalRate?: number;
+  maxRecentApprovalRate?: number;
   recentApprovalRateDays?: number;
   dailyAssignTimeRanges?: string;
   fetchTaskLoopNum?: number;

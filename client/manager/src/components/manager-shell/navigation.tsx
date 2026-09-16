@@ -9,6 +9,7 @@ import {
   DashboardOutlined,
   FileDoneOutlined,
   LinkOutlined,
+  MonitorOutlined,
   ProfileOutlined,
   ReconciliationOutlined,
   RetweetOutlined,
@@ -119,6 +120,11 @@ export const navTree: NavNode[] = [
         key: "/manual/order-details",
         icon: <UnorderedListOutlined />,
         label: "做单明细",
+      },
+      {
+        key: "/manual/drop-repair-data",
+        icon: <MonitorOutlined />,
+        label: "监控补单数据",
       },
       // 暂时隐藏：提现审批
       // { key: "/manual/withdraw-approval", icon: <AuditOutlined />, label: "提现审批" },

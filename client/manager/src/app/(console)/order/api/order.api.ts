@@ -169,6 +169,25 @@ export async function batchMarkOrderException(orderIds: number[], reason?: strin
   return unwrapApiResponse(response.data);
 }
 
+/**
+ * 清除异常标识：只复位管理端的异常标记，不通知上游、也不恢复打标时停掉的分发。
+ * 用于误标或异常已人工处理完的订单。
+ */
+export async function clearOrderException(orderId: number) {
+  const response = await instance.post<ApiResponse<unknown>>(
+    `/order-records/${orderId}/exception/clear`,
+  );
+  return unwrapApiResponse(response.data);
+}
+
+export async function batchClearOrderExceptions(orderIds: number[]) {
+  const response = await instance.post<ApiResponse<OrderActionBatchResult>>(
+    "/order-record-exceptions/batch-clear",
+    { orderIds },
+  );
+  return unwrapApiResponse(response.data);
+}
+
 /** 强制完成：barry 停止分发 + assignment/shop 置完成 + 通知 kak */
 export async function forceFinishOrders(orderIds: number[]) {
   const response = await instance.post<ApiResponse<OrderActionBatchResult>>(

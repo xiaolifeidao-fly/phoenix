@@ -6,6 +6,7 @@ export interface ManualTaskStatisticsQuery {
   startDate?: string;
   endDate?: string;
   shopCategoryIds?: string;
+  channel?: string;
   excludeWhitelistUsers?: boolean;
   userId?: number;
   page?: number;
@@ -43,6 +44,8 @@ export interface ShopCategoryTaskSummary {
 export interface UserTaskSummary extends ShopCategoryTaskSummary {
   userId: number;
   username: string;
+  /** 渠道编码，对应渠道管理里的 code */
+  channel: string;
   upAccountNum: number;
 }
 

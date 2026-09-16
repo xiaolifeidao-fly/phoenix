@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import {
+  batchClearOrderExceptions,
   batchMarkOrderException,
   batchRefundOrders,
   bkOrder,
+  clearOrderException,
   fetchOrders,
   forceFinishOrders,
   markOrderException,
@@ -88,6 +90,29 @@ export function useOrderManagement(loadOnMount = true) {
     }
   };
 
+  const doClearException = async (orderId: number) => {
+    setSubmitting(true);
+    try {
+      await clearOrderException(orderId);
+      await refresh();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const doBatchClearException = async (orderIds: number[]): Promise<OrderActionBatchResult> => {
+    setSubmitting(true);
+    try {
+      const result = await batchClearOrderExceptions(orderIds);
+      if (result.succeeded > 0) {
+        await refresh();
+      }
+      return result;
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const doForceFinish = async (orderIds: number[]): Promise<OrderActionBatchResult> => {
     setSubmitting(true);
     try {
@@ -136,6 +161,8 @@ export function useOrderManagement(loadOnMount = true) {
     doBk,
     doMarkException,
     doBatchMarkException,
+    doClearException,
+    doBatchClearException,
     doForceFinish,
   };
 }

@@ -102,6 +102,16 @@ const (
 	barryInnerOrderManualDetailsPath                          = "barry.url.inner.order.manual.details.suffix"
 	barryInnerOrderManualDetailUsersPath                      = "barry.url.inner.order.manual.detail.users.suffix"
 	barryInnerOrderRealDetailPath                             = "barry.url.inner.order.real.detail.suffix"
+
+	barryInnerShopDropMonitorRuleGetPath  = "barry.url.inner.shop.drop.monitor.rule.get.suffix"
+	barryInnerShopDropMonitorRuleSavePath = "barry.url.inner.shop.drop.monitor.rule.save.suffix"
+	barryInnerShopDropRepairSummaryPath   = "barry.url.inner.shop.drop.repair.summary.suffix"
+	barryInnerShopDropRepairQueryPath     = "barry.url.inner.shop.drop.repair.query.suffix"
+	barryInnerShopDropMonitorSummaryPath  = "barry.url.inner.shop.drop.monitor.summary.suffix"
+	barryInnerShopDropMonitorQueryPath    = "barry.url.inner.shop.drop.monitor.query.suffix"
+	barryInnerShopDropMonitorRecordPath   = "barry.url.inner.shop.drop.monitor.record.suffix"
+	barryInnerShopDropMonitorRuntimePath  = "barry.url.inner.shop.drop.monitor.runtime.suffix"
+	barryInnerShopDropMonitorJobPath      = "barry.url.inner.shop.drop.monitor.job.suffix"
 )
 
 func servicePath(configKey string) string {

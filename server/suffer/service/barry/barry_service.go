@@ -37,6 +37,9 @@ type BarryService struct {
 	UserAssignQueue             *UserAssignQueueService
 	WorkbenchDashboardStats     *WorkbenchDashboardStatisticsService
 	OrderAssign                 *OrderAssignService
+	ShopDropMonitorRule         *ShopDropMonitorRuleService
+	ShopDropRepair              *ShopDropRepairService
+	ShopDropMonitor             *ShopDropMonitorService
 }
 
 func NewBarryService() *BarryService {
@@ -54,6 +57,9 @@ func NewBarryService() *BarryService {
 		AssignUidRule:               NewAssignUidRuleService(client),
 		AssignVideoRule:             NewAssignVideoRuleService(client),
 		AssignRefundRule:            NewAssignRefundRuleService(client),
+		ShopDropMonitorRule:         NewShopDropMonitorRuleService(client),
+		ShopDropRepair:              NewShopDropRepairService(client),
+		ShopDropMonitor:             NewShopDropMonitorService(client),
 		AssignApprovalRateRule:      NewAssignApprovalRateRuleService(client),
 		AssignVideoUserRule:         NewAssignVideoUserRuleService(client),
 		AssignUidSubmitRateUserRule: NewAssignUidSubmitRateUserRuleService(client),

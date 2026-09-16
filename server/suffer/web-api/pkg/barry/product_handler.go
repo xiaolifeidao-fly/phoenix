@@ -56,6 +56,37 @@ func (h *BarryHandler) registerProductRoutes(engine *gin.RouterGroup) {
 	engine.POST("/barry/assign-whitelist-approval-rate", h.saveAssignWhitelistApprovalRate)
 	engine.GET("/barry/assign-uid-switch", h.getAssignUidSwitch)
 	engine.POST("/barry/assign-uid-switch", h.saveAssignUidSwitch)
+	engine.GET("/barry/drop-monitor-rules", h.getShopDropMonitorRule)
+	engine.POST("/barry/drop-monitor-rules", h.saveShopDropMonitorRule)
+}
+
+// 人工商品上的掉量监控配置: 有效期、等待期、首检延迟、阈值、补单开关.
+func (h *BarryHandler) getShopDropMonitorRule(c *gin.Context) {
+	var q barryDTO.ShopDropMonitorRuleQueryDTO
+	if c.ShouldBindQuery(&q) != nil || q.ShopCategoryID <= 0 {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := h.barryService.ShopDropMonitorRule.Get(c.Request.Context(), q)
+	if err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	commonRouter.ToJson(c, response.Data, nil)
+}
+
+func (h *BarryHandler) saveShopDropMonitorRule(c *gin.Context) {
+	var req barryDTO.SaveShopDropMonitorRuleDTO
+	if c.ShouldBindJSON(&req) != nil || req.ShopCategoryID <= 0 {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := h.barryService.ShopDropMonitorRule.Save(c.Request.Context(), &req)
+	if err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	commonRouter.ToJson(c, response.Data, nil)
 }
 
 func (h *BarryHandler) listProductTypes(c *gin.Context) {
@@ -754,9 +785,11 @@ func (h *BarryHandler) getAssignWhitelistApprovalRate(c *gin.Context) {
 
 func (h *BarryHandler) saveAssignWhitelistApprovalRate(c *gin.Context) {
 	var req struct {
-		ShopCategoryID         int64   `json:"shopCategoryId"`
-		MinRecentApprovalRate  float64 `json:"minRecentApprovalRate"`
-		RecentApprovalRateDays *int    `json:"recentApprovalRateDays"`
+		ShopCategoryID        int64   `json:"shopCategoryId"`
+		MinRecentApprovalRate float64 `json:"minRecentApprovalRate"`
+		// 上限为空表示不限上限。
+		MaxRecentApprovalRate  *float64 `json:"maxRecentApprovalRate"`
+		RecentApprovalRateDays *int     `json:"recentApprovalRateDays"`
 	}
 	if c.ShouldBindJSON(&req) != nil || req.ShopCategoryID <= 0 || req.MinRecentApprovalRate < 0 || req.MinRecentApprovalRate > 1 ||
 		(req.MinRecentApprovalRate == 0 && req.RecentApprovalRateDays == nil) ||
@@ -764,7 +797,15 @@ func (h *BarryHandler) saveAssignWhitelistApprovalRate(c *gin.Context) {
 		commonRouter.ToError(c, "参数错误")
 		return
 	}
-	response, err := h.barryService.AssignWhitelistSwitch.SaveApprovalRate(c.Request.Context(), req.ShopCategoryID, req.MinRecentApprovalRate, req.RecentApprovalRateDays)
+	if !isValidApprovalRate(req.MaxRecentApprovalRate) {
+		commonRouter.ToError(c, "审核通过率需在0~100%之间")
+		return
+	}
+	if req.MaxRecentApprovalRate != nil && req.MinRecentApprovalRate > *req.MaxRecentApprovalRate {
+		commonRouter.ToError(c, "审核通过率下限不能大于上限")
+		return
+	}
+	response, err := h.barryService.AssignWhitelistSwitch.SaveApprovalRate(c.Request.Context(), req.ShopCategoryID, req.MinRecentApprovalRate, req.MaxRecentApprovalRate, req.RecentApprovalRateDays)
 	if err != nil {
 		commonRouter.ToJson(c, nil, err)
 		return

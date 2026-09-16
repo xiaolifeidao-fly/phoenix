@@ -28,6 +28,12 @@ func (h *BarryHandler) RegisterHandler(engine *gin.RouterGroup) {
 	h.registerOrderFetchMonitorRoutes(engine)
 	h.registerOrderManualDetailRoutes(engine)
 	h.registerOrderRealDetailRoutes(engine)
+	h.registerDropRepairRoutes(engine)
+}
+
+// isValidApprovalRate 审核通过率取值校验, 0~1 之间; nil 表示该侧不限制, 视为合法.
+func isValidApprovalRate(rate *float64) bool {
+	return rate == nil || (*rate >= 0 && *rate <= 1)
 }
 
 func normalizeBarryPage(q *barryDTO.PageQueryDTO) {
