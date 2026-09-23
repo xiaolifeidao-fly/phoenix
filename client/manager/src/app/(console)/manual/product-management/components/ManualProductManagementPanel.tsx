@@ -158,6 +158,10 @@ const ASSIGN_MODEL_OPTIONS = [
 const ASSIGN_STRATEGY_OPTIONS = [
   { label: "单条分配", value: "SINGLE_ASSIGN" },
   { label: "批量分配", value: "BATCH_ASSIGN" },
+  // 整单外发给外部平台（provider888 这类 SMM 面板）。
+  // 必须和「分配模式 = 批量分配（BATCH_ASSIGN_MODEL）」一起用：
+  // 策略负责进件即下单，模式决定结算走 BatchAssignProcessor，少配一个链路就断。
+  { label: "整单外发", value: "EXT_BATCH_ASSIGN" },
 ];
 
 const ASSIGN_TYPE_OPTIONS = [

@@ -1687,6 +1687,9 @@ type ShopDropMonitorSummaryDTO struct {
 	DropOrderNum       int64   `json:"dropOrderNum"`
 	DropCheckNum       int64   `json:"dropCheckNum"`
 	DropRate           float64 `json:"dropRate"`
+	DropTotalNum       int64   `json:"dropTotalNum"`
+	OrderTotalNum      int64   `json:"orderTotalNum"`
+	DropNumRate        float64 `json:"dropNumRate"`
 	RepairOrderNum     int64   `json:"repairOrderNum"`
 	RepairTotalNum     int64   `json:"repairTotalNum"`
 	DropNotRepairedNum int64   `json:"dropNotRepairedNum"`
@@ -1724,8 +1727,12 @@ type ShopDropMonitorQueryDTO struct {
 	BusinessID      string `json:"businessId,omitempty" form:"businessId"`
 	Status          string `json:"status,omitempty" form:"status"`
 	OnlyDropped     bool   `json:"onlyDropped,omitempty" form:"onlyDropped"`
-	PageIndex       int    `json:"pageIndex,omitempty" form:"pageIndex"`
-	PageSize        int    `json:"pageSize,omitempty" form:"pageSize"`
+	// Checked 是否已触发过检测: "true"=已检测, "false"=还没检测, 空=全部. 用字符串是因为 bool 的零值传不下去.
+	Checked   string `json:"checked,omitempty" form:"checked"`
+	SortField string `json:"sortField,omitempty" form:"sortField"`
+	SortOrder string `json:"sortOrder,omitempty" form:"sortOrder"`
+	PageIndex int    `json:"pageIndex,omitempty" form:"pageIndex"`
+	PageSize  int    `json:"pageSize,omitempty" form:"pageSize"`
 }
 
 // ShopDropMonitorRuntimeDTO 掉量监控运行健康度: 任务在不在跑、跑不跑得过来、有没有丢消息.
@@ -1752,17 +1759,17 @@ type ShopDropMonitorNodeDTO struct {
 // ShopDropMonitorJobRecordDTO 定时任务每一轮的运行流水.
 type ShopDropMonitorJobRecordDTO struct {
 	BarryBaseDTO
-	Node               string `json:"node,omitempty"`
-	RunTime            string `json:"runTime,omitempty"`
-	CostMs             int64  `json:"costMs"`
-	DispatchFetched    int    `json:"dispatchFetched"`
-	DispatchMarked     int    `json:"dispatchMarked"`
-	DispatchSubmitted  int    `json:"dispatchSubmitted"`
-	RequeueFetched     int    `json:"requeueFetched"`
-	RequeueSubmitted   int    `json:"requeueSubmitted"`
-	Recycled           int    `json:"recycled"`
-	RepairFilled       int    `json:"repairFilled"`
-	ErrorMessage       string `json:"errorMessage,omitempty"`
+	Node              string `json:"node,omitempty"`
+	RunTime           string `json:"runTime,omitempty"`
+	CostMs            int64  `json:"costMs"`
+	DispatchFetched   int    `json:"dispatchFetched"`
+	DispatchMarked    int    `json:"dispatchMarked"`
+	DispatchSubmitted int    `json:"dispatchSubmitted"`
+	RequeueFetched    int    `json:"requeueFetched"`
+	RequeueSubmitted  int    `json:"requeueSubmitted"`
+	Recycled          int    `json:"recycled"`
+	RepairFilled      int    `json:"repairFilled"`
+	ErrorMessage      string `json:"errorMessage,omitempty"`
 }
 
 type ShopDropMonitorJobRecordPageDTO struct {

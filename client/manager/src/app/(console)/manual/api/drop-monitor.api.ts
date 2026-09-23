@@ -11,9 +11,16 @@ export interface DropMonitorQuery {
   status?: string;
   /** 只看发生过掉量的 */
   onlyDropped?: boolean;
+  /** 是否已触发过检测。"true"=已检测，"false"=建了档还没检测，空=全部 */
+  checked?: "true" | "false";
+  /** 排序字段，后端按白名单校验 */
+  sortField?: DropMonitorSortField;
+  sortOrder?: "ASC" | "DESC";
   pageIndex?: number;
   pageSize?: number;
 }
+
+export type DropMonitorSortField = "lastCheckTime" | "nextCheckTime" | "finishTime" | "firstDropTime";
 
 /** 掉量监控概览。不开自动补单也有数据 —— 灰度期就靠它定首检延迟与收档次数。 */
 export interface DropMonitorSummary {
@@ -22,6 +29,12 @@ export interface DropMonitorSummary {
   dropCheckNum: number;
   /** 掉量率，百分比 */
   dropRate: number;
+  /** 掉量总量 = 各单窗口内最大掉量之和 */
+  dropTotalNum: number;
+  /** 下单总量 = 各单本单总量之和，掉量量级比例的分母 */
+  orderTotalNum: number;
+  /** 掉量量级比例 = 掉量总量 / 下单总量，百分比 */
+  dropNumRate: number;
   repairOrderNum: number;
   repairTotalNum: number;
   /** 掉了但没补（未开补单或被守卫拦下） */
@@ -115,6 +128,12 @@ export const DROP_MONITOR_STATUS_OPTIONS = [
   { label: "采集异常", value: "ERROR" },
   { label: "续单取代", value: "SUPERSEDED" },
   { label: "人工关档", value: "CLOSED" },
+];
+
+/** 首检延迟没到的单建了档却一次都没测过，和已经测过的分开看 */
+export const DROP_MONITOR_CHECKED_OPTIONS = [
+  { label: "已触发检测", value: "true" },
+  { label: "未触发检测", value: "false" },
 ];
 
 export const DROP_CHECK_RESULT_LABEL: Record<string, string> = {

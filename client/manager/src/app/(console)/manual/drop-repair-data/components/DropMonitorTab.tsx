@@ -4,13 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 import dayjs, { type Dayjs } from "dayjs";
 import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { Button, Card, Col, DatePicker, Input, Modal, Row, Select, Space, Statistic, Switch, Table, Tag, Tooltip, Typography } from "antd";
+import type { TableProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import type { TablePaginationConfig } from "antd/es/table/interface";
 import { message } from "@/utils/notify";
 import { dateRangePresets } from "@/utils/date-range-presets";
 import { fetchManualProducts, type ManualProductRecord } from "../../api/product.api";
 import {
   DROP_CHECK_RESULT_LABEL,
+  DROP_MONITOR_CHECKED_OPTIONS,
   DROP_MONITOR_STATUS_OPTIONS,
   fetchDropMonitorDetails,
   fetchDropMonitorRecords,
@@ -18,6 +19,7 @@ import {
   type DropMonitorDetail,
   type DropMonitorQuery,
   type DropMonitorRecord,
+  type DropMonitorSortField,
   type DropMonitorSummary,
 } from "../../api/drop-monitor.api";
 import { ellipsisCell, formatDateTime } from "./format";
@@ -81,6 +83,9 @@ export function DropMonitorTab() {
     businessId: "",
     status: undefined as string | undefined,
     onlyDropped: false,
+    checked: undefined as "true" | "false" | undefined,
+    sortField: undefined as DropMonitorSortField | undefined,
+    sortOrder: undefined as "ASC" | "DESC" | undefined,
     pageIndex: 1,
     pageSize: 20,
   });
@@ -95,6 +100,9 @@ export function DropMonitorTab() {
       businessId: next.businessId.trim() || undefined,
       status: next.status,
       onlyDropped: next.onlyDropped || undefined,
+      checked: next.checked,
+      sortField: next.sortField,
+      sortOrder: next.sortOrder,
       pageIndex: next.pageIndex,
       pageSize: next.pageSize,
     };
@@ -135,6 +143,22 @@ export function DropMonitorTab() {
     void load(next);
   };
 
+  /** 服务端排序：表头点一下就换 sortField/sortOrder 重新查，分页回到第一页 */
+  const sortOrderOf = (field: DropMonitorSortField) =>
+    filters.sortField === field ? (filters.sortOrder === "ASC" ? "ascend" : "descend") : null;
+
+  const handleTableChange: TableProps<DropMonitorDetail>["onChange"] = (pagination, _tableFilters, sorter, extra) => {
+    const current = Array.isArray(sorter) ? sorter[0] : sorter;
+    const order = current?.order;
+    const field = order && typeof current?.field === "string" ? (current.field as DropMonitorSortField) : undefined;
+    search({
+      sortField: field,
+      sortOrder: field === undefined ? undefined : order === "ascend" ? "ASC" : "DESC",
+      pageIndex: extra.action === "sort" ? 1 : pagination.current ?? 1,
+      pageSize: pagination.pageSize ?? 20,
+    });
+  };
+
   const openRecords = async (row: DropMonitorDetail) => {
     setRecordRow(row);
     setRecordLoading(true);
@@ -152,7 +176,16 @@ export function DropMonitorTab() {
     { title: "原单号", dataIndex: "oriShopId", width: 170, ellipsis: { showTitle: false } , render: ellipsisCell },
     { title: "人工商品", dataIndex: "shopCategoryName", width: 130, ellipsis: { showTitle: false } , render: ellipsisCell },
     { title: "链接ID", dataIndex: "businessId", width: 150, ellipsis: { showTitle: false } , render: ellipsisCell },
-    { title: "完成时间", dataIndex: "finishTime", width: 170, render: (value: string) => formatDateTime(value) },
+    {
+      title: "完成时间",
+      dataIndex: "finishTime",
+      key: "finishTime",
+      width: 170,
+      sorter: true,
+      sortDirections: ["descend", "ascend"],
+      sortOrder: sortOrderOf("finishTime"),
+      render: (value: string) => formatDateTime(value),
+    },
     {
       title: (
         <Tooltip title="完成那一刻的结束值，所有掉量都跟它比">
@@ -172,7 +205,16 @@ export function DropMonitorTab() {
     },
     { title: "掉量次数", dataIndex: "dropTimes", width: 90 },
     { title: "检测次数", dataIndex: "checkTimes", width: 90 },
-    { title: "首次掉量", dataIndex: "firstDropTime", width: 170, render: (value: string) => formatDateTime(value) },
+    {
+      title: "首次掉量",
+      dataIndex: "firstDropTime",
+      key: "firstDropTime",
+      width: 170,
+      sorter: true,
+      sortDirections: ["descend", "ascend"],
+      sortOrder: sortOrderOf("firstDropTime"),
+      render: (value: string) => formatDateTime(value),
+    },
     { title: "已补单", dataIndex: "repairTimes", width: 80 },
     {
       title: "状态",
@@ -180,7 +222,30 @@ export function DropMonitorTab() {
       width: 120,
       render: (value: string) => <Tag color={statusColor[value] ?? "default"}>{statusLabel[value] ?? value}</Tag>,
     },
-    { title: "下次检测", dataIndex: "nextCheckTime", width: 170, render: (value: string) => formatDateTime(value) },
+    {
+      title: (
+        <Tooltip title="最近一次真正跑过检测的时间，还没到首检延迟的单这里是空的">
+          <span>最近检测</span>
+        </Tooltip>
+      ),
+      dataIndex: "lastCheckTime",
+      key: "lastCheckTime",
+      width: 170,
+      sorter: true,
+      sortDirections: ["descend", "ascend"],
+      sortOrder: sortOrderOf("lastCheckTime"),
+      render: (value: string) => formatDateTime(value),
+    },
+    {
+      title: "下次检测",
+      dataIndex: "nextCheckTime",
+      key: "nextCheckTime",
+      width: 170,
+      sorter: true,
+      sortDirections: ["descend", "ascend"],
+      sortOrder: sortOrderOf("nextCheckTime"),
+      render: (value: string) => formatDateTime(value),
+    },
     { title: "备注", dataIndex: "remark", width: 160, ellipsis: { showTitle: false } , render: ellipsisCell },
     {
       title: "操作",
@@ -263,6 +328,14 @@ export function DropMonitorTab() {
             onChange={(value) => setFilters({ ...filters, status: value })}
             options={DROP_MONITOR_STATUS_OPTIONS}
           />
+          <Select
+            allowClear
+            style={{ width: 160 }}
+            placeholder="检测触发(默认全部)"
+            value={filters.checked}
+            onChange={(value) => setFilters({ ...filters, checked: value })}
+            options={DROP_MONITOR_CHECKED_OPTIONS}
+          />
           <Space size={6}>
             <Text>只看掉量</Text>
             <Switch
@@ -279,28 +352,68 @@ export function DropMonitorTab() {
         </Space>
       </Card>
 
-      <Row gutter={16}>
-        <Col span={4}>
+      <Row gutter={[16, 16]}>
+        <Col span={6}>
           <Card size="small">
             <Statistic title="建档单数" value={summary?.totalNum ?? 0} loading={loading} />
           </Card>
         </Col>
-        <Col span={4}>
+        <Col span={6}>
           <Card size="small">
             <Statistic title="掉量单数" value={summary?.dropOrderNum ?? 0} loading={loading} />
           </Card>
         </Col>
-        <Col span={4}>
+        <Col span={6}>
           <Card size="small">
-            <Statistic title="掉量率" value={summary?.dropRate ?? 0} suffix="%" loading={loading} />
+            <Statistic
+              title={
+                <Tooltip title="按单数算：掉量单数 ÷ 建档单数">
+                  <span>掉量率(按单数)</span>
+                </Tooltip>
+              }
+              value={summary?.dropRate ?? 0}
+              suffix="%"
+              loading={loading}
+            />
           </Card>
         </Col>
-        <Col span={4}>
+        <Col span={6}>
           <Card size="small">
             <Statistic title="掉了未补" value={summary?.dropNotRepairedNum ?? 0} loading={loading} />
           </Card>
         </Col>
-        <Col span={4}>
+        <Col span={6}>
+          <Card size="small">
+            <Statistic
+              title={
+                <Tooltip title="各单窗口内最大掉量之和，比“掉了几单”更能看出损失体量">
+                  <span>掉量总量</span>
+                </Tooltip>
+              }
+              value={summary?.dropTotalNum ?? 0}
+              loading={loading}
+              valueStyle={(summary?.dropTotalNum ?? 0) > 0 ? { color: "#cf1322" } : undefined}
+            />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card size="small">
+            <Statistic
+              title={
+                <Tooltip title="按量级算：掉量总量 ÷ 下单总量，和按单数算的掉量率是两回事">
+                  <span>掉量率(按量级)</span>
+                </Tooltip>
+              }
+              value={summary?.dropNumRate ?? 0}
+              suffix="%"
+              loading={loading}
+            />
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              掉量 {summary?.dropTotalNum ?? 0} / 下单 {summary?.orderTotalNum ?? 0}
+            </Text>
+          </Card>
+        </Col>
+        <Col span={6}>
           <Card size="small">
             <Statistic
               title="首次掉量平均距完成"
@@ -309,7 +422,7 @@ export function DropMonitorTab() {
             />
           </Card>
         </Col>
-        <Col span={4}>
+        <Col span={6}>
           <Card size="small">
             <Statistic title="检测次数(采集量)" value={summary?.checkTimesNum ?? 0} loading={loading} />
           </Card>
@@ -334,7 +447,7 @@ export function DropMonitorTab() {
         loading={loading}
         columns={columns}
         dataSource={rows}
-        scroll={{ x: 2000 }}
+        scroll={{ x: 2200 }}
         pagination={{
           current: filters.pageIndex,
           pageSize: filters.pageSize,
@@ -342,9 +455,7 @@ export function DropMonitorTab() {
           showSizeChanger: true,
           showTotal: (value) => `共 ${value} 条`,
         }}
-        onChange={(pagination: TablePaginationConfig) =>
-          search({ pageIndex: pagination.current ?? 1, pageSize: pagination.pageSize ?? 20 })
-        }
+        onChange={handleTableChange}
       />
 
       <Modal

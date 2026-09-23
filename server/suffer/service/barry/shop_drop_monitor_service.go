@@ -42,6 +42,9 @@ func (s *ShopDropMonitorService) Query(ctx context.Context, query barryDTO.ShopD
 		"businessId", query.BusinessID,
 		"status", query.Status,
 		"onlyDropped", query.OnlyDropped,
+		"checked", query.Checked,
+		"sortField", query.SortField,
+		"sortOrder", query.SortOrder,
 		"pageIndex", query.PageIndex,
 		"pageSize", query.PageSize,
 	), response)
