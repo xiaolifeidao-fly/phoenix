@@ -32,6 +32,11 @@ export const routeRegistry: Record<string, ComponentType<any>> = {
       (m) => ({ default: m.ProductCategoryManagementPanel }),
     ),
   ),
+  "/upstream/community": lazyPanel(() =>
+    import("@/app/(console)/upstream/community/components/UpstreamCommunityPanel").then((m) => ({
+      default: m.UpstreamCommunityPanel,
+    })),
+  ),
   "/order/list": lazyPanel(() =>
     import("@/app/(console)/order/components/OrderManagementPanel").then((m) => ({
       default: m.OrderManagementPanel,
@@ -62,6 +67,16 @@ export const routeRegistry: Record<string, ComponentType<any>> = {
       "@/app/(console)/manual/channel-management/components/ManualChannelManagementPanel"
     ).then((m) => ({ default: m.ManualChannelManagementPanel })),
   ),
+  "/manual/settle-channel-management": lazyPanel(() =>
+    import(
+      "@/app/(console)/manual/settle-channel-management/components/SettleChannelManagementPanel"
+    ).then((m) => ({ default: m.SettleChannelManagementPanel })),
+  ),
+  "/manual/withdraw-settle": lazyPanel(() =>
+    import("@/app/(console)/manual/withdraw-settle/components/WithdrawSettlePanel").then((m) => ({
+      default: m.WithdrawSettlePanel,
+    })),
+  ),
   "/manual/task-statistics": lazyPanel(() =>
     import("@/app/(console)/manual/task-statistics/components/ManualTaskStatisticsPanel").then(
       (m) => ({ default: m.ManualTaskStatisticsPanel }),
@@ -91,6 +106,11 @@ export const routeRegistry: Record<string, ComponentType<any>> = {
     import(
       "@/app/(console)/reconciliation/workbench/components/ReconciliationWorkbenchPanel"
     ).then((m) => ({ default: m.ReconciliationWorkbenchPanel })),
+  ),
+  "/reconciliation/manual-book": lazyPanel(() =>
+    import("@/app/(console)/reconciliation/manual-book/components/ManualBookPanel").then((m) => ({
+      default: m.ManualBookPanel,
+    })),
   ),
   "/user": lazyPanel(() =>
     import("@/app/(console)/user/components/UserManagementDemo").then((m) => ({

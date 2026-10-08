@@ -1,0 +1,24 @@
+[Unit]
+Description=Suffer HTTP Gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=suffer-gateway
+Group=suffer-gateway
+WorkingDirectory=/opt/suffer-gateway
+ExecStart=/opt/suffer-gateway/suffer-gateway -config /etc/suffer-gateway/config.json
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=35
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+UMask=0077
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

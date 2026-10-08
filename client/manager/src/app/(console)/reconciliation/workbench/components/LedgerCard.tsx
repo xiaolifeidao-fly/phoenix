@@ -1,8 +1,9 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
-import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
+import { useEffect, useMemo, useState } from "react";
+import { DeleteOutlined, EditOutlined, PlusOutlined, SyncOutlined } from "@ant-design/icons";
 import {
+  Alert,
   Button,
   DatePicker,
   Empty,
@@ -20,16 +21,25 @@ import {
 import type { ColumnsType } from "antd/es/table";
 import dayjs, { type Dayjs } from "dayjs";
 import { message } from "@/utils/notify";
-import { LEDGER_CATEGORIES, type LedgerRecord, type LedgerType } from "../types";
-import { MoneyCell, SectionHead, moneyColumn } from "./shared";
+import { fetchSettleChannels, type SettleChannelRecord } from "@/app/(console)/manual/api/settle.api";
+import { fetchManualUsers } from "@/app/(console)/manual/api/user.api";
+import { fetchUsers } from "@/app/(console)/user/api/user.api";
+import {
+  LEDGER_CATEGORIES,
+  LEDGER_SOURCE_LABEL,
+  LEDGER_TYPE_LABEL,
+  type LedgerCurrency,
+  type LedgerRecordType,
+  type LedgerSortField,
+  type ReconLedgerRecord,
+  type ReconLedgerSummaryItem,
+} from "../api/reconciliation.api";
+import type { LedgerState } from "../hooks/useLedger";
+import { RemoteSearchSelect, type RemoteOption } from "./RemoteSearchSelect";
+import { MoneyCell, SectionHead, money, moneyColumn } from "./shared";
 
 interface LedgerCardProps {
-  rows: LedgerRecord[];
-  onChange: (rows: LedgerRecord[]) => void;
-  /** 出账基准：人工维度「总出款」 */
-  manualOutBaseline: { bigRmb: number; bigU: number; smallRmb: number; smallU: number };
-  /** 入账基准：上游维度「应收金额」 */
-  receivableBaseline: { rmb: number; u: number };
+  ledger: LedgerState;
   /** 新增记录时的默认日期 */
   defaultDate: Dayjs;
 }
@@ -37,196 +47,214 @@ interface LedgerCardProps {
 type LedgerView = "summary" | "detail";
 
 interface LedgerFormValues {
-  date: Dayjs;
-  type: LedgerType;
+  recordDate: Dayjs;
   category: string;
-  amountRmb: number;
-  amountU: number;
-  feeRmb: number;
-  feeU: number;
+  currency: LedgerCurrency;
+  amount: number | null;
+  settleChannelId?: number | null;
+  exchangeRate?: number | null;
+  upstreamUserId?: string | null;
+  userId?: number | null;
   remark?: string;
 }
 
-interface LedgerTotals {
-  amountRmb: number;
-  amountU: number;
-  feeRmb: number;
-  feeU: number;
+/** 上游社区：suffer「用户管理」列表，按名称 / 账号 / 邮箱 / 手机模糊搜索 */
+async function searchUpstreamUsers(keyword: string): Promise<RemoteOption<string>[]> {
+  const page = await fetchUsers({ pageIndex: 1, pageSize: 20, search: keyword || undefined });
+  return (page.data ?? []).map((user) => ({
+    value: String(user.id),
+    label: `${user.name || user.username}（${user.username}）· #${user.id}`,
+  }));
 }
 
-const emptyTotals = (): LedgerTotals => ({ amountRmb: 0, amountU: 0, feeRmb: 0, feeU: 0 });
-
-function accumulate(target: LedgerTotals, row: LedgerRecord) {
-  target.amountRmb += Number(row.amountRmb) || 0;
-  target.amountU += Number(row.amountU) || 0;
-  target.feeRmb += Number(row.feeRmb) || 0;
-  target.feeU += Number(row.feeU) || 0;
-  return target;
+/** 下游人工用户：「人工 - 做单用户」列表，按用户名模糊搜索 */
+async function searchDownstreamUsers(keyword: string): Promise<RemoteOption<number>[]> {
+  const page = await fetchManualUsers({ pageIndex: 1, pageSize: 20, username: keyword || undefined });
+  return (page.data ?? []).map((user) => ({
+    value: user.id,
+    label: `${user.username}${user.channel ? ` · ${user.channel}` : ""} · #${user.id}`,
+  }));
 }
 
-interface SummaryRow extends LedgerTotals {
+interface SummaryRow {
   key: string;
   type: string;
   category: string;
+  count: number;
+  manualCount?: number;
+  amountRmb: number;
+  amountU: number;
   total?: boolean;
 }
 
-interface CompareRow {
-  key: string;
-  label: string;
-  targetLabel: string;
-  ledgerRmb: number;
-  ledgerU: number;
-  targetRmb: number;
-  targetU: number;
-  diffRmb: number;
-  diffU: number;
-  matched: boolean;
-}
+const manualCategoryOptions = (["IN", "OUT"] as LedgerRecordType[]).map((type) => ({
+  label: LEDGER_TYPE_LABEL[type],
+  options: LEDGER_CATEGORIES.filter((item) => item.type === type && item.manual).map((item) => ({
+    label: item.label,
+    value: item.value,
+  })),
+}));
 
-export function LedgerCard({
-  rows,
-  onChange,
-  manualOutBaseline,
-  receivableBaseline,
-  defaultDate,
-}: LedgerCardProps) {
+const filterCategoryOptions = LEDGER_CATEGORIES.map((item) => ({ label: item.label, value: item.value }));
+
+export function LedgerCard({ ledger, defaultDate }: LedgerCardProps) {
   const [view, setView] = useState<LedgerView>("summary");
-  const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<ReconLedgerRecord | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [channels, setChannels] = useState<SettleChannelRecord[]>([]);
   const [form] = Form.useForm<LedgerFormValues>();
-  const createType = Form.useWatch("type", form) as LedgerType | undefined;
+  const formCategory = Form.useWatch("category", form);
+  const formCurrency = Form.useWatch("currency", form);
+  const formChannelId = Form.useWatch("settleChannelId", form);
+  const formAmount = Form.useWatch("amount", form);
+  const formRate = Form.useWatch("exchangeRate", form);
 
-  const { summaryRows, compareRows } = useMemo(() => {
-    const out = rows.filter((row) => row.type === "出款").reduce(accumulate, emptyTotals());
-    const income = rows.filter((row) => row.type === "入账").reduce(accumulate, emptyTotals());
+  const { summary } = ledger;
 
-    // 先按预设类目排序，再补上明细里出现过的自定义类目
-    const ordered: SummaryRow[] = [
-      ...LEDGER_CATEGORIES["出款"].map((category) => ({ type: "出款", category })),
-      ...LEDGER_CATEGORIES["入账"].map((category) => ({ type: "入账", category })),
-    ].map((item) => ({ ...item, key: `${item.type}-${item.category}`, ...emptyTotals() }));
-    const index = new Map(ordered.map((item) => [item.key, item]));
+  useEffect(() => {
+    fetchSettleChannels()
+      .then(setChannels)
+      .catch(() => setChannels([]));
+  }, []);
 
-    rows.forEach((row) => {
-      const key = `${row.type}-${row.category}`;
-      let item = index.get(key);
-      if (!item) {
-        item = { key, type: row.type, category: row.category, ...emptyTotals() };
-        index.set(key, item);
-        ordered.push(item);
-      }
-      accumulate(item, row);
-    });
+  const { summaryRows } = useMemo(() => {
+    const items: ReconLedgerSummaryItem[] = summary?.categoryList ?? [];
+    const visible: SummaryRow[] = items
+      .filter((item) => item.count > 0)
+      .map((item) => ({
+        key: item.category,
+        type: LEDGER_TYPE_LABEL[item.recordType] ?? item.recordType,
+        category: item.categoryName,
+        count: item.count,
+        manualCount: item.manualCount,
+        amountRmb: item.amountRmb,
+        amountU: item.amountU,
+      }));
+    const count = (type: LedgerRecordType) =>
+      items.filter((item) => item.recordType === type).reduce((total, item) => total + item.count, 0);
 
-    const visible = ordered.filter(
-      (item) => item.amountRmb || item.amountU || item.feeRmb || item.feeU,
-    );
-
-    const categoryTotal = (category: string) =>
-      rows.filter((row) => row.type === "出款" && row.category === category).reduce(accumulate, emptyTotals());
-
-    const bigOut = categoryTotal("大户出款");
-    const smallOut = categoryTotal("小户出款");
-
-    const compare: CompareRow[] = [
-      {
-        key: "big",
-        label: "大户出账",
-        targetLabel: "人工维度 · 总出款",
-        ledgerRmb: bigOut.amountRmb,
-        ledgerU: bigOut.amountU,
-        targetRmb: manualOutBaseline.bigRmb,
-        targetU: manualOutBaseline.bigU,
-      },
-      {
-        key: "small",
-        label: "小户出账",
-        targetLabel: "人工维度 · 总出款",
-        ledgerRmb: smallOut.amountRmb,
-        ledgerU: smallOut.amountU,
-        targetRmb: manualOutBaseline.smallRmb,
-        targetU: manualOutBaseline.smallU,
-      },
-      {
-        key: "income",
-        label: "总计入账",
-        targetLabel: "上游维度 · 应收金额",
-        ledgerRmb: income.amountRmb,
-        ledgerU: income.amountU,
-        targetRmb: receivableBaseline.rmb,
-        targetU: receivableBaseline.u,
-      },
-    ].map((item) => {
-      const diffRmb = item.ledgerRmb - item.targetRmb;
-      const diffU = item.ledgerU - item.targetU;
-      return { ...item, diffRmb, diffU, matched: diffRmb === 0 && diffU === 0 };
-    });
 
     return {
       summaryRows: [
         ...visible,
-        { key: "total-out", type: "出款", category: "总计出款", ...out, total: true },
-        { key: "total-in", type: "入账", category: "总计入账", ...income, total: true },
-        {
-          key: "total-net",
-          type: "净额",
-          category: "净入账",
-          amountRmb: income.amountRmb - out.amountRmb,
-          amountU: income.amountU - out.amountU,
-          feeRmb: income.feeRmb + out.feeRmb,
-          feeU: income.feeU + out.feeU,
-          total: true,
-        },
-      ] as SummaryRow[],
-      compareRows: compare,
+        { key: "total-in", type: "入账", category: "总计入账", count: count("IN"), amountRmb: summary?.inRmb ?? 0, amountU: summary?.inU ?? 0, total: true },
+        { key: "total-out", type: "出账", category: "总计出账", count: count("OUT"), amountRmb: summary?.outRmb ?? 0, amountU: summary?.outU ?? 0, total: true },
+        { key: "total-net", type: "净额", category: "净入账", count: count("IN") + count("OUT"), amountRmb: summary?.netRmb ?? 0, amountU: summary?.netU ?? 0, total: true },
+      ],
     };
-  }, [rows, manualOutBaseline, receivableBaseline]);
+  }, [summary]);
 
-  const mismatchCount = compareRows.filter((row) => !row.matched).length;
+  /** 所选日期内的总入账、总出账和利润（入账 − 出账），按 RMB，U 记录已折算 */
+  const periodTotals = [
+    { label: "总入账", value: summary?.inRmb ?? 0 },
+    { label: "总出账", value: summary?.outRmb ?? 0 },
+    { label: "利润（入账 − 出账）", value: summary?.netRmb ?? 0, highlight: true },
+  ];
 
-  const updateRow = (id: number, patch: Partial<LedgerRecord>) => {
-    onChange(rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
-  };
+  /** 受控排序：当前排序列显示升 / 降箭头 */
+  const sortOrderOf = (field: LedgerSortField) =>
+    ledger.filters.sortField === field
+      ? ledger.filters.sortOrder === "asc"
+        ? ("ascend" as const)
+        : ("descend" as const)
+      : null;
+  const selectedChannel = channels.find((item) => item.id === formChannelId);
 
-  const handleDelete = (id: number) => {
-    onChange(rows.filter((row) => row.id !== id));
-    message.success("已删除该条出入账记录");
-  };
+  /** 手续费预览，和 barry 的算法一致：社区入账 → 代收，人工出款 → 代付；U 先算 U 再折 RMB */
+  const feePreview = useMemo(() => {
+    const isCollect = formCategory === "COMMUNITY_IN";
+    if ((!isCollect && formCategory !== "MANUAL_SETTLE") || !selectedChannel || !formAmount) {
+      return null;
+    }
+    const label = isCollect ? "代收手续费" : "代付手续费";
+    if (formCurrency === "USDT") {
+      const rate = formRate || selectedChannel.exchangeRate;
+      const feeU = formAmount * ((isCollect ? selectedChannel.collectFeeRateU : selectedChannel.payoutFeeRateU) || 0);
+      return rate ? `${label} ${money(feeU)} U（≈ ${money(feeU * rate)} RMB）` : null;
+    }
+    const feeRmb = formAmount * ((isCollect ? selectedChannel.collectFeeRate : selectedChannel.payoutFeeRate) || 0);
+    return `${label} ${money(feeRmb)} RMB`;
+  }, [formCategory, formCurrency, formAmount, formRate, selectedChannel]);
 
-  const openCreate = () => {
+  const openForm = (record: ReconLedgerRecord | null) => {
+    setEditing(record);
     form.setFieldsValue({
-      date: defaultDate,
-      type: "入账",
-      category: LEDGER_CATEGORIES["入账"][0],
-      amountRmb: 0,
-      amountU: 0,
-      feeRmb: 0,
-      feeU: 0,
-      remark: "",
+      recordDate: record ? dayjs(record.recordDate) : defaultDate,
+      category: record?.category ?? "COMMUNITY_IN",
+      currency: record?.currency ?? "RMB",
+      amount: record ? (record.currency === "USDT" ? record.amountU ?? null : record.amountRmb) : null,
+      settleChannelId: record?.settleChannelId ?? null,
+      exchangeRate: record?.exchangeRate ?? null,
+      upstreamUserId: record?.upstreamUserId ?? null,
+      userId: record?.userId ?? null,
+      remark: record?.remark ?? "",
     });
-    setCreateOpen(true);
+    setFormOpen(true);
   };
 
-  const handleCreate = async () => {
+  const handleChannelChange = (channelId: number | null) => {
+    // 选了通道且按 U：汇率默认带出通道汇率，仍可手改
+    const channel = channels.find((item) => item.id === channelId);
+    if (form.getFieldValue("currency") === "USDT" && channel?.exchangeRate) {
+      form.setFieldValue("exchangeRate", channel.exchangeRate);
+    }
+  };
+
+  const handleCurrencyChange = (currency: LedgerCurrency) => {
+    if (currency === "USDT" && !form.getFieldValue("exchangeRate") && selectedChannel?.exchangeRate) {
+      form.setFieldValue("exchangeRate", selectedChannel.exchangeRate);
+    }
+  };
+
+  const handleSubmit = async () => {
     const values = await form.validateFields();
-    const nextId = Math.max(0, ...rows.map((row) => row.id)) + 1;
-    onChange([
-      {
-        id: nextId,
-        date: values.date.format("YYYY-MM-DD"),
-        type: values.type,
+    try {
+      await ledger.save(editing?.id ?? null, {
+        recordDate: values.recordDate.format("YYYY-MM-DD"),
         category: values.category,
-        amountRmb: Number(values.amountRmb) || 0,
-        amountU: Number(values.amountU) || 0,
-        feeRmb: Number(values.feeRmb) || 0,
-        feeU: Number(values.feeU) || 0,
-        remark: values.remark?.trim() || "",
-      },
-      ...rows,
-    ]);
-    setCreateOpen(false);
-    setView("detail");
-    message.success("已新增出入账记录");
+        currency: values.currency,
+        amount: Number(values.amount),
+        settleChannelId: values.settleChannelId ?? null,
+        exchangeRate: values.currency === "USDT" ? values.exchangeRate ?? null : null,
+        upstreamUserId: values.category === "COMMUNITY_IN" ? values.upstreamUserId ?? undefined : undefined,
+        userId: values.category === "MANUAL_SETTLE" ? values.userId ?? undefined : undefined,
+        remark: values.remark?.trim() || undefined,
+      });
+      message.success(editing ? "已更新出入账记录" : "已新增出入账记录");
+      setFormOpen(false);
+      setView("detail");
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "保存失败");
+    }
+  };
+
+  const handleDelete = async (record: ReconLedgerRecord) => {
+    try {
+      await ledger.remove(record.id);
+      message.success("已删除该条出入账记录");
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "删除失败");
+    }
+  };
+
+  const handleSync = async () => {
+    try {
+      const result = await ledger.syncWithdraw();
+      if (result.failed > 0) {
+        // 有失败一定要说出来，不能显示成「没有需要补记」
+        message.error(
+          `找到 ${result.withdrawCount} 笔提现，${result.failed} 笔记账失败${result.created ? `，新增 ${result.created} 条` : ""}。${result.firstError ?? ""}`,
+        );
+      } else if (result.withdrawCount === 0) {
+        message.info("所选日期内没有提现成功的记录");
+      } else if (result.created > 0) {
+        message.success(`找到 ${result.withdrawCount} 笔提现，已补记 ${result.created} 条人工出款 / 代付手续费`);
+      } else {
+        message.success(`找到 ${result.withdrawCount} 笔提现，都已记过账，无需补记`);
+      }
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "同步失败");
+    }
   };
 
   const summaryColumns: ColumnsType<SummaryRow> = [
@@ -237,96 +265,134 @@ export function LedgerCard({
       render: (value: string) => <Tag className={`recon-type-tag recon-type-tag--${typeTone(value)}`}>{value}</Tag>,
     },
     { title: "类目", dataIndex: "category", width: 108, fixed: "left", render: (value: string) => <span className="recon-row-name">{value}</span> },
-    moneyColumn<SummaryRow>("金额 RMB", "amountRmb", 96),
-    moneyColumn<SummaryRow>("金额 U", "amountU", 92),
-    moneyColumn<SummaryRow>("手续费 RMB", "feeRmb", 96),
-    moneyColumn<SummaryRow>("手续费 U", "feeU", 92),
+    {
+      title: "笔数",
+      dataIndex: "count",
+      width: 110,
+      align: "right",
+      render: (value: number, row) =>
+        row.total || !row.manualCount ? (
+          value
+        ) : (
+          <Tooltip title={`系统 ${value - row.manualCount} 笔，人工 ${row.manualCount} 笔`}>
+            <span>
+              {value}
+              <span className="recon-subcard-caption">（人工 {row.manualCount}）</span>
+            </span>
+          </Tooltip>
+        ),
+    },
+    moneyColumn<SummaryRow>("金额 RMB", "amountRmb", 110),
+    moneyColumn<SummaryRow>("其中 U", "amountU", 100),
   ];
 
-  const detailColumns: ColumnsType<LedgerRecord> = [
+  const detailColumns: ColumnsType<ReconLedgerRecord> = [
     {
       title: "日期",
-      dataIndex: "date",
-      width: 138,
+      dataIndex: "recordDate",
+      width: 116,
       fixed: "left",
-      render: (value: string, record) => (
-        <DatePicker
-          value={value ? dayjs(value) : null}
-          allowClear={false}
-          style={{ width: "100%" }}
-          onChange={(next) => next && updateRow(record.id, { date: next.format("YYYY-MM-DD") })}
-        />
-      ),
-    },
-    {
-      title: "类型",
-      dataIndex: "type",
-      width: 96,
-      render: (value: LedgerType, record) => (
-        <Select<LedgerType>
-          value={value}
-          style={{ width: "100%" }}
-          options={(Object.keys(LEDGER_CATEGORIES) as LedgerType[]).map((item) => ({ label: item, value: item }))}
-          onChange={(type) =>
-            updateRow(record.id, {
-              type,
-              category: LEDGER_CATEGORIES[type].includes(record.category)
-                ? record.category
-                : LEDGER_CATEGORIES[type][0],
-            })
-          }
-        />
-      ),
+      sorter: true,
+      sortOrder: sortOrderOf("date"),
     },
     {
       title: "类目",
-      dataIndex: "category",
-      width: 136,
+      dataIndex: "categoryName",
+      key: "category",
+      width: 240,
+      sorter: true,
+      sortOrder: sortOrderOf("category"),
       render: (value: string, record) => (
-        <Select
-          value={value}
-          style={{ width: "100%" }}
-          options={LEDGER_CATEGORIES[record.type].map((item) => ({ label: item, value: item }))}
-          onChange={(category) => updateRow(record.id, { category })}
-        />
+        <span style={{ whiteSpace: "nowrap" }}>
+          <Tag className={`recon-type-tag recon-type-tag--${record.recordType === "IN" ? "income" : "outcome"}`}>
+            {LEDGER_TYPE_LABEL[record.recordType]}
+          </Tag>
+          {value}
+          <SourceTag record={record} />
+        </span>
       ),
     },
-    numberEditColumn("金额 RMB", "amountRmb", updateRow),
-    numberEditColumn("金额 U", "amountU", updateRow),
-    numberEditColumn("手续费 RMB", "feeRmb", updateRow),
-    numberEditColumn("手续费 U", "feeU", updateRow),
+    {
+      title: "金额",
+      key: "amount",
+      width: 150,
+      align: "right",
+      render: (_, record) => <LedgerAmount record={record} />,
+    },
+    {
+      title: "汇率 / 费率",
+      key: "rate",
+      width: 110,
+      align: "right",
+      render: (_, record) => (
+        <span className="recon-subcard-caption">
+          {record.exchangeRate ? `1U=${record.exchangeRate}` : "-"}
+          {record.feeRate != null ? <div>{`${Number((record.feeRate * 100).toFixed(4))}%`}</div> : null}
+        </span>
+      ),
+    },
+    { title: "通道", dataIndex: "settleChannelName", width: 100, render: (value?: string) => value || "-" },
+    {
+      title: "上下游用户",
+      key: "user",
+      sorter: true,
+      sortOrder: sortOrderOf("user"),
+      width: 130,
+      render: (_, record) => (
+        <span>
+          {record.upstreamUserId ? (
+            <Tooltip title={`上游社区 · suffer 用户 #${record.upstreamUserId}`}>
+              <span>上游 {record.upstreamUserName || `#${record.upstreamUserId}`}</span>
+            </Tooltip>
+          ) : (
+            record.username || (record.userId ? `#${record.userId}` : null)
+          )}
+          {record.points ? <div className="recon-subcard-caption">{`${money(record.points)} 积分`}</div> : null}
+        </span>
+      ),
+    },
     {
       title: "备注",
       dataIndex: "remark",
       width: 160,
-      render: (value: string, record) => (
-        <Input
-          value={value}
-          placeholder="来源 / 原因 / 处理人"
-          onChange={(event) => updateRow(record.id, { remark: event.target.value })}
-        />
-      ),
+      render: (value?: string) => value || "-",
     },
     {
       title: "操作",
       key: "actions",
-      width: 72,
+      width: 84,
       fixed: "right",
       align: "center",
-      render: (_, record) => (
-        <Popconfirm
-          title="删除该条记录"
-          description="删除后汇总与差异对比会立即重算。"
-          okText="删除"
-          cancelText="取消"
-          okButtonProps={{ danger: true }}
-          onConfirm={() => handleDelete(record.id)}
-        >
-          <Tooltip title="删除">
-            <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+      render: (_, record) =>
+        record.editable ? (
+          <>
+            <Tooltip title="编辑">
+              <Button type="text" size="small" icon={<EditOutlined />} onClick={() => openForm(record)} />
+            </Tooltip>
+            <Popconfirm
+              title="删除该条记录"
+              description={
+                record.category === "COMMUNITY_IN"
+                  ? "对应的代收手续费会一起删除。"
+                  : record.category === "MANUAL_SETTLE"
+                    ? "对应的代付手续费会一起删除。"
+                    : "删除后汇总会立即重算。"
+              }
+              okText="删除"
+              cancelText="取消"
+              okButtonProps={{ danger: true }}
+              onConfirm={() => handleDelete(record)}
+            >
+              <Tooltip title="删除">
+                <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+              </Tooltip>
+            </Popconfirm>
+          </>
+        ) : (
+          <Tooltip title="系统生成的记录不能修改、删除">
+            <span className="recon-subcard-caption">—</span>
           </Tooltip>
-        </Popconfirm>
-      ),
+        ),
     },
   ];
 
@@ -334,14 +400,9 @@ export function LedgerCard({
     <section className="manager-data-card recon-card">
       <SectionHead
         title="出入账"
-        caption="汇总视图用于复核，明细视图负责录入、修改与删除"
+        caption="人工出款多由提现成功自动生成，也可人工录入；手续费随主记录自动生成。每条都标注系统 / 人工"
         extra={
           <>
-            {mismatchCount > 0 ? (
-              <Tag className="recon-alert-pill">{mismatchCount} 项存在差异</Tag>
-            ) : (
-              <Tag className="recon-ok-pill">全部一致</Tag>
-            )}
             <Segmented<LedgerView>
               value={view}
               onChange={setView}
@@ -350,14 +411,30 @@ export function LedgerCard({
                 { label: "明细", value: "detail" },
               ]}
             />
-            {view === "detail" ? (
-              <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-                新增
+            <Tooltip title="补记所选日期内提现成功、但还没记账的人工出款">
+              <Button icon={<SyncOutlined />} loading={ledger.submitting} onClick={handleSync}>
+                同步人工出账
               </Button>
-            ) : null}
+            </Tooltip>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => openForm(null)}>
+              新增
+            </Button>
           </>
         }
       />
+
+      {ledger.error ? (
+        <Alert
+          type="error"
+          showIcon
+          message={ledger.error}
+          action={
+            <Button size="small" onClick={() => void ledger.refresh()}>
+              重试
+            </Button>
+          }
+        />
+      ) : null}
 
       {view === "summary" ? (
         <div className="recon-stack">
@@ -365,80 +442,202 @@ export function LedgerCard({
             className="recon-table"
             rowKey="key"
             size="small"
+            loading={ledger.loading}
             columns={summaryColumns}
             dataSource={summaryRows}
             pagination={false}
-            scroll={{ x: 552 }}
+            scroll={{ x: 450 }}
             rowClassName={(row) => (row.total ? "recon-row-total" : "")}
           />
 
-          <div className="recon-subcard">
-            <div className="recon-subcard-head">
-              <span className="recon-subcard-title">出入账差异对比</span>
-              <span className="recon-subcard-caption">
-                出账对比人工维度「总出款」，入账对比上游维度「应收金额」
-              </span>
-            </div>
-            <div className="recon-compare-list">
-              {compareRows.map((row) => (
-                <CompareItem key={row.key} row={row} />
+          <div className="recon-calc-strip">
+            <div className="recon-calc-strip-title">所选日期汇总</div>
+            <div className="recon-calc-grid">
+              {periodTotals.map((item) => (
+                <div
+                  className={item.highlight ? "recon-calc-item recon-calc-item--highlight" : "recon-calc-item"}
+                  key={item.label}
+                >
+                  <span className="recon-calc-label">{item.label}</span>
+                  <span className="recon-calc-value">
+                    <MoneyCell value={item.value} />
+                    <em className="recon-calc-unit">RMB</em>
+                  </span>
+                </div>
               ))}
             </div>
           </div>
         </div>
       ) : (
-        <Table<LedgerRecord>
-          className="recon-table recon-table--editable"
-          rowKey="id"
-          size="small"
-          columns={detailColumns}
-          dataSource={rows}
-          pagination={false}
-          scroll={{ x: 1034 }}
-          locale={{
-            emptyText: <Empty description="暂无明细，点击「新增」录入出入账记录" />,
-          }}
-        />
+        <div className="recon-stack">
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <Select<LedgerRecordType>
+              allowClear
+              placeholder="全部方向"
+              style={{ width: 120 }}
+              value={ledger.filters.recordType}
+              options={(["IN", "OUT"] as LedgerRecordType[]).map((type) => ({ label: LEDGER_TYPE_LABEL[type], value: type }))}
+              onChange={(recordType) => ledger.setFilters((current) => ({ ...current, recordType, page: 1 }))}
+            />
+            <Select<string[]>
+              mode="multiple"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              maxTagCount="responsive"
+              placeholder="全部类目（可多选、可搜索）"
+              style={{ minWidth: 260, maxWidth: 420 }}
+              value={ledger.filters.categories}
+              options={filterCategoryOptions}
+              onChange={(categories) => ledger.setFilters((current) => ({ ...current, categories: categories ?? [], page: 1 }))}
+            />
+          </div>
+          <Table<ReconLedgerRecord>
+            className="recon-table"
+            rowKey="id"
+            size="small"
+            loading={ledger.loading}
+            columns={detailColumns}
+            dataSource={ledger.rows}
+            scroll={{ x: 1044 }}
+            pagination={{
+              current: ledger.filters.page,
+              pageSize: ledger.filters.pageSize,
+              total: ledger.total,
+              showSizeChanger: false,
+              size: "small",
+            }}
+            onChange={(pagination, _filters, sorter, extra) => {
+              if (extra.action === "sort") {
+                // 排序在服务端做（分页查询），切换排序回到第一页
+                const single = Array.isArray(sorter) ? sorter[0] : sorter;
+                const field = sortFieldOfColumn(single?.columnKey ?? single?.field);
+                ledger.setFilters((current) => ({
+                  ...current,
+                  sortField: single?.order && field ? field : undefined,
+                  sortOrder: single?.order === "ascend" ? "asc" : single?.order === "descend" ? "desc" : undefined,
+                  page: 1,
+                }));
+                return;
+              }
+              ledger.setFilters((current) => ({ ...current, page: pagination.current ?? 1 }));
+            }}
+            locale={{ emptyText: <Empty description="所选日期内暂无出入账记录" /> }}
+          />
+        </div>
       )}
 
       <Modal
-        title="新增出入账"
-        open={createOpen}
-        okText="确认新增"
+        title={editing ? "编辑出入账" : "新增出入账"}
+        open={formOpen}
+        okText={editing ? "保存" : "确认新增"}
         cancelText="取消"
         width={640}
         destroyOnClose
-        onOk={handleCreate}
-        onCancel={() => setCreateOpen(false)}
+        confirmLoading={ledger.submitting}
+        onOk={handleSubmit}
+        onCancel={() => setFormOpen(false)}
       >
         <Form<LedgerFormValues> className="manager-form-skin" form={form} layout="vertical" preserve={false}>
           <div className="recon-form-grid">
-            <Form.Item name="date" label="日期" rules={[{ required: true, message: "请选择日期" }]}>
+            <Form.Item name="recordDate" label="日期" rules={[{ required: true, message: "请选择日期" }]}>
               <DatePicker style={{ width: "100%" }} allowClear={false} />
             </Form.Item>
-            <Form.Item name="type" label="类型" rules={[{ required: true }]}>
-              <Select
-                options={(Object.keys(LEDGER_CATEGORIES) as LedgerType[]).map((item) => ({ label: item, value: item }))}
-                onChange={(type: LedgerType) => form.setFieldValue("category", LEDGER_CATEGORIES[type][0])}
+            <Form.Item name="category" label="类目" rules={[{ required: true, message: "请选择类目" }]}>
+              <Select options={manualCategoryOptions} />
+            </Form.Item>
+            <Form.Item name="currency" label="币种" rules={[{ required: true }]}>
+              <Segmented<LedgerCurrency>
+                block
+                options={[
+                  { label: "RMB", value: "RMB" },
+                  { label: "U", value: "USDT" },
+                ]}
+                onChange={handleCurrencyChange}
               />
             </Form.Item>
-            <Form.Item className="recon-form-wide" name="category" label="类目" rules={[{ required: true, message: "请选择类目" }]}>
-              <Select options={LEDGER_CATEGORIES[createType ?? "入账"].map((item) => ({ label: item, value: item }))} />
+            <Form.Item
+              name="amount"
+              label={formCurrency === "USDT" ? "金额（U）" : "金额（RMB）"}
+              rules={[{ required: true, message: "请输入金额" }]}
+            >
+              <InputNumber<number> min={0.01} precision={2} style={{ width: "100%" }} controls={false} />
             </Form.Item>
-            <Form.Item name="amountRmb" label="金额 RMB">
-              <InputNumber style={{ width: "100%" }} controls={false} />
+            {formCategory === "COMMUNITY_IN" ? (
+              <Form.Item
+                name="upstreamUserId"
+                label="上游社区"
+                rules={[{ required: true, message: "请选择上游社区" }]}
+                extra="从「用户管理」中选择，可按名称、账号搜索"
+              >
+                <RemoteSearchSelect<string>
+                  placeholder="搜索上游社区"
+                  fetchOptions={searchUpstreamUsers}
+                  initialOption={
+                    editing?.upstreamUserId
+                      ? { value: editing.upstreamUserId, label: editing.upstreamUserName || `#${editing.upstreamUserId}` }
+                      : null
+                  }
+                />
+              </Form.Item>
+            ) : null}
+            {formCategory === "MANUAL_SETTLE" ? (
+              <Form.Item
+                name="userId"
+                label="下游人工用户"
+                rules={[{ required: true, message: "请选择下游人工用户" }]}
+                extra="从「人工 - 做单用户」中选择，可按用户名搜索"
+              >
+                <RemoteSearchSelect<number>
+                  placeholder="搜索做单用户"
+                  fetchOptions={searchDownstreamUsers}
+                  initialOption={
+                    editing?.userId ? { value: editing.userId, label: editing.username || `#${editing.userId}` } : null
+                  }
+                />
+              </Form.Item>
+            ) : null}
+            <Form.Item
+              name="settleChannelId"
+              label="结算通道"
+              rules={[{ required: formCategory === "COMMUNITY_IN", message: "社区入账需选择结算通道" }]}
+              extra={
+                formCategory === "COMMUNITY_IN"
+                  ? "按该通道的代收手续费率生成一条代收手续费"
+                  : formCategory === "MANUAL_SETTLE"
+                    ? "选了通道会按代付手续费率生成一条代付手续费；不选则不生成"
+                    : undefined
+              }
+            >
+              <Select<number>
+                allowClear
+                placeholder={formCategory === "COMMUNITY_IN" ? "请选择" : "可不选"}
+                options={channels
+                  .filter((item) => item.enabled || item.id === editing?.settleChannelId)
+                  .map((item) => ({
+                    label: `${item.name}${item.defaultChannel ? " · 默认" : ""}${item.enabled ? "" : " · 已停用"}`,
+                    value: item.id,
+                  }))}
+                onChange={handleChannelChange}
+              />
             </Form.Item>
-            <Form.Item name="amountU" label="金额 U">
-              <InputNumber style={{ width: "100%" }} controls={false} />
-            </Form.Item>
-            <Form.Item name="feeRmb" label="手续费 RMB">
-              <InputNumber style={{ width: "100%" }} controls={false} />
-            </Form.Item>
-            <Form.Item name="feeU" label="手续费 U">
-              <InputNumber style={{ width: "100%" }} controls={false} />
-            </Form.Item>
-            <Form.Item className="recon-form-wide" name="remark" label="备注">
-              <Input placeholder="可填写来源、原因或处理人" maxLength={120} />
+            {formCurrency === "USDT" ? (
+              <Form.Item
+                name="exchangeRate"
+                label="汇率（1U = ? RMB）"
+                rules={[{ required: true, message: "按 U 录入需填写汇率" }]}
+                extra={formAmount && formRate ? `折合 ${money(formAmount * formRate)} RMB` : undefined}
+              >
+                <InputNumber<number> min={0.0001} precision={6} style={{ width: "100%" }} controls={false} />
+              </Form.Item>
+            ) : null}
+            {feePreview ? (
+              <Form.Item className="recon-form-wide">
+                <Alert type="info" showIcon message={`将同时生成${feePreview}`} />
+              </Form.Item>
+            ) : null}
+            <Form.Item className="recon-form-wide" name="remark" label="备注" rules={[{ max: 255, message: "备注不能超过 255 个字符" }]}>
+              <Input placeholder="可填写来源、原因或处理人" />
             </Form.Item>
           </div>
         </Form>
@@ -447,78 +646,46 @@ export function LedgerCard({
   );
 }
 
-function numberEditColumn(
-  title: string,
-  dataIndex: "amountRmb" | "amountU" | "feeRmb" | "feeU",
-  updateRow: (id: number, patch: Partial<LedgerRecord>) => void,
-): ColumnsType<LedgerRecord>[number] {
-  return {
-    title,
-    dataIndex,
-    width: 108,
-    align: "right",
-    render: (value: number, record: LedgerRecord) => (
-      <InputNumber
-        value={value}
-        controls={false}
-        style={{ width: "100%" }}
-        onChange={(next) => updateRow(record.id, { [dataIndex]: Number(next) || 0 })}
-      />
-    ),
-  };
+/** 表格列 → 服务端排序字段 */
+function sortFieldOfColumn(key: unknown): LedgerSortField | undefined {
+  if (key === "recordDate") return "date";
+  if (key === "category" || key === "user") return key;
+  return undefined;
 }
 
-/** 单个对比项：左右布局下表格太宽，改用「出入账 / 基准 / 差异」三栏小卡 */
-function CompareItem({ row }: { row: CompareRow }) {
+/** 标注记录是系统生成还是人工录入 */
+function SourceTag({ record }: { record: ReconLedgerRecord }) {
+  const manual = record.source === "MANUAL";
   return (
-    <div className={row.matched ? "recon-compare-item" : "recon-compare-item recon-compare-item--mismatch"}>
-      <div className="recon-compare-head">
-        <span className="recon-compare-label">{row.label}</span>
-        <span className="recon-compare-target">vs {row.targetLabel}</span>
-        {row.matched ? <Tag color="success">一致</Tag> : <Tag color="error">有差异</Tag>}
-      </div>
-      <div className="recon-compare-grid">
-        <span className="recon-compare-col" />
-        <span className="recon-compare-col">出入账</span>
-        <span className="recon-compare-col">基准</span>
-        <span className="recon-compare-col">差异</span>
-        {(
-          [
-            { unit: "RMB", ledger: row.ledgerRmb, target: row.targetRmb, diff: row.diffRmb },
-            { unit: "U", ledger: row.ledgerU, target: row.targetU, diff: row.diffU },
-          ] as const
-        ).map((line) => (
-          <Fragment key={line.unit}>
-            <span className="recon-compare-unit">{line.unit}</span>
-            <span className="recon-compare-cell">
-              <MoneyCell value={line.ledger} />
-            </span>
-            <span className="recon-compare-cell">
-              <MoneyCell value={line.target} />
-            </span>
-            <span className="recon-compare-cell">
-              <DiffCell value={line.diff} />
-            </span>
-          </Fragment>
-        ))}
-      </div>
-    </div>
+    <Tooltip title={LEDGER_SOURCE_LABEL[record.source] ?? record.source}>
+      <Tag color={manual ? "orange" : "blue"} style={{ marginInlineStart: 6 }}>
+        {manual ? "人工" : "系统"}
+      </Tag>
+    </Tooltip>
   );
 }
 
-function DiffCell({ value }: { value: number }) {
-  if (!value) {
-    return <span className="recon-diff recon-diff--zero">0</span>;
+/** 按 RMB 记账只显示 RMB；按 U 记账显示 U，并在下面带折算的 RMB */
+function LedgerAmount({ record }: { record: ReconLedgerRecord }) {
+  if (record.currency === "USDT" && record.amountU != null) {
+    return (
+      <span>
+        <MoneyCell value={record.amountU} /> U
+        <div className="recon-subcard-caption">
+          ≈ <MoneyCell value={record.amountRmb} /> RMB
+        </div>
+      </span>
+    );
   }
   return (
-    <span className="recon-diff recon-diff--alert">
-      <MoneyCell value={value} />
+    <span>
+      <MoneyCell value={record.amountRmb} /> RMB
     </span>
   );
 }
 
 function typeTone(value: string) {
   if (value === "入账") return "income";
-  if (value === "出款") return "outcome";
+  if (value === "出账") return "outcome";
   return "net";
 }

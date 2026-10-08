@@ -344,3 +344,62 @@ func (r *DashboardRepository) ActualCompletedPeriodsByCategory(todayStart, tomor
 	err := r.Db.Raw(query, args...).Scan(&rows).Error
 	return rows, err
 }
+
+// AccountTypeAmountRow 账户流水按类型汇总, amount 为绝对值之和.
+type AccountTypeAmountRow struct {
+	Type   string  `gorm:"column:type"`
+	Amount float64 `gorm:"column:amount"`
+}
+
+// SumAccountDetailByType 对账上游维度: [start, end) 内账户流水按类型汇总(绝对值).
+func (r *DashboardRepository) SumAccountDetailByType(types []string, start, end time.Time) ([]AccountTypeAmountRow, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	rows := make([]AccountTypeAmountRow, 0)
+	err := r.Db.Raw(`SELECT type, COALESCE(SUM(ABS(IFNULL(amount, 0))), 0) AS amount
+		FROM account_detail
+		WHERE type IN ? AND created_time >= ? AND created_time < ?
+		GROUP BY type`, types, start, end).Scan(&rows).Error
+	return rows, err
+}
+
+// CategoryRebateTipRow 按商品类目单位金额折算的返点 / 小费, 以及对应数量.
+type CategoryRebateTipRow struct {
+	Num          int64   `gorm:"column:num"`
+	RebateAmount float64 `gorm:"column:rebate_amount"`
+	TipAmount    float64 `gorm:"column:tip_amount"`
+}
+
+// SumOrderRebateTip 对账上游维度: [start, end) 内下单(order_record.created_time)的
+// 下单数量 × 类目返点 / 小费单位金额. 取类目当前配置的金额.
+func (r *DashboardRepository) SumOrderRebateTip(start, end time.Time) (CategoryRebateTipRow, error) {
+	var row CategoryRebateTipRow
+	if r.Db == nil {
+		return row, fmt.Errorf("database is not initialized")
+	}
+	err := r.Db.Raw(`SELECT COALESCE(SUM(o.order_num), 0) AS num,
+		COALESCE(SUM(o.order_num * sc.rebate_amount), 0) AS rebate_amount,
+		COALESCE(SUM(o.order_num * sc.tip_amount), 0) AS tip_amount
+		FROM order_record o
+		JOIN shop_category sc ON sc.id = o.shop_category_id
+		WHERE o.active = 1 AND o.created_time >= ? AND o.created_time < ?`, start, end).Scan(&row).Error
+	return row, err
+}
+
+// SumRefundRebateTip 对账上游维度: [start, end) 内退单完成(order_refund_record 状态 REFUND,
+// 按 updated_time)的退单数量 × 类目返点 / 小费单位金额, 用来冲减.
+func (r *DashboardRepository) SumRefundRebateTip(start, end time.Time) (CategoryRebateTipRow, error) {
+	var row CategoryRebateTipRow
+	if r.Db == nil {
+		return row, fmt.Errorf("database is not initialized")
+	}
+	err := r.Db.Raw(`SELECT COALESCE(SUM(rr.refund_num), 0) AS num,
+		COALESCE(SUM(rr.refund_num * sc.rebate_amount), 0) AS rebate_amount,
+		COALESCE(SUM(rr.refund_num * sc.tip_amount), 0) AS tip_amount
+		FROM order_refund_record rr
+		JOIN shop_category sc ON sc.id = rr.shop_category_id
+		WHERE rr.active = 1 AND rr.order_refund_status = 'REFUND'
+		  AND rr.updated_time >= ? AND rr.updated_time < ?`, start, end).Scan(&row).Error
+	return row, err
+}

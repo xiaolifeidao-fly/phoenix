@@ -49,6 +49,8 @@ type ShopCategoryDTO struct {
 	Name                  string `json:"name"`
 	BarryShopCategoryCode string `json:"barryShopCategoryCode"`
 	Status                string `json:"status"`
+	RebateAmount          string `json:"rebateAmount"`
+	TipAmount             string `json:"tipAmount"`
 }
 
 type CreateShopCategoryDTO = ShopCategoryDTO
@@ -61,6 +63,8 @@ type UpdateShopCategoryDTO struct {
 	Name                  *string `json:"name,omitempty"`
 	BarryShopCategoryCode *string `json:"barryShopCategoryCode,omitempty"`
 	Status                *string `json:"status,omitempty"`
+	RebateAmount          *string `json:"rebateAmount,omitempty"`
+	TipAmount             *string `json:"tipAmount,omitempty"`
 }
 
 type ShopCategoryQueryDTO struct {

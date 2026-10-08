@@ -20,6 +20,25 @@ func (r *UserRepository) EnsureTable() error {
 	return r.Db.AutoMigrate(&User{})
 }
 
+// Create / SaveOrUpdate 覆盖通用实现: 没登录过的用户 last_login_time 是零值,
+// 原样写库会变成 '0000-00-00', 严格模式下 MySQL 直接报 Error 1292. 零值时不写这一列.
+func (r *UserRepository) Create(entity *User) (*User, error) {
+	entity.Init()
+	return entity, omitZeroLastLogin(r.Db, entity).Create(entity).Error
+}
+
+func (r *UserRepository) SaveOrUpdate(entity *User) (*User, error) {
+	entity.Init()
+	return entity, omitZeroLastLogin(r.Db, entity).Save(entity).Error
+}
+
+func omitZeroLastLogin(tx *gorm.DB, entity *User) *gorm.DB {
+	if entity.LastLoginTime.IsZero() {
+		return tx.Omit("last_login_time")
+	}
+	return tx
+}
+
 func (r *UserRepository) FindByUsername(username string) (*User, error) {
 	if r.Db == nil {
 		return nil, fmt.Errorf("database is not initialized")
@@ -85,7 +104,7 @@ func (r *UserRepository) ListUsersByQuery(query userDTO.UserQueryDTO, pageIndex,
 		u.id, u.active, u.created_time, u.updated_time, u.created_by, u.updated_by,
 		u.name, u.username, u.email, u.phone, u.department, u.role, u.password,
 		u.origin_password, u.status, u.last_login_time, u.secret_key, u.remark,
-		u.pub_token, u.ban_count
+		u.pub_token, u.ban_count, u.is_trading
 	FROM user u ` + whereSQL + ` ORDER BY u.id DESC LIMIT ? OFFSET ?`
 	values = append(values, pageSize, (pageIndex-1)*pageSize)
 	var rows []UserListRow
@@ -199,6 +218,12 @@ func buildUserListWhere(query userDTO.UserQueryDTO) (string, []interface{}) {
 			WHERE a.user_id = u.id AND a.active = 1 AND a.account_status = ?
 		))`)
 		values = append(values, value, value)
+	}
+	switch strings.ToLower(strings.TrimSpace(query.IsTrading)) {
+	case "true", "1":
+		clauses = append(clauses, "u.is_trading = 1")
+	case "false", "0":
+		clauses = append(clauses, "u.is_trading = 0")
 	}
 	if value := strings.TrimSpace(query.SecretKey); value != "" {
 		clauses = append(clauses, "u.secret_key = ?")

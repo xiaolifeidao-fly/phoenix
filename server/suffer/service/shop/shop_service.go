@@ -4,6 +4,7 @@ import (
 	baseDTO "common/base/dto"
 	"common/middleware/db"
 	"fmt"
+	"regexp"
 	"strings"
 	shopDTO "suffer/service/shop/dto"
 	shopRepository "suffer/service/shop/repository"
@@ -48,6 +49,18 @@ func (s *ShopService) EnsureTable() error {
 		}
 	}
 	return nil
+}
+
+// shopAmountPattern 非负金额, 最多 8 位小数, 与 decimal(38,8) 对齐.
+var shopAmountPattern = regexp.MustCompile(`^\d{1,30}(\.\d{1,8})?$`)
+
+// normalizeShopAmount 空值按 0 处理; 负数、非数字或超过 8 位小数返回错误.
+func normalizeShopAmount(value, label string) (string, error) {
+	value = defaultShopDecimal(value)
+	if !shopAmountPattern.MatchString(value) {
+		return "", fmt.Errorf("%s需为不小于0的数字，最多8位小数", label)
+	}
+	return value, nil
 }
 
 func normalizeShopPage(page, pageIndex, pageSize int) (int, int) {
@@ -273,9 +286,18 @@ func (s *ShopService) CreateShopCategory(req *shopDTO.CreateShopCategoryDTO) (*s
 	if req == nil {
 		return nil, fmt.Errorf("request is nil")
 	}
+	rebateAmount, err := normalizeShopAmount(req.RebateAmount, "返点金额")
+	if err != nil {
+		return nil, err
+	}
+	tipAmount, err := normalizeShopAmount(req.TipAmount, "小费金额")
+	if err != nil {
+		return nil, err
+	}
 	created, err := s.shopCategoryRepository.Create(&shopRepository.ShopCategory{
 		Price: defaultShopDecimal(req.Price), SecretKey: strings.TrimSpace(req.SecretKey), LowerLimit: req.LowerLimit, UpperLimit: req.UpperLimit,
 		ShopID: req.ShopID, Name: strings.TrimSpace(req.Name), BarryShopCategoryCode: strings.TrimSpace(req.BarryShopCategoryCode), Status: normalizeShopCategoryStatus(req.Status),
+		RebateAmount: rebateAmount, TipAmount: tipAmount,
 	})
 	if err != nil {
 		return nil, err
@@ -295,6 +317,18 @@ func (s *ShopService) UpdateShopCategory(id uint, req *shopDTO.UpdateShopCategor
 	}
 	if entity.Active == 0 {
 		return nil, gorm.ErrRecordNotFound
+	}
+	// 先校验, 避免校验失败时实体已被部分改写
+	var rebateAmount, tipAmount string
+	if req.RebateAmount != nil {
+		if rebateAmount, err = normalizeShopAmount(*req.RebateAmount, "返点金额"); err != nil {
+			return nil, err
+		}
+	}
+	if req.TipAmount != nil {
+		if tipAmount, err = normalizeShopAmount(*req.TipAmount, "小费金额"); err != nil {
+			return nil, err
+		}
 	}
 	nextPrice := defaultShopDecimal(entity.Price)
 	if req.Price != nil {
@@ -333,6 +367,12 @@ func (s *ShopService) UpdateShopCategory(id uint, req *shopDTO.UpdateShopCategor
 	}
 	if req.Status != nil {
 		entity.Status = normalizeShopCategoryStatus(*req.Status)
+	}
+	if req.RebateAmount != nil {
+		entity.RebateAmount = rebateAmount
+	}
+	if req.TipAmount != nil {
+		entity.TipAmount = tipAmount
 	}
 	var changeEntity *shopRepository.ShopCategoryChange
 	if shouldCreatePriceChange {

@@ -7,28 +7,30 @@ import (
 
 type UserDTO struct {
 	baseDTO.BaseDTO
-	Name           string                 `json:"name"`
-	Username       string                 `json:"username"`
-	Email          string                 `json:"email"`
-	Phone          string                 `json:"phone"`
-	Department     string                 `json:"department"`
-	Role           string                 `json:"role"`
-	Password       string                 `json:"password"`
-	OriginPassword string                 `json:"originPassword"`
-	Status         string                 `json:"status"`
-	LastLoginTime  time.Time              `json:"lastLoginTime"`
-	SecretKey      string                 `json:"secretKey"`
-	Remark         string                 `json:"remark"`
-	PubToken       string                 `json:"pubToken"`
-	BanCount       uint32                 `json:"banCount"`
-	AccountID      int                    `json:"accountId"`
-	AccountStatus  string                 `json:"accountStatus"`
-	BalanceAmount  string                 `json:"balanceAmount"`
-	TenantUserID   int                    `json:"tenantUserId"`
-	TenantID       uint64                 `json:"tenantId"`
-	TenantName     string                 `json:"tenantName"`
-	Roles          []UserRoleBindingDTO   `json:"roles"`
-	Tenants        []UserTenantBindingDTO `json:"tenants"`
+	Name           string    `json:"name"`
+	Username       string    `json:"username"`
+	Email          string    `json:"email"`
+	Phone          string    `json:"phone"`
+	Department     string    `json:"department"`
+	Role           string    `json:"role"`
+	Password       string    `json:"password"`
+	OriginPassword string    `json:"originPassword"`
+	Status         string    `json:"status"`
+	LastLoginTime  time.Time `json:"lastLoginTime"`
+	SecretKey      string    `json:"secretKey"`
+	Remark         string    `json:"remark"`
+	PubToken       string    `json:"pubToken"`
+	BanCount       uint32    `json:"banCount"`
+	// IsTrading 是否活跃(上游用户), 对账工作台账户状态只展示活跃用户.
+	IsTrading     bool                   `json:"isTrading"`
+	AccountID     int                    `json:"accountId"`
+	AccountStatus string                 `json:"accountStatus"`
+	BalanceAmount string                 `json:"balanceAmount"`
+	TenantUserID  int                    `json:"tenantUserId"`
+	TenantID      uint64                 `json:"tenantId"`
+	TenantName    string                 `json:"tenantName"`
+	Roles         []UserRoleBindingDTO   `json:"roles"`
+	Tenants       []UserTenantBindingDTO `json:"tenants"`
 }
 
 type UserRoleBindingDTO struct {
@@ -67,6 +69,7 @@ type CreateUserDTO struct {
 	Remark         string    `json:"remark"`
 	PubToken       string    `json:"pubToken"`
 	BanCount       uint32    `json:"banCount"`
+	IsTrading      bool      `json:"isTrading"`
 }
 
 type UpdateUserDTO struct {
@@ -84,6 +87,7 @@ type UpdateUserDTO struct {
 	Remark         *string    `json:"remark,omitempty"`
 	PubToken       *string    `json:"pubToken,omitempty"`
 	BanCount       *uint32    `json:"banCount,omitempty"`
+	IsTrading      *bool      `json:"isTrading,omitempty"`
 }
 
 type UserQueryDTO struct {
@@ -98,8 +102,10 @@ type UserQueryDTO struct {
 	Department string `form:"department"`
 	Role       string `form:"role"`
 	Status     string `form:"status"`
-	SecretKey  string `form:"secretKey"`
-	PubToken   string `form:"pubToken"`
+	// IsTrading true / false, 为空不筛.
+	IsTrading string `form:"isTrading"`
+	SecretKey string `form:"secretKey"`
+	PubToken  string `form:"pubToken"`
 }
 
 type UserStatsDTO struct {

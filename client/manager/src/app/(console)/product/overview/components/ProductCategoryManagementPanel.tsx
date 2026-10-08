@@ -36,7 +36,12 @@ interface CategoryFormValues {
   lowerLimit: number;
   upperLimit: number;
   price: string;
+  rebateAmount?: string;
+  tipAmount?: string;
 }
+
+/** 非负金额，最多 8 位小数，和后端 decimal(38,8) 一致；留空按 0 保存。 */
+const AMOUNT_PATTERN = /^\d+(\.\d{1,8})?$/;
 
 const categoryStatusFilterOptions = [
   { label: "上架", value: "ACTIVE" },
@@ -127,6 +132,8 @@ export function ProductCategoryManagementPanel() {
       lowerLimit: 0,
       upperLimit: 0,
       price: "",
+      rebateAmount: "",
+      tipAmount: "",
     });
     setModalOpen(true);
   };
@@ -142,6 +149,8 @@ export function ProductCategoryManagementPanel() {
       lowerLimit: record.lowerLimit,
       upperLimit: record.upperLimit,
       price: record.price,
+      rebateAmount: trimAmount(record.rebateAmount),
+      tipAmount: trimAmount(record.tipAmount),
     });
     setModalOpen(true);
   };
@@ -166,6 +175,8 @@ export function ProductCategoryManagementPanel() {
       lowerLimit: Number(values.lowerLimit || 0),
       upperLimit: Number(values.upperLimit || 0),
       price: values.price.trim(),
+      rebateAmount: values.rebateAmount?.trim() || "0",
+      tipAmount: values.tipAmount?.trim() || "0",
     };
     if (!editingCategory) {
       payload.status = "ACTIVE";
@@ -205,6 +216,18 @@ export function ProductCategoryManagementPanel() {
       dataIndex: "price",
       width: 120,
       render: (value: string) => <span style={{ fontWeight: 600 }}>￥{value || "0.00000000"}</span>,
+    },
+    {
+      title: "返点金额",
+      dataIndex: "rebateAmount",
+      width: 120,
+      render: (value?: string) => `￥${trimAmount(value) || "0"}`,
+    },
+    {
+      title: "小费金额",
+      dataIndex: "tipAmount",
+      width: 120,
+      render: (value?: string) => `￥${trimAmount(value) || "0"}`,
     },
     {
       title: "下限 / 上限",
@@ -393,7 +416,7 @@ export function ProductCategoryManagementPanel() {
           loading={loading}
           dataSource={categories}
           columns={categoryColumns}
-          scroll={{ x: 1560 }}
+          scroll={{ x: 1880 }}
           pagination={{
             current: query.pageIndex,
             pageSize: query.pageSize,
@@ -452,6 +475,24 @@ export function ProductCategoryManagementPanel() {
             <Input placeholder="例如：0.012" />
           </Form.Item>
           <Space style={{ width: "100%" }} size={12}>
+            <Form.Item
+              name="rebateAmount"
+              label="返点金额"
+              style={{ flex: 1 }}
+              rules={[{ pattern: AMOUNT_PATTERN, message: "请输入不小于 0 的金额，最多 8 位小数" }]}
+            >
+              <Input placeholder="留空为 0" />
+            </Form.Item>
+            <Form.Item
+              name="tipAmount"
+              label="小费金额"
+              style={{ flex: 1 }}
+              rules={[{ pattern: AMOUNT_PATTERN, message: "请输入不小于 0 的金额，最多 8 位小数" }]}
+            >
+              <Input placeholder="留空为 0" />
+            </Form.Item>
+          </Space>
+          <Space style={{ width: "100%" }} size={12}>
             <Form.Item name="lowerLimit" label="下限" style={{ flex: 1 }} initialValue={0}>
               <InputNumber min={0} style={{ width: "100%" }} />
             </Form.Item>
@@ -490,6 +531,14 @@ export function ProductCategoryManagementPanel() {
 
 function resolveStatus(value?: string) {
   return value?.trim().toUpperCase() === "EXPIRE" ? "EXPIRE" : "ACTIVE";
+}
+
+/** "1.50000000" → "1.5"，去掉 decimal(38,8) 补的尾零。 */
+function trimAmount(value?: string) {
+  if (!value) {
+    return "";
+  }
+  return value.includes(".") ? value.replace(/\.?0+$/, "") : value;
 }
 
 function formatDateTime(value?: string) {

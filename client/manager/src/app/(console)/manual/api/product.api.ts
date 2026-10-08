@@ -463,6 +463,26 @@ export async function saveAssignWhitelistApprovalRate(shopCategoryId: number, mi
   return unwrapApiResponse(response.data);
 }
 
+/** 积分配置-审核加积分方式（字段沿用 eatMode）：按提交量 = 审核成功、失败都加积分；按审核 = 只有审核成功才加积分。 */
+export type EatMode = "SUBMIT_COUNT" | "APPROVE";
+
+/** 人工商品积分配置；eatRatio 为 0~1 小数，提交任务时按比例吃量。两项互不相关，null 表示未配置。 */
+export interface PointsRule {
+  eatRatio: number | null;
+  eatMode: EatMode | null;
+}
+
+export async function fetchPointsRule(shopCategoryId: number): Promise<PointsRule> {
+  const response = await instance.get<ApiResponse<PointsRule | null>>("/barry/points-rules", { params: { shopCategoryId } });
+  const data = unwrapApiResponse(response.data);
+  return { eatRatio: data?.eatRatio ?? null, eatMode: data?.eatMode ?? null };
+}
+
+export async function savePointsRule(shopCategoryId: number, rule: PointsRule) {
+  const response = await instance.post<ApiResponse<PointsRule | null>>("/barry/points-rules", { shopCategoryId, ...rule });
+  return unwrapApiResponse(response.data);
+}
+
 export async function fetchAssignUidSwitch(shopCategoryId: number) {
   const response = await instance.get<ApiResponse<AssignSwitchRecord | null>>(
     "/barry/assign-uid-switch",

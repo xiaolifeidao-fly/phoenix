@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircleOutlined,
   EditOutlined,
+  FireOutlined,
   FileSearchOutlined,
   LockOutlined,
   PartitionOutlined,
@@ -14,7 +15,7 @@ import {
   TeamOutlined,
   WalletOutlined,
 } from "@ant-design/icons";
-import { Button, Form, Input, InputNumber, Modal, Select, Space, Table, Tag, Tooltip, Typography } from "antd";
+import { Button, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tag, Tooltip, Typography } from "antd";
 import { message } from "@/utils/notify";
 import type { ColumnsType } from "antd/es/table";
 import { WorkspaceDrawer } from "@/components/manager-shell/WorkspaceDrawer";
@@ -93,6 +94,20 @@ export function UserManagementDemo() {
     patchUser,
   } = useUserManagement();
   const [searchValue, setSearchValue] = useState(query.search);
+  const [activeSaving, setActiveSaving] = useState<number | null>(null);
+
+  /** 只改是否活跃一项，走部分更新 */
+  const handleToggleActive = async (record: UserRecord, checked: boolean) => {
+    setActiveSaving(record.id);
+    try {
+      await patchUser(record.id, { isTrading: checked });
+      message.success(checked ? `已将 ${record.username} 设为活跃` : `已将 ${record.username} 设为不活跃`);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "更新是否活跃失败");
+    } finally {
+      setActiveSaving(null);
+    }
+  };
   const [modalOpen, setModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserRecord | null>(null);
   const [tenantOptions, setTenantOptions] = useState<TenantOption[]>([]);
@@ -256,6 +271,16 @@ export function UserManagementDemo() {
       width: 160,
     },
     {
+      title: "是否活跃",
+      key: "isTrading",
+      width: 110,
+      render: (_, record) => (
+        <Tooltip title="活跃的上游用户会出现在对账工作台「账户状态」里；在「操作」里调整">
+          {record.isTrading ? <Tag color="green">活跃</Tag> : <Tag>不活跃</Tag>}
+        </Tooltip>
+      ),
+    },
+    {
       title: "密码",
       key: "password",
       width: 140,
@@ -374,6 +399,26 @@ export function UserManagementDemo() {
                 onClick={() => setRechargeDetailUser(record)}
               />
             </Tooltip>
+            <Popconfirm
+              title={record.isTrading ? "取消活跃" : "设为活跃"}
+              description={
+                record.isTrading
+                  ? `取消后 ${record.username} 不再出现在对账工作台「账户状态」里。`
+                  : `设为活跃后 ${record.username} 会出现在对账工作台「账户状态」里。`
+              }
+              okText="确认"
+              cancelText="取消"
+              onConfirm={() => handleToggleActive(record, !record.isTrading)}
+            >
+              <Tooltip title={record.isTrading ? "取消活跃" : "设为活跃"}>
+                <Button
+                  size="small"
+                  type="text"
+                  loading={activeSaving === record.id}
+                  icon={<FireOutlined style={{ color: record.isTrading ? "#d4380d" : undefined }} />}
+                />
+              </Tooltip>
+            </Popconfirm>
             <Tooltip title={frozen ? "解冻" : "冻结"}>
               <Button
                 size="small"
@@ -446,6 +491,18 @@ export function UserManagementDemo() {
                 { label: "冻结", value: "EXPIRE" },
               ]}
             />
+            <Select
+              className="manager-filter-input"
+              value={query.isTrading || undefined}
+              allowClear
+              placeholder="是否活跃"
+              onChange={(value) => void refresh({ pageIndex: 1, isTrading: value ?? "" })}
+              style={{ width: 140 }}
+              options={[
+                { label: "活跃", value: "true" },
+                { label: "不活跃", value: "false" },
+              ]}
+            />
             <Button
               icon={<ReloadOutlined />}
               loading={loading || statsLoading}
@@ -483,7 +540,7 @@ export function UserManagementDemo() {
       <section className="manager-data-card manager-table">
         <Table<UserRecord>
           rowKey="id"
-          scroll={{ x: 1540 }}
+          scroll={{ x: 1650 }}
           loading={loading}
           dataSource={users}
           columns={columns}

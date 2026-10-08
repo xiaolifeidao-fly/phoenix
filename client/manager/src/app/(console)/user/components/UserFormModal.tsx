@@ -1,6 +1,6 @@
 "use client";
 
-import { Form, Input } from "antd";
+import { Form, Input, Switch } from "antd";
 import { useEffect } from "react";
 import { WorkspaceDrawer } from "@/components/manager-shell/WorkspaceDrawer";
 import type { UserPayload, UserRecord } from "../api/user.api";
@@ -17,6 +17,7 @@ interface UserFormValues {
   username: string;
   remark?: string;
   password?: string;
+  isTrading: boolean;
 }
 
 export function UserFormModal({
@@ -38,6 +39,7 @@ export function UserFormModal({
       username: user?.username ?? "",
       remark: user?.remark ?? "",
       password: "",
+      isTrading: Boolean(user?.isTrading),
     });
   }, [form, open, user]);
 
@@ -60,6 +62,7 @@ export function UserFormModal({
           role: user?.role ?? "member",
           status: user?.status ?? "ACTIVE",
           remark: values.remark?.trim(),
+          isTrading: Boolean(values.isTrading),
         };
         const password = values.password?.trim();
         if (password) {
@@ -89,6 +92,14 @@ export function UserFormModal({
             <Input.Password placeholder="请输入密码" />
           </Form.Item>
         ) : null}
+        <Form.Item
+          label="是否活跃"
+          name="isTrading"
+          valuePropName="checked"
+          extra="活跃的上游用户会出现在对账工作台「账户状态」里"
+        >
+          <Switch checkedChildren="活跃" unCheckedChildren="否" />
+        </Form.Item>
         <Form.Item label="备注" name="remark">
           <Input.TextArea rows={3} placeholder="请输入备注" />
         </Form.Item>

@@ -21,6 +21,8 @@ type User struct {
 	Remark         string    `gorm:"column:remark;type:varchar(50)" orm:"column(remark);size(50);null" description:"备注"`
 	PubToken       string    `gorm:"column:pub_token;type:varchar(100);uniqueIndex:pub_token" orm:"column(pub_token);size(100);null" description:"公钥token"`
 	BanCount       uint32    `gorm:"column:ban_count;type:int unsigned;default:0" orm:"column(ban_count);null" description:"封禁次数"`
+	// IsTrading 是否活跃(上游用户): 对账工作台「账户状态」只展示活跃用户. 和逻辑删除的 active 无关.
+	IsTrading bool `gorm:"column:is_trading;type:tinyint(1);not null;default:0" orm:"column(is_trading);null" description:"是否活跃"`
 }
 
 func (u *User) TableName() string {
@@ -73,6 +75,7 @@ type UserListRow struct {
 	Remark         string    `gorm:"column:remark"`
 	PubToken       string    `gorm:"column:pub_token"`
 	BanCount       uint32    `gorm:"column:ban_count"`
+	IsTrading      bool      `gorm:"column:is_trading"`
 }
 
 type UserAccountRow struct {

@@ -24,6 +24,8 @@ type ShopCategory struct {
 	Name                  string `gorm:"column:name;type:varchar(50)" description:"名称"`
 	BarryShopCategoryCode string `gorm:"column:barry_shop_category_code;type:varchar(50)" description:"Barry编码"`
 	Status                string `gorm:"column:status;type:varchar(50)" description:"状态"`
+	RebateAmount          string `gorm:"column:rebate_amount;type:decimal(38,8);not null;default:0.00000000" description:"返点金额"`
+	TipAmount             string `gorm:"column:tip_amount;type:decimal(38,8);not null;default:0.00000000" description:"小费金额"`
 }
 
 func (s *ShopCategory) TableName() string { return "shop_category" }

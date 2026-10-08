@@ -10,8 +10,10 @@ import (
 	"suffer/web-api/pkg/notice"
 	"suffer/web-api/pkg/order"
 	"suffer/web-api/pkg/permission"
+	"suffer/web-api/pkg/recon"
 	"suffer/web-api/pkg/shop"
 	"suffer/web-api/pkg/tenant"
+	"suffer/web-api/pkg/upstream"
 	"suffer/web-api/pkg/user"
 	"time"
 )
@@ -32,8 +34,10 @@ func registerHandler() []routers.Handler {
 		build("notice", func() routers.Handler { return notice.NewNoticeHandler() }),
 		build("order", func() routers.Handler { return order.NewOrderHandler() }),
 		build("permission", func() routers.Handler { return permission.NewPermissionHandler() }),
+		build("recon", func() routers.Handler { return recon.NewReconHandler() }),
 		build("shop", func() routers.Handler { return shop.NewShopHandler() }),
 		build("tenant", func() routers.Handler { return tenant.NewTenantHandler() }),
+		build("upstream", func() routers.Handler { return upstream.NewUpstreamHandler() }),
 		build("user", func() routers.Handler { return user.NewUserHandler() }),
 	}
 }

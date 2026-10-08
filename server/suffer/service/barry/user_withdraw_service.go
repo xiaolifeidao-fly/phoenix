@@ -24,7 +24,11 @@ func (s *UserWithdrawService) List(ctx context.Context, query barryDTO.UserWithd
 	requestURL = strings.ReplaceAll(requestURL, "{status}", strings.TrimSpace(query.Status))
 	requestURL = strings.ReplaceAll(requestURL, "{startTime}", strings.TrimSpace(query.StartTime))
 	requestURL = strings.ReplaceAll(requestURL, "{endTime}", strings.TrimSpace(query.EndTime))
-	err := s.client.GetAbsolute(ctx, requestURL, nil, response)
+	// 审核时间不放进 suffix 模板, 直接追加查询参数, 部署配置不用改
+	err := s.client.GetAbsolute(ctx, requestURL, buildValues(
+		"approveStartTime", query.ApproveStartTime,
+		"approveEndTime", query.ApproveEndTime,
+	), response)
 	if err != nil {
 		return nil, err
 	}

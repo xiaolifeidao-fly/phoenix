@@ -67,3 +67,22 @@ export function FormulaGrid({ items }: { items: { label: string; expression: str
     </div>
   );
 }
+
+/** 上游用户的下拉文案：名称（用户名）· 备注；名称和用户名相同时只写一次 */
+export function upstreamUserLabel(name?: string, username?: string, remark?: string) {
+  const title = name || username || "";
+  const base = username && username !== title ? `${title}（${username}）` : title;
+  return remark ? `${base} · ${remark}` : base;
+}
+
+/** 表格里的上游用户：名称加粗，下面一行是用户名和备注 */
+export function UpstreamUserCell({ name, username, remark }: { name?: string; username?: string; remark?: string }) {
+  const title = name || username || "-";
+  const caption = [username && username !== title ? username : "", remark ?? ""].filter(Boolean).join(" · ");
+  return (
+    <span>
+      <span className="recon-row-name">{title}</span>
+      {caption ? <div className="recon-subcard-caption">{caption}</div> : null}
+    </span>
+  );
+}

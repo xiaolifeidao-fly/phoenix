@@ -23,13 +23,17 @@ type BarryService struct {
 	UserPointsAdmin             *UserPointsAdminService
 	User                        *UserService
 	UserWhitelist               *UserWhitelistService
+	PointsRule                  *PointsRuleService
+	Settle                      *SettleService
 	UserDetail                  *UserDetailService
 	UserWithdraw                *UserWithdrawService
 	PointWithdraw               *PointWithdrawService
+	WithdrawSummary             *WithdrawSummaryService
 	Entry                       *EntryService
 	Return                      *ReturnService
 	OrderSummary                *OrderSummaryService
 	ManualTaskStats             *ManualTaskStatisticsService
+	Reconciliation              *ReconciliationService
 	ManualOrderDetails          *ManualOrderDetailService
 	OrderManualDetails          *OrderManualDetailService
 	OrderRealDetail             *OrderRealDetailService
@@ -70,13 +74,17 @@ func NewBarryService() *BarryService {
 		UserPointsAdmin:             NewUserPointsAdminService(client),
 		User:                        NewUserService(client),
 		UserWhitelist:               NewUserWhitelistService(client),
+		PointsRule:                  NewPointsRuleService(client),
+		Settle:                      NewSettleService(client),
 		UserDetail:                  NewUserDetailService(client),
 		UserWithdraw:                NewUserWithdrawService(client),
 		PointWithdraw:               NewPointWithdrawService(client),
+		WithdrawSummary:             NewWithdrawSummaryService(client),
 		Entry:                       NewEntryService(client),
 		Return:                      NewReturnService(client),
 		OrderSummary:                orderSummaryService,
 		ManualTaskStats:             NewManualTaskStatisticsService(client),
+		Reconciliation:              NewReconciliationService(client),
 		ManualOrderDetails:          NewManualOrderDetailService(client),
 		OrderManualDetails:          NewOrderManualDetailService(client),
 		OrderRealDetail:             NewOrderRealDetailService(client),

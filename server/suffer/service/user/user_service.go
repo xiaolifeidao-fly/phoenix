@@ -185,6 +185,7 @@ func (s *UserService) ListUsers(query userDTO.UserQueryDTO) (*baseDTO.PageDTO[us
 			Remark:         row.Remark,
 			PubToken:       row.PubToken,
 			BanCount:       row.BanCount,
+			IsTrading:      row.IsTrading,
 		})
 	}
 	if len(items) == 0 {
@@ -323,6 +324,7 @@ func (s *UserService) CreateUser(req *userDTO.CreateUserDTO) (*userDTO.UserDTO, 
 		Remark:         remark,
 		PubToken:       pubToken,
 		BanCount:       req.BanCount,
+		IsTrading:      req.IsTrading,
 	})
 	if err != nil {
 		return nil, err
@@ -412,6 +414,9 @@ func (s *UserService) UpdateUser(id uint, req *userDTO.UpdateUserDTO) (*userDTO.
 	}
 	if req.BanCount != nil {
 		entity.BanCount = *req.BanCount
+	}
+	if req.IsTrading != nil {
+		entity.IsTrading = *req.IsTrading
 	}
 	saved, err := s.userRepository.SaveOrUpdate(entity)
 	if err != nil {

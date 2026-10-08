@@ -39,6 +39,9 @@ export class UserRecord {
 
   banCount = 0;
 
+  /** 是否活跃（上游用户）：对账工作台「账户状态」只展示活跃用户 */
+  isTrading = false;
+
   accountId?: number;
 
   accountStatus = "";
@@ -80,6 +83,8 @@ export interface UserListQuery extends Record<string, string | number | undefine
   search?: string;
   role?: string;
   status?: string;
+  /** "true" / "false"，为空不筛 */
+  isTrading?: string;
 }
 
 export interface UserPayload {
@@ -100,6 +105,7 @@ export interface UserPayload {
   secretKey?: string;
   pubToken?: string;
   banCount?: number;
+  isTrading?: boolean;
 }
 
 export async function fetchUsers(query: UserListQuery) {
@@ -109,6 +115,7 @@ export async function fetchUsers(query: UserListQuery) {
     search: query.search,
     role: query.role,
     status: query.status,
+    isTrading: query.isTrading || undefined,
   });
 }
 

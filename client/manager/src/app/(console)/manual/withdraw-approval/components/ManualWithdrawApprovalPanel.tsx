@@ -61,10 +61,16 @@ export function ManualWithdrawApprovalPanel() {
     username: "",
     channel: "",
     status: "",
-    dateRange: createDefaultDateRange(),
+    /** 申请时间；可清空，但和审核时间至少要有一个 */
+    dateRange: createDefaultDateRange() as DateRangeFilterValue | null,
+    /** 审核时间；可空 */
+    approveRange: null as DateRangeFilterValue | null,
   });
 
-  const dateRangeValue = useMemo(() => normalizeDateRange(filters.dateRange), [filters.dateRange]);
+  const dateRangeValue = useMemo(
+    () => (filters.dateRange ? normalizeDateRange(filters.dateRange) : null),
+    [filters.dateRange],
+  );
 
   const loadChannels = async () => {
     setChannelLoading(true);
@@ -80,15 +86,23 @@ export function ManualWithdrawApprovalPanel() {
   };
 
   const loadRecords = async () => {
+    if (!filters.dateRange && !filters.approveRange) {
+      // 两个时间都不限会把整张提现表查出来
+      message.warning("申请时间和审核时间至少选一个");
+      return;
+    }
     setLoading(true);
     try {
-      const [startTime, endTime] = normalizeDateRange(filters.dateRange);
+      const applyRange = filters.dateRange ? normalizeDateRange(filters.dateRange) : null;
+      const approveRange = filters.approveRange;
       const result = await fetchManualWithdrawRecords({
         username: filters.username.trim() || undefined,
         channel: filters.channel || undefined,
         status: filters.status || undefined,
-        startTime: startTime ? startTime.format("YYYY-MM-DD HH:mm:ss") : undefined,
-        endTime: endTime ? endTime.format("YYYY-MM-DD HH:mm:ss") : undefined,
+        startTime: applyRange ? applyRange[0].format("YYYY-MM-DD HH:mm:ss") : undefined,
+        endTime: applyRange ? applyRange[1].format("YYYY-MM-DD HH:mm:ss") : undefined,
+        approveStartTime: approveRange ? approveRange[0].format("YYYY-MM-DD HH:mm:ss") : undefined,
+        approveEndTime: approveRange ? approveRange[1].format("YYYY-MM-DD HH:mm:ss") : undefined,
       });
       setRecords(result);
     } catch (error) {
@@ -293,7 +307,7 @@ export function ManualWithdrawApprovalPanel() {
       <section className="manager-shell-card" style={{ borderRadius: 30, padding: 24 }}>
         <Space direction="vertical" size={18} style={{ width: "100%" }}>
           <div>
-            <div className="manager-section-label">审批筛选</div>
+            <div className="manager-section-label">提现筛选</div>
             <Title level={4} style={{ margin: "10px 0 0" }}>
               用户提现记录
             </Title>
@@ -321,22 +335,55 @@ export function ManualWithdrawApprovalPanel() {
               value={filters.status}
               onChange={(value) => setFilters((current) => ({ ...current, status: value }))}
             />
-            <RangePicker
-              showTime
-              presets={dateRangePresets}
-              value={dateRangeValue}
-              onChange={(value) => {
-                if (!value || !value[0] || !value[1]) {
-                  setFilters((current) => ({ ...current, dateRange: createDefaultDateRange() }));
-                  return;
-                }
-                const [startTime, endTime] = normalizeDateRange(value);
-                setFilters((current) => ({
-                  ...current,
-                  dateRange: [startTime.startOf("second"), endTime.startOf("second")],
-                }));
-              }}
-            />
+            <Space size={6}>
+              <Text type="secondary">申请时间</Text>
+              <RangePicker
+                showTime
+                allowClear
+                presets={dateRangePresets}
+                placeholder={["申请开始", "申请结束"]}
+                value={dateRangeValue}
+                onChange={(value) => {
+                  if (!value || !value[0] || !value[1]) {
+                    setFilters((current) => ({ ...current, dateRange: null }));
+                    return;
+                  }
+                  const [startTime, endTime] = normalizeDateRange(value);
+                  setFilters((current) => ({
+                    ...current,
+                    dateRange: [startTime.startOf("second"), endTime.startOf("second")],
+                  }));
+                }}
+              />
+            </Space>
+            <Space size={6}>
+              <Text type="secondary">审核时间</Text>
+              <RangePicker
+                showTime
+                allowClear
+                presets={dateRangePresets}
+                placeholder={["审核开始", "审核结束"]}
+                value={filters.approveRange}
+                onChange={(value) => {
+                  if (!value || !value[0] || !value[1]) {
+                    setFilters((current) => ({
+                      ...current,
+                      approveRange: null,
+                      // 审核时间清空后，申请时间也是空的话恢复成今天，避免查全表
+                      dateRange: current.dateRange ?? createDefaultDateRange(),
+                    }));
+                    return;
+                  }
+                  const [startTime, endTime] = normalizeDateRange(value);
+                  setFilters((current) => ({
+                    ...current,
+                    approveRange: [startTime.startOf("second"), endTime.startOf("second")],
+                    // 按审核时间查时清掉默认的申请时间（当天），否则「9 月审核、更早申请」的记录会被筛掉；需要时可再选
+                    dateRange: null,
+                  }));
+                }}
+              />
+            </Space>
             <Button type="primary" icon={<SearchOutlined />} onClick={() => void loadRecords()}>
               查询
             </Button>

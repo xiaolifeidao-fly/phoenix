@@ -1,8 +1,10 @@
 package dashboard
 
 import (
+	"fmt"
 	"math"
 	"sort"
+	"strings"
 	dashboardDTO "suffer/service/dashboard/dto"
 	dashboardRepository "suffer/service/dashboard/repository"
 	"time"
@@ -249,4 +251,67 @@ func comparisonRate(change, previous float64) float64 {
 		return 0
 	}
 	return math.Round(change/previous*10000) / 100
+}
+
+// upstreamMaxDays 与对账工作台其他区块一致.
+const upstreamMaxDays = 93
+
+// UpstreamDimension 对账工作台 - 上游维度. 日期 yyyy-MM-dd, 两端都包含, 区间最长 93 天.
+func (s *DashboardService) UpstreamDimension(startDate, endDate string) (*dashboardDTO.UpstreamDimensionDTO, error) {
+	start, end, err := parseUpstreamRange(startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+	amounts, err := s.repository.SumAccountDetailByType([]string{"PAY", "GIVEN", "CONSUMER", "REFUND", "BK"}, start, end)
+	if err != nil {
+		return nil, err
+	}
+	byType := make(map[string]float64, len(amounts))
+	for _, row := range amounts {
+		byType[row.Type] = row.Amount
+	}
+	ordered, err := s.repository.SumOrderRebateTip(start, end)
+	if err != nil {
+		return nil, err
+	}
+	refunded, err := s.repository.SumRefundRebateTip(start, end)
+	if err != nil {
+		return nil, err
+	}
+	return &dashboardDTO.UpstreamDimensionDTO{
+		StartDate:      start.Format("2006-01-02"),
+		EndDate:        end.AddDate(0, 0, -1).Format("2006-01-02"),
+		RechargeAmount: byType["PAY"],
+		GivenAmount:    byType["GIVEN"],
+		ConsumeAmount:  byType["CONSUMER"],
+		RefundAmount:   byType["REFUND"],
+		BkAmount:       byType["BK"],
+		RebateAmount:   ordered.RebateAmount - refunded.RebateAmount,
+		TipAmount:      ordered.TipAmount - refunded.TipAmount,
+		OrderNum:       ordered.Num,
+		RefundNum:      refunded.Num,
+		OrderRebate:    ordered.RebateAmount,
+		RefundRebate:   refunded.RebateAmount,
+		OrderTip:       ordered.TipAmount,
+		RefundTip:      refunded.TipAmount,
+	}, nil
+}
+
+// parseUpstreamRange 返回 [开始日 00:00, 结束日次日 00:00), 按本地时区.
+func parseUpstreamRange(startDate, endDate string) (time.Time, time.Time, error) {
+	start, err := time.ParseInLocation("2006-01-02", strings.TrimSpace(startDate), time.Local)
+	if err != nil {
+		return time.Time{}, time.Time{}, fmt.Errorf("开始日期格式应为 yyyy-MM-dd")
+	}
+	last, err := time.ParseInLocation("2006-01-02", strings.TrimSpace(endDate), time.Local)
+	if err != nil {
+		return time.Time{}, time.Time{}, fmt.Errorf("结束日期格式应为 yyyy-MM-dd")
+	}
+	if last.Before(start) {
+		return time.Time{}, time.Time{}, fmt.Errorf("结束日期不能早于开始日期")
+	}
+	if int(last.Sub(start).Hours()/24)+1 > upstreamMaxDays {
+		return time.Time{}, time.Time{}, fmt.Errorf("日期区间最长%d天", upstreamMaxDays)
+	}
+	return start, last.AddDate(0, 0, 1), nil
 }

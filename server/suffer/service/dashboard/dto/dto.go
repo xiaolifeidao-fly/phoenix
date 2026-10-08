@@ -74,3 +74,27 @@ type ActualCompletedCategoryDTO struct {
 	YesterdayPendingCount int64  `json:"yesterdayPendingCount"`
 	TotalPendingCount     int64  `json:"totalPendingCount"`
 }
+
+// UpstreamDimensionDTO 对账工作台 - 上游维度, 金额均为 RMB, 都取绝对值.
+//
+// 充值 / 赠送 / 消费 / 退款 / 补款取账户流水(account_detail 的 PAY / GIVEN / CONSUMER / REFUND / BK)按流水时间.
+// 消费是毛额(不扣退款、补款), 退款、补款单列, 利润公式里分别扣.
+// 返点 / 小费 = 下单数量 × 商品类目返点 / 小费单位金额 − 退单数量 × 同样的单位金额(取类目当前配置).
+type UpstreamDimensionDTO struct {
+	StartDate      string  `json:"startDate"`
+	EndDate        string  `json:"endDate"`
+	RechargeAmount float64 `json:"rechargeAmount"`
+	GivenAmount    float64 `json:"givenAmount"`
+	ConsumeAmount  float64 `json:"consumeAmount"`
+	RefundAmount   float64 `json:"refundAmount"`
+	BkAmount       float64 `json:"bkAmount"`
+	RebateAmount   float64 `json:"rebateAmount"`
+	TipAmount      float64 `json:"tipAmount"`
+	// 以下为返点 / 小费的拆分, 页面悬停展示用
+	OrderNum     int64   `json:"orderNum"`
+	RefundNum    int64   `json:"refundNum"`
+	OrderRebate  float64 `json:"orderRebate"`
+	RefundRebate float64 `json:"refundRebate"`
+	OrderTip     float64 `json:"orderTip"`
+	RefundTip    float64 `json:"refundTip"`
+}

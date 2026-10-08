@@ -8,6 +8,7 @@ import {
   EditOutlined,
   EyeOutlined,
   KeyOutlined,
+  AccountBookOutlined,
   PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
@@ -20,9 +21,11 @@ import {
   Form,
   Input,
   InputNumber,
+  Radio,
   Select,
   Space,
   Table,
+  Tag,
   Tooltip,
   Typography,
 } from "antd";
@@ -44,6 +47,15 @@ import {
   type ManualUserRecord,
   updateManualUser,
 } from "../../api/user.api";
+import {
+  fetchSettleChannels,
+  fetchUserSettleConfig,
+  resolveSettleCurrencyText,
+  saveUserSettleConfig,
+  settleCurrencyOptions,
+  type SettleChannelRecord,
+  type SettleCurrency,
+} from "../../api/settle.api";
 
 const { Text } = Typography;
 
@@ -73,6 +85,12 @@ interface UserFormValues {
   alipayName?: string;
   alipayAccount?: string;
   role?: string;
+}
+
+interface SettleFormValues {
+  settleCurrency?: SettleCurrency;
+  settleChannelId?: number | null;
+  remark?: string;
 }
 
 interface PasswordFormValues {
@@ -115,6 +133,16 @@ export function ManualUserManagementPanel() {
   // 弹框打开时生成一次的会话标记。serial = 会话标记 + 实际金额，
   // 这样"同一笔重试"是幂等的，而"改了金额再提交"会被当成新的一笔。
   const adjustSessionRef = useRef<string>("");
+
+  // 结算配置
+  const [settleForm] = Form.useForm<SettleFormValues>();
+  const [settleDrawerOpen, setSettleDrawerOpen] = useState(false);
+  const [settleUser, setSettleUser] = useState<ManualUserRecord | null>(null);
+  const [settleLoading, setSettleLoading] = useState(false);
+  const [settleSubmitting, setSettleSubmitting] = useState(false);
+  const [settleChannels, setSettleChannels] = useState<SettleChannelRecord[]>([]);
+  // 打开时已绑定的通道：停用了也要能在下拉里显示并原样保留
+  const [settleBoundChannelId, setSettleBoundChannelId] = useState<number | null>(null);
 
   // 查看所有账号余额
   const [summaryDrawerOpen, setSummaryDrawerOpen] = useState(false);
@@ -364,6 +392,68 @@ export function ManualUserManagementPanel() {
     }
   };
 
+  const openSettleDrawer = async (record: ManualUserRecord) => {
+    setSettleUser(record);
+    setSettleBoundChannelId(null);
+    settleForm.resetFields();
+    setSettleDrawerOpen(true);
+    setSettleLoading(true);
+    try {
+      const [channelList, config] = await Promise.all([fetchSettleChannels(), fetchUserSettleConfig(record.id)]);
+      setSettleChannels(channelList);
+      setSettleBoundChannelId(config?.settleChannelId ?? null);
+      settleForm.setFieldsValue({
+        settleCurrency: config?.settleCurrency,
+        settleChannelId: config?.settleChannelId ?? null,
+        remark: config?.remark ?? "",
+      });
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "加载结算配置失败");
+    } finally {
+      setSettleLoading(false);
+    }
+  };
+
+  const closeSettleDrawer = () => {
+    setSettleDrawerOpen(false);
+    setSettleUser(null);
+    settleForm.resetFields();
+  };
+
+  const handleSettleSubmit = async () => {
+    if (!settleUser) {
+      return;
+    }
+    const values = await settleForm.validateFields();
+    if (!values.settleCurrency) {
+      return;
+    }
+    setSettleSubmitting(true);
+    try {
+      await saveUserSettleConfig(settleUser.id, {
+        settleCurrency: values.settleCurrency,
+        settleChannelId: values.settleChannelId ?? null,
+        remark: values.remark?.trim() || undefined,
+      });
+      message.success("结算配置已保存");
+      closeSettleDrawer();
+      await loadUsers(pagination.current);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "保存结算配置失败");
+    } finally {
+      setSettleSubmitting(false);
+    }
+  };
+
+  const settleChannelOptions = settleChannels
+    .filter((item) => item.enabled || item.id === settleBoundChannelId)
+    .map((item) => ({
+      label: `${item.name}（代收 ${formatRate(item.collectFeeRate)} / 代付 ${formatRate(item.payoutFeeRate)}）${
+        item.enabled ? "" : " · 已停用"
+      }`,
+      value: item.id,
+    }));
+
   const openSummaryDrawer = () => {
     setSummaryDrawerOpen(true);
     void loadSummary();
@@ -500,6 +590,22 @@ export function ManualUserManagementPanel() {
       render: (value?: number) => <PointsCell value={value} />,
     },
     {
+      title: "结算方式",
+      key: "settle",
+      width: 160,
+      render: (_, record) =>
+        record.settleCurrency ? (
+          <Space direction="vertical" size={2}>
+            <Tag color={record.settleCurrency === "USDT" ? "cyan" : "gold"} style={{ marginInlineEnd: 0, width: "fit-content" }}>
+              {resolveSettleCurrencyText(record.settleCurrency)}
+            </Tag>
+            <Text type="secondary">{record.settleChannelName || "未选通道"}</Text>
+          </Space>
+        ) : (
+          <Text type="secondary">未配置</Text>
+        ),
+    },
+    {
       title: "更新时间",
       dataIndex: "updatedTime",
       width: 180,
@@ -509,10 +615,10 @@ export function ManualUserManagementPanel() {
       title: "操作",
       key: "actions",
       fixed: "right",
-      // 五个动作带文字要占 550px 左右，表格是 table-layout: fixed，超出的按钮会直接画到固定列外面。
-      // 和渠道、商品列表一致改成图标 + Tooltip：34px 按钮 × 5 + 间距 4 × 4 + 单元格左右内边距 32 = 218，
-      // 列宽留到 240，缩放或主题调 controlHeight 时也不会顶破。
-      width: 240,
+      // 动作带文字会超宽，表格是 table-layout: fixed，超出的按钮会直接画到固定列外面。
+      // 和渠道、商品列表一致改成图标 + Tooltip：34px 按钮 × 6 + 间距 4 × 5 + 单元格左右内边距 32 = 256，
+      // 列宽留到 280，缩放或主题调 controlHeight 时也不会顶破。
+      width: 280,
       render: (_, record) => (
         <Space size={4} wrap={false}>
           <Tooltip title="编辑">
@@ -548,6 +654,14 @@ export function ManualUserManagementPanel() {
               aria-label="调整积分"
               icon={<WalletOutlined />}
               onClick={() => openAdjustPointsDrawer(record)}
+            />
+          </Tooltip>
+          <Tooltip title="结算配置">
+            <Button
+              type="text"
+              aria-label="结算配置"
+              icon={<AccountBookOutlined />}
+              onClick={() => void openSettleDrawer(record)}
             />
           </Tooltip>
         </Space>
@@ -621,8 +735,8 @@ export function ManualUserManagementPanel() {
             showSizeChanger: false,
             onChange: (page, pageSize) => void loadUsers(page, pageSize),
           }}
-          // 各列宽度合计 1220，和 scroll.x 保持一致，避免列被压缩后内容溢出
-          scroll={{ x: 1220 }}
+          // 各列宽度合计 1420，和 scroll.x 保持一致，避免列被压缩后内容溢出
+          scroll={{ x: 1420 }}
           style={{ marginTop: 20 }}
         />
       </section>
@@ -673,6 +787,35 @@ export function ManualUserManagementPanel() {
           </Form.Item>
           <Form.Item name="role" label="角色">
             <Input placeholder="请输入角色标识" />
+          </Form.Item>
+        </Form>
+      </WorkspaceDrawer>
+
+      <WorkspaceDrawer
+        title={settleUser ? `结算配置 · ${settleUser.username}` : "结算配置"}
+        open={settleDrawerOpen}
+        onClose={closeSettleDrawer}
+        okText="保存配置"
+        submitting={settleSubmitting}
+        width={520}
+        onSubmit={handleSettleSubmit}
+      >
+        <Form className="manager-form-skin" form={settleForm} layout="vertical" preserve={false} disabled={settleLoading}>
+          <Form.Item name="settleCurrency" label="结算方式" rules={[{ required: true, message: "请选择结算方式" }]}>
+            <Radio.Group options={settleCurrencyOptions} optionType="button" buttonStyle="solid" />
+          </Form.Item>
+          <Form.Item name="settleChannelId" label="结算通道" extra="只能选择启用中的通道，可在「人工 - 结算通道」维护。">
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder="不指定通道"
+              loading={settleLoading}
+              options={settleChannelOptions}
+            />
+          </Form.Item>
+          <Form.Item name="remark" label="备注" rules={[{ max: 255, message: "备注不能超过 255 个字符" }]}>
+            <Input.TextArea rows={3} placeholder="例如：U 地址、结算周期等说明" />
           </Form.Item>
         </Form>
       </WorkspaceDrawer>
@@ -1035,4 +1178,9 @@ function resolveChannelLabel(channel: string | undefined, channelNameMap: Map<st
     return "-";
   }
   return channelNameMap.get(channel) || channel;
+}
+
+/** 0.045 → 4.5% */
+function formatRate(rate?: number) {
+  return rate == null ? "-" : `${Number((Number(rate) * 100).toFixed(4))}%`;
 }

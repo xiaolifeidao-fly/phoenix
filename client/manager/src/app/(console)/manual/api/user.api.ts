@@ -1,6 +1,8 @@
 "use client";
 
 import { getData, getDataList, getPage, instance, unwrapApiResponse, type ApiResponse } from "@/utils/axios";
+import type { EatMode, PointsRule } from "./product.api";
+import type { SettleCurrency } from "./settle.api";
 
 export class ManualPaymentMethodRecord {
   id = 0;
@@ -36,6 +38,13 @@ export class ManualUserRecord {
 
   /** 当前冻结金额（user_points.block_points），单位：积分 */
   blockPoints = 0;
+
+  /** 结算方式，未配置为空 */
+  settleCurrency?: SettleCurrency;
+
+  settleChannelId?: number;
+
+  settleChannelName?: string;
 
   createdTime?: string;
 
@@ -105,6 +114,12 @@ export class BarryUserWhitelistRecord {
   dailyAssignTimeRanges = "";
 
   fetchTaskLoopNum?: number;
+
+  /** 吃量比例 0~1，留空取商品全局值 */
+  eatRatio?: number;
+
+  /** 审核加积分方式，留空取商品全局值 */
+  eatMode?: EatMode;
 }
 
 export interface ManualUserListQuery {
@@ -229,6 +244,12 @@ export async function fetchBarryUserWhitelists(query: BarryUserWhitelistQuery) {
 
 export async function saveBarryUserWhitelist(payload: BarryUserWhitelistPayload) {
   const response = await instance.post<ApiResponse<BarryUserWhitelistRecord | null>>("/barry/user-whitelists", payload);
+  return unwrapApiResponse(response.data);
+}
+
+/** 只改白名单用户的积分配置，不改白名单状态；已剔除（失效）的用户同样可配。 */
+export async function updateBarryUserWhitelistPointsRule(id: number, rule: PointsRule) {
+  const response = await instance.put<ApiResponse<BarryUserWhitelistRecord | null>>(`/barry/user-whitelists/${id}/points-rule`, rule);
   return unwrapApiResponse(response.data);
 }
 

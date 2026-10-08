@@ -1,454 +1,427 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { CheckCircleOutlined, EditOutlined, PlusOutlined, WarningOutlined } from "@ant-design/icons";
+import { useEffect, useMemo, useState } from "react";
+import { EditOutlined, HistoryOutlined, PlusOutlined, RollbackOutlined } from "@ant-design/icons";
 import {
+  Alert,
   Button,
   DatePicker,
+  Empty,
   Form,
   Input,
   InputNumber,
   Modal,
+  Popconfirm,
   Segmented,
   Select,
   Space,
   Table,
   Tag,
+  Tooltip,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs, { type Dayjs } from "dayjs";
 import { message } from "@/utils/notify";
 import {
-  ACCOUNT_DIFF_ALERT_PERCENT,
-  ACCOUNT_FIELDS,
-  type AccountFieldKey,
-  type AccountManualRow,
-  type AccountSystemRow,
-} from "../types";
-import { FormulaGrid, MoneyCell, SectionHead, money, moneyColumn } from "./shared";
+  createOpeningDebt,
+  fetchOpeningDebts,
+  revokeOpeningDebt,
+  updateOpeningDebt,
+  type AccountStatusRow,
+  type OpeningDebtRecord,
+} from "../api/reconciliation.api";
+import { FormulaGrid, MoneyCell, SectionHead, UpstreamUserCell, money, moneyColumn, upstreamUserLabel } from "./shared";
 
 interface AccountStatusCardProps {
-  systemRows: AccountSystemRow[];
-  manualRows: AccountManualRow[];
-  onManualRowsChange: (rows: AccountManualRow[]) => void;
-  /** 新增记录时的默认日期 */
-  defaultDate: Dayjs;
+  rows: AccountStatusRow[];
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
+  /** 所选区间，用于说明期初 / 期末对应哪天 */
+  range: [Dayjs, Dayjs];
 }
 
 type AccountView = "system" | "manual";
 
-const NEW_SUBJECT = "__new_community__";
-const kindOptions = ["社区", "平台", "代收方"].map((item) => ({ label: item, value: item }));
-
-interface AccountFormValues {
-  date: Dayjs;
-  subject: string;
-  customSubject?: string;
-  kind: string;
-  debtRmb: number;
-  debtU: number;
-  balanceRmb: number;
-  balanceU: number;
+interface OpeningDebtFormValues {
+  amount: number | null;
+  effectiveDate: Dayjs;
+  remark?: string;
 }
 
 const formulas = [
-  { label: "当前欠款", expression: "应收金额 − 社区入账 − 社区入账手续费" },
-  { label: "当前余额", expression: "上期余额 + 总计入账 − 总计出款" },
-  { label: "录入约束", expression: "系统计算不可修改，人工录入用于每日复核" },
+  { label: "系统计算欠款", expression: "人工录入欠款 + 应收（充值）− 社区入账 − 代收手续费，后三项从录入生效日的次日累计到所选日" },
+  { label: "人工录入欠款", expression: "同一时刻只有一条未结清；录入新的一条，上一条自动结清" },
+  { label: "账户余额", expression: "该用户账户的当前余额，不随所选日期变化" },
 ];
 
-export function AccountStatusCard({
-  systemRows,
-  manualRows,
-  onManualRowsChange,
-  defaultDate,
-}: AccountStatusCardProps) {
+export function AccountStatusCard({ rows, loading, error, onRetry, range }: AccountStatusCardProps) {
   const [view, setView] = useState<AccountView>("system");
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<AccountManualRow[]>([]);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [form] = Form.useForm<AccountFormValues>();
-  const selectedSubject = Form.useWatch("subject", form);
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [history, setHistory] = useState<OpeningDebtRecord[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<OpeningDebtRecord | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [form] = Form.useForm<OpeningDebtFormValues>();
 
-  const visibleRows = editing ? draft : manualRows;
+  const openingLabel = range[0].subtract(1, "day").format("MM-DD");
+  const closingLabel = range[1].format("MM-DD");
+  const selectedRow = rows.find((row) => row.userId === selectedUserId) ?? null;
+  const current = history.find((item) => item.settleStatus === "UNSETTLED") ?? null;
+  const userOptions = useMemo(
+    () =>
+      rows.map((row) => ({
+        label: upstreamUserLabel(row.name, row.username, row.remark),
+        value: row.userId,
+      })),
+    [rows],
+  );
 
-  const alerts = useMemo(() => {
-    const systemBySubject = new Map(systemRows.map((row) => [row.subject, row]));
-    const result: {
-      key: string;
-      date: string;
-      subject: string;
-      field: string;
-      systemValue: number;
-      manualValue: number;
-      percent: number;
-    }[] = [];
-
-    manualRows.forEach((manualRow) => {
-      const systemRow = systemBySubject.get(manualRow.subject);
-      if (!systemRow) return;
-      ACCOUNT_FIELDS.forEach((field) => {
-        const percent = diffPercent(systemRow[field.key], manualRow[field.key]);
-        if (percent > ACCOUNT_DIFF_ALERT_PERCENT) {
-          result.push({
-            key: `${manualRow.id}-${field.key}`,
-            date: manualRow.date,
-            subject: manualRow.subject,
-            field: field.label,
-            systemValue: systemRow[field.key],
-            manualValue: manualRow[field.key],
-            percent,
-          });
-        }
-      });
-    });
-
-    return result.sort((a, b) => b.percent - a.percent);
-  }, [systemRows, manualRows]);
-
-  const switchView = (next: AccountView) => {
-    if (next !== "manual" && editing) {
-      setEditing(false);
-      setDraft([]);
-    }
-    setView(next);
-  };
-
-  const startEdit = () => {
-    setDraft(manualRows.map((row) => ({ ...row })));
-    setEditing(true);
-  };
-
-  const cancelEdit = () => {
-    setEditing(false);
-    setDraft([]);
-  };
-
-  const saveEdit = () => {
-    onManualRowsChange(draft.map((row) => ({ ...row })));
-    setEditing(false);
-    setDraft([]);
-    message.success("人工录入已保存，差异预警已重算");
-  };
-
-  const updateDraft = (id: number, patch: Partial<AccountManualRow>) => {
-    setDraft((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
-  };
-
-  const openCreate = () => {
-    const first = systemRows[0];
-    form.setFieldsValue({
-      date: defaultDate,
-      subject: first?.subject,
-      customSubject: "",
-      kind: first?.kind ?? "社区",
-      debtRmb: first?.debtRmb ?? 0,
-      debtU: first?.debtU ?? 0,
-      balanceRmb: first?.balanceRmb ?? 0,
-      balanceU: first?.balanceU ?? 0,
-    });
-    setCreateOpen(true);
-  };
-
-  /** 选中已有主体时，用系统计算值预填，减少手工输入 */
-  const prefillFromSystem = (subject: string) => {
-    if (subject === NEW_SUBJECT) {
-      form.setFieldsValue({ kind: "社区", debtRmb: 0, debtU: 0, balanceRmb: 0, balanceU: 0 });
+  const loadHistory = async (userId: number | null) => {
+    if (!userId) {
+      setHistory([]);
       return;
     }
-    const systemRow = systemRows.find((row) => row.subject === subject);
-    if (!systemRow) return;
-    form.setFieldsValue({
-      kind: systemRow.kind,
-      debtRmb: systemRow.debtRmb,
-      debtU: systemRow.debtU,
-      balanceRmb: systemRow.balanceRmb,
-      balanceU: systemRow.balanceU,
-    });
+    setHistoryLoading(true);
+    try {
+      setHistory(await fetchOpeningDebts(userId));
+    } catch (err) {
+      setHistory([]);
+      message.error(err instanceof Error ? err.message : "人工录入欠款加载失败");
+    } finally {
+      setHistoryLoading(false);
+    }
   };
 
-  const handleCreate = async () => {
-    const values = await form.validateFields();
-    const subject =
-      values.subject === NEW_SUBJECT ? (values.customSubject ?? "").trim() : values.subject;
-    if (!subject) {
-      message.error("请填写新增社区名称");
-      return;
-    }
-    const target = editing ? draft : manualRows;
-    const nextRow: AccountManualRow = {
-      id: Math.max(0, ...target.map((row) => row.id)) + 1,
-      date: values.date.format("YYYY-MM-DD"),
-      subject,
-      kind: values.kind,
-      debtRmb: Number(values.debtRmb) || 0,
-      debtU: Number(values.debtU) || 0,
-      balanceRmb: Number(values.balanceRmb) || 0,
-      balanceU: Number(values.balanceU) || 0,
-    };
-    if (editing) {
-      setDraft([nextRow, ...draft]);
-    } else {
-      onManualRowsChange([nextRow, ...manualRows]);
-    }
-    setCreateOpen(false);
+  useEffect(() => {
+    void loadHistory(selectedUserId);
+  }, [selectedUserId]);
+
+  const openManual = (userId: number) => {
+    setSelectedUserId(userId);
     setView("manual");
-    message.success("已新增人工录入记录");
   };
 
-  const systemColumns: ColumnsType<AccountSystemRow> = [
-    { title: "账户主体", dataIndex: "subject", width: 92, fixed: "left", render: (value: string) => <span className="recon-row-name">{value}</span> },
-    { title: "类型", dataIndex: "kind", width: 72, render: (value: string) => <Tag className="recon-kind-tag">{value}</Tag> },
-    moneyColumn<AccountSystemRow>("欠款金额 RMB", "debtRmb", 100),
-    moneyColumn<AccountSystemRow>("欠款金额 U", "debtU", 96),
-    moneyColumn<AccountSystemRow>("账户余额 RMB", "balanceRmb", 100),
-    moneyColumn<AccountSystemRow>("账户余额 U", "balanceU", 96),
+  const openForm = (record: OpeningDebtRecord | null) => {
+    setEditing(record);
+    form.setFieldsValue({
+      amount: record ? record.amount : null,
+      effectiveDate: record ? dayjs(record.effectiveDate) : dayjs().startOf("day"),
+      remark: record?.remark ?? "",
+    });
+    setFormOpen(true);
+  };
+
+  const afterChange = async () => {
+    await loadHistory(selectedUserId);
+    onRetry();
+  };
+
+  const handleSubmit = async () => {
+    if (!selectedUserId) return;
+    const values = await form.validateFields();
+    const payload = {
+      userId: selectedUserId,
+      amount: Number(values.amount),
+      effectiveDate: values.effectiveDate.format("YYYY-MM-DD"),
+      remark: values.remark?.trim() || undefined,
+    };
+    setSubmitting(true);
+    try {
+      if (editing) {
+        await updateOpeningDebt(editing.id, payload);
+        message.success("已更新人工录入欠款");
+      } else {
+        await createOpeningDebt(payload);
+        message.success(current ? "已录入，上一条已自动结清" : "已录入人工录入欠款");
+      }
+      setFormOpen(false);
+      await afterChange();
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "保存失败");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRevoke = async (record: OpeningDebtRecord) => {
+    try {
+      await revokeOpeningDebt(record.id);
+      message.success("已撤销，上一条已恢复为未结清");
+      await afterChange();
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "撤销失败");
+    }
+  };
+
+  const systemColumns: ColumnsType<AccountStatusRow> = [
+    {
+      title: "上游用户",
+      dataIndex: "name",
+      width: 170,
+      fixed: "left",
+      render: (_, row) => <UpstreamUserCell name={row.name} username={row.username} remark={row.remark} />,
+    },
+    {
+      title: "人工录入欠款",
+      key: "currentDebt",
+      width: 150,
+      align: "right",
+      render: (_, row) =>
+        row.currentDebt ? (
+          <span>
+            <MoneyCell value={row.currentDebt.amount} />
+            <div className="recon-subcard-caption">{row.currentDebt.effectiveDate} 生效</div>
+          </span>
+        ) : (
+          <span className="recon-subcard-caption">未录入</span>
+        ),
+    },
+    {
+      title: `期初欠款（${openingLabel}）`,
+      dataIndex: "openingDebt",
+      width: 140,
+      align: "right",
+      render: (value: number | null) => <DebtCell value={value} />,
+    },
+    moneyColumn<AccountStatusRow>("本期应收", "periodRecharge", 110),
+    moneyColumn<AccountStatusRow>("本期入账", "periodIncome", 110),
+    moneyColumn<AccountStatusRow>("本期入账手续费", "periodCollectFee", 120),
+    {
+      title: `系统计算欠款（${closingLabel}）`,
+      dataIndex: "closingDebt",
+      width: 160,
+      align: "right",
+      render: (value: number | null, row) =>
+        value === null ? (
+          <DebtCell value={null} />
+        ) : (
+          <Tooltip
+            title={
+              row.closingBaseline
+                ? `起点 ${money(row.closingBaseline.amount)}（${row.closingBaseline.effectiveDate} 生效）+ 应收 ${money(row.closingRecharge)} − 入账 ${money(row.closingIncome)} − 手续费 ${money(row.closingCollectFee)}`
+                : undefined
+            }
+          >
+            <strong>
+              <MoneyCell value={value} />
+            </strong>
+          </Tooltip>
+        ),
+    },
+    moneyColumn<AccountStatusRow>("账户余额", "balanceAmount", 120),
+    {
+      title: "操作",
+      key: "actions",
+      width: 72,
+      fixed: "right",
+      align: "center",
+      render: (_, row) => (
+        <Tooltip title="人工录入欠款">
+          <Button type="text" size="small" icon={<HistoryOutlined />} onClick={() => openManual(row.userId)} />
+        </Tooltip>
+      ),
+    },
   ];
 
-  const manualColumns: ColumnsType<AccountManualRow> = [
+  const historyColumns: ColumnsType<OpeningDebtRecord> = [
+    { title: "生效日期", dataIndex: "effectiveDate", width: 110 },
+    moneyColumn<OpeningDebtRecord>("欠款金额", "amount", 120),
     {
-      title: "日期",
-      dataIndex: "date",
-      width: editing ? 138 : 100,
-      fixed: "left",
-      render: (value: string, record) =>
-        editing ? (
-          <DatePicker
-            value={value ? dayjs(value) : null}
-            allowClear={false}
-            style={{ width: "100%" }}
-            onChange={(next) => next && updateDraft(record.id, { date: next.format("YYYY-MM-DD") })}
-          />
+      title: "状态",
+      key: "settleStatus",
+      width: 160,
+      render: (_, record) =>
+        record.settleStatus === "UNSETTLED" ? (
+          <Tag color="orange">未结清（当前有效）</Tag>
         ) : (
-          value
+          <Tag>已结清{record.settleDate ? ` · ${record.settleDate}` : ""}</Tag>
         ),
     },
+    { title: "备注", dataIndex: "remark", render: (value?: string) => value || "-" },
     {
-      title: "账户主体",
-      dataIndex: "subject",
-      width: editing ? 120 : 96,
-      fixed: "left",
-      render: (value: string, record) =>
-        editing ? (
-          <Input value={value} onChange={(event) => updateDraft(record.id, { subject: event.target.value })} />
-        ) : (
-          <span className="recon-row-name">{value}</span>
-        ),
+      title: "录入",
+      key: "createdBy",
+      width: 150,
+      render: (_, record) => (
+        <span className="recon-subcard-caption">
+          {record.createdBy || "-"}
+          <div>{record.createdTime}</div>
+        </span>
+      ),
     },
     {
-      title: "类型",
-      dataIndex: "kind",
-      width: editing ? 104 : 76,
-      render: (value: string, record) =>
-        editing ? (
-          <Select
-            value={value}
-            style={{ width: "100%" }}
-            options={kindOptions}
-            onChange={(kind) => updateDraft(record.id, { kind })}
-          />
+      title: "操作",
+      key: "actions",
+      width: 90,
+      align: "center",
+      render: (_, record) =>
+        record.settleStatus === "UNSETTLED" ? (
+          <Space size={0}>
+            <Tooltip title="修改">
+              <Button type="text" size="small" icon={<EditOutlined />} onClick={() => openForm(record)} />
+            </Tooltip>
+            <Popconfirm
+              title="撤销这条录入"
+              description="撤销后上一条恢复为未结清，欠款按上一条重新计算。"
+              okText="撤销"
+              cancelText="取消"
+              okButtonProps={{ danger: true }}
+              onConfirm={() => handleRevoke(record)}
+            >
+              <Tooltip title="撤销">
+                <Button type="text" size="small" danger icon={<RollbackOutlined />} />
+              </Tooltip>
+            </Popconfirm>
+          </Space>
         ) : (
-          <Tag className="recon-kind-tag">{value}</Tag>
+          <Tooltip title="已结清的记录不能修改">
+            <span className="recon-subcard-caption">—</span>
+          </Tooltip>
         ),
     },
-    ...ACCOUNT_FIELDS.map((field) => ({
-      title: field.label,
-      dataIndex: field.key,
-      width: editing ? 116 : 104,
-      align: "right" as const,
-      render: (value: number, record: AccountManualRow) =>
-        editing ? (
-          <InputNumber
-            value={value}
-            controls={false}
-            style={{ width: "100%" }}
-            onChange={(next) => updateDraft(record.id, { [field.key]: Number(next) || 0 })}
-          />
-        ) : (
-          <ManualValueCell
-            value={value}
-            systemValue={systemRows.find((row) => row.subject === record.subject)?.[field.key as AccountFieldKey]}
-          />
-        ),
-    })),
   ];
 
   return (
     <section className="manager-data-card recon-card">
       <SectionHead
         title="账户状态"
-        caption="系统计算只读，人工录入按日期维护并自动对比差异"
+        caption="活跃上游用户的欠款随所选日期变化；人工录入欠款作为起点"
         extra={
-          <>
-            <Segmented<AccountView>
-              value={view}
-              onChange={switchView}
-              options={[
-                { label: "系统计算", value: "system" },
-                { label: "人工录入", value: "manual" },
-              ]}
-            />
-            {view === "manual" &&
-              (editing ? (
-                <Space size={8}>
-                  <Button icon={<PlusOutlined />} onClick={openCreate}>
-                    新增记录
-                  </Button>
-                  <Button onClick={cancelEdit}>取消</Button>
-                  <Button type="primary" onClick={saveEdit}>
-                    保存
-                  </Button>
-                </Space>
-              ) : (
-                <Button icon={<EditOutlined />} onClick={startEdit}>
-                  编辑
-                </Button>
-              ))}
-          </>
+          <Segmented<AccountView>
+            value={view}
+            onChange={setView}
+            options={[
+              { label: "系统计算", value: "system" },
+              { label: "录入欠款", value: "manual" },
+            ]}
+          />
         }
       />
 
+      {error ? (
+        <Alert
+          type="error"
+          showIcon
+          message={error}
+          action={
+            <Button size="small" onClick={onRetry}>
+              重试
+            </Button>
+          }
+        />
+      ) : null}
+
       {view === "system" ? (
         <div className="recon-stack">
-          <Table<AccountSystemRow>
+          <Table<AccountStatusRow>
             className="recon-table"
-            rowKey="subject"
+            rowKey="userId"
             size="small"
+            loading={loading}
             columns={systemColumns}
-            dataSource={systemRows}
-            pagination={false}
-            scroll={{ x: 556 }}
+            dataSource={rows}
+            pagination={rows.length > 10 ? { pageSize: 10, size: "small", showSizeChanger: false } : false}
+            scroll={{ x: 1150 }}
+            locale={{ emptyText: "没有活跃的上游用户，请先在「用户管理」把用户设为活跃" }}
           />
           <FormulaGrid items={formulas} />
         </div>
       ) : (
         <div className="recon-stack">
-          {editing ? (
-            <div className="recon-edit-hint">
-              编辑态：修改后点击「保存」才会写入并重新计算差异预警，点击「取消」放弃本次改动。
-            </div>
-          ) : null}
-          <Table<AccountManualRow>
-            className={editing ? "recon-table recon-table--editable" : "recon-table"}
-            rowKey="id"
-            size="small"
-            columns={manualColumns}
-            dataSource={visibleRows}
-            pagination={false}
-            scroll={{ x: editing ? 928 : 688 }}
-          />
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <Select<number>
+              showSearch
+              optionFilterProp="label"
+              placeholder="选择上游用户"
+              style={{ minWidth: 320 }}
+              value={selectedUserId ?? undefined}
+              options={userOptions}
+              onChange={setSelectedUserId}
+            />
+            <Button type="primary" icon={<PlusOutlined />} disabled={!selectedUserId} onClick={() => openForm(null)}>
+              录入欠款
+            </Button>
+            {selectedRow ? (
+              <span className="recon-subcard-caption">
+                系统计算欠款（{closingLabel}）：{selectedRow.closingDebt === null ? "未建账" : money(selectedRow.closingDebt)}
+              </span>
+            ) : null}
+          </div>
+          {selectedUserId ? (
+            <Table<OpeningDebtRecord>
+              className="recon-table"
+              rowKey="id"
+              size="small"
+              loading={historyLoading}
+              columns={historyColumns}
+              dataSource={history}
+              pagination={false}
+              scroll={{ x: 720 }}
+              locale={{ emptyText: <Empty description="还没有录入过欠款，点「录入欠款」建账" /> }}
+            />
+          ) : (
+            <Empty description="选择一个上游用户，查看和录入它的欠款时间线" />
+          )}
         </div>
       )}
 
-      <div className="recon-alert-zone">
-        {alerts.length ? (
-          <>
-            <div className="recon-alert-zone-head">
-              <WarningOutlined />
-              <span>
-                {alerts.length} 项人工录入与系统计算差异超过 {ACCOUNT_DIFF_ALERT_PERCENT}%，需要跟进
-              </span>
-            </div>
-            <div className="recon-alert-list">
-              {alerts.map((item) => (
-                <div className="recon-alert" key={item.key}>
-                  <span className="recon-alert-date">{item.date}</span>
-                  <span className="recon-alert-copy">
-                    <strong>
-                      {item.subject} · {item.field}
-                    </strong>
-                    系统 {money(item.systemValue)}，人工 {money(item.manualValue)}
-                  </span>
-                  <span className="recon-alert-percent">差异 {item.percent.toFixed(1)}%</span>
-                </div>
-              ))}
-            </div>
-          </>
-        ) : (
-          <div className="recon-alert-empty">
-            <CheckCircleOutlined />
-            人工录入与系统计算差异均未超过 {ACCOUNT_DIFF_ALERT_PERCENT}%，暂无需跟进项。
-          </div>
-        )}
-      </div>
-
       <Modal
-        title="新增账户状态人工录入"
-        open={createOpen}
-        okText="确认新增"
+        title={`${editing ? "修改人工录入欠款" : "录入欠款"}${selectedRow ? ` · ${selectedRow.name || selectedRow.username}` : ""}`}
+        open={formOpen}
+        okText={editing ? "保存" : "确认录入"}
         cancelText="取消"
-        width={720}
         destroyOnClose
-        onOk={handleCreate}
-        onCancel={() => setCreateOpen(false)}
+        confirmLoading={submitting}
+        onOk={handleSubmit}
+        onCancel={() => setFormOpen(false)}
       >
-        <Form<AccountFormValues> className="manager-form-skin" form={form} layout="vertical" preserve={false}>
-          <div className="recon-form-grid">
-            <Form.Item name="date" label="日期" rules={[{ required: true, message: "请选择日期" }]}>
-              <DatePicker style={{ width: "100%" }} allowClear={false} />
-            </Form.Item>
-            <Form.Item name="subject" label="账户主体" rules={[{ required: true, message: "请选择账户主体" }]}>
-              <Select
-                options={[
-                  ...systemRows.map((row) => ({ label: row.subject, value: row.subject })),
-                  { label: "＋ 新增社区", value: NEW_SUBJECT },
-                ]}
-                onChange={prefillFromSystem}
-              />
-            </Form.Item>
-            <Form.Item
-              name="customSubject"
-              label="新增社区名称"
-              rules={
-                selectedSubject === NEW_SUBJECT
-                  ? [{ required: true, message: "请填写新增社区名称" }]
-                  : undefined
-              }
-            >
-              <Input
-                placeholder={selectedSubject === NEW_SUBJECT ? "请输入社区名称" : "选择「新增社区」后填写"}
-                disabled={selectedSubject !== NEW_SUBJECT}
-                maxLength={40}
-              />
-            </Form.Item>
-            <Form.Item name="kind" label="主体类型" rules={[{ required: true }]}>
-              <Select options={kindOptions} />
-            </Form.Item>
-            <Form.Item name="debtRmb" label="欠款金额 RMB">
-              <InputNumber style={{ width: "100%" }} controls={false} />
-            </Form.Item>
-            <Form.Item name="debtU" label="欠款金额 U">
-              <InputNumber style={{ width: "100%" }} controls={false} />
-            </Form.Item>
-            <Form.Item name="balanceRmb" label="账户余额 RMB">
-              <InputNumber style={{ width: "100%" }} controls={false} />
-            </Form.Item>
-            <Form.Item name="balanceU" label="账户余额 U">
-              <InputNumber style={{ width: "100%" }} controls={false} />
-            </Form.Item>
+        {selectedRow ? (
+          <div className="recon-subcard" style={{ marginBottom: 16, padding: "10px 14px" }}>
+            <div className="recon-subcard-caption" style={{ marginBottom: 2 }}>
+              上游用户
+            </div>
+            <UpstreamUserCell name={selectedRow.name} username={selectedRow.username} remark={selectedRow.remark} />
           </div>
+        ) : null}
+        {!editing && current ? (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message={`当前未结清的一条（${current.effectiveDate} 生效，${money(current.amount)}）会自动结清，结清日期为新记录的生效日期。`}
+          />
+        ) : null}
+        <Form<OpeningDebtFormValues> className="manager-form-skin" form={form} layout="vertical" preserve={false}>
+          <Form.Item name="amount" label="欠款金额（RMB）" rules={[{ required: true, message: "请填写欠款金额" }]} extra="负数表示多付">
+            <InputNumber<number> precision={2} style={{ width: "100%" }} controls={false} />
+          </Form.Item>
+          <Form.Item
+            name="effectiveDate"
+            label="生效日期"
+            rules={[{ required: true, message: "请选择生效日期" }]}
+            extra="生效日当天的流水算在这笔欠款里，从次日开始累计；需晚于上一条的生效日期"
+          >
+            <DatePicker style={{ width: "100%" }} allowClear={false} />
+          </Form.Item>
+          <Form.Item name="remark" label="备注" rules={[{ max: 255, message: "备注不能超过 255 个字符" }]}>
+            <Input.TextArea rows={2} placeholder="例如：对账确认的期初欠款" />
+          </Form.Item>
         </Form>
       </Modal>
     </section>
   );
 }
 
-/** 人工录入只读态：差异超阈值的单元格标黄，方便一眼定位 */
-function ManualValueCell({ value, systemValue }: { value: number; systemValue?: number }) {
-  const percent = systemValue === undefined ? 0 : diffPercent(systemValue, value);
-  const flagged = percent > ACCOUNT_DIFF_ALERT_PERCENT;
-  return (
-    <span className={flagged ? "recon-manual-cell recon-manual-cell--flagged" : "recon-manual-cell"}>
-      <MoneyCell value={value} />
-      {flagged ? <em className="recon-manual-cell-badge">{percent.toFixed(1)}%</em> : null}
-    </span>
-  );
-}
-
-/** 人工值相对系统值的偏差百分比；系统值为 0 时，只要人工值不为 0 就视为 100% */
-function diffPercent(systemValue: number, manualValue: number): number {
-  const base = Math.abs(Number(systemValue) || 0);
-  const diff = Math.abs((Number(manualValue) || 0) - (Number(systemValue) || 0));
-  if (base === 0) return diff === 0 ? 0 : 100;
-  return (diff / base) * 100;
+/** 欠款为空 = 所选日期还没有生效的人工录入欠款 */
+function DebtCell({ value }: { value: number | null }) {
+  if (value === null) {
+    return (
+      <Tooltip title="这一天之前还没有生效的人工录入欠款，无法计算">
+        <span className="recon-subcard-caption">未建账</span>
+      </Tooltip>
+    );
+  }
+  return <MoneyCell value={value} />;
 }

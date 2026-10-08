@@ -41,6 +41,12 @@ export class ShopCategoryRecord {
 
   status = "";
 
+  /** 返点金额 */
+  rebateAmount = "0.00000000";
+
+  /** 小费金额 */
+  tipAmount = "0.00000000";
+
   createdTime?: string;
 
   updatedTime?: string;
@@ -116,6 +122,8 @@ export interface ShopCategoryPayload {
   lowerLimit: number;
   upperLimit: number;
   price: string;
+  rebateAmount?: string;
+  tipAmount?: string;
   status?: string;
 }
 

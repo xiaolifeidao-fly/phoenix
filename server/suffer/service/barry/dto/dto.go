@@ -845,6 +845,51 @@ type UserWhitelistDTO struct {
 	RecentApprovalRateDays *int     `json:"recentApprovalRateDays,omitempty"`
 	DailyAssignTimeRanges  string   `json:"dailyAssignTimeRanges,omitempty"`
 	FetchTaskLoopNum       *int     `json:"fetchTaskLoopNum,omitempty"`
+	// 用户积分配置, 为空时取商品全局值.
+	EatRatio *float64 `json:"eatRatio,omitempty"`
+	EatMode  string   `json:"eatMode,omitempty"`
+}
+
+// PointsRuleDTO 人工商品积分配置. 吃量比例 0~1, 提交任务时吃量; 审核加积分方式 SUBMIT_COUNT 按提交量 / APPROVE 按审核. 两项各自可为空.
+type PointsRuleDTO struct {
+	EatRatio *float64 `json:"eatRatio"`
+	EatMode  *string  `json:"eatMode"`
+}
+
+// SettleChannelDTO 结算通道, 手续费率为 0~1 小数; ID 为空表示新增.
+type SettleChannelDTO struct {
+	ID             *int64   `json:"id,omitempty"`
+	Name           string   `json:"name"`
+	CollectFeeRate *float64 `json:"collectFeeRate"`
+	PayoutFeeRate  *float64 `json:"payoutFeeRate"`
+	// U 的代收 / 代付手续费率, 与 RMB 费率分开配置.
+	CollectFeeRateU *float64 `json:"collectFeeRateU"`
+	PayoutFeeRateU  *float64 `json:"payoutFeeRateU"`
+	// ExchangeRate 1U = ? RMB, 可空.
+	ExchangeRate *float64 `json:"exchangeRate"`
+	Enabled      *bool    `json:"enabled,omitempty"`
+	// DefaultChannel 是否默认通道: 用户没绑定通道时提现记账用它. 全表最多一个, barry 侧保证.
+	DefaultChannel *bool  `json:"defaultChannel,omitempty"`
+	Remark         string `json:"remark,omitempty"`
+	CreatedTime    string `json:"createdTime,omitempty"`
+	UpdatedTime    string `json:"updatedTime,omitempty"`
+}
+
+// UserSettleConfigDTO 做单用户结算配置: 结算方式 USDT / RMB + 可选结算通道.
+type UserSettleConfigDTO struct {
+	UserID            int64  `json:"userId"`
+	SettleCurrency    string `json:"settleCurrency"`
+	SettleChannelID   *int64 `json:"settleChannelId"`
+	SettleChannelName string `json:"settleChannelName,omitempty"`
+	Remark            string `json:"remark,omitempty"`
+	UpdatedTime       string `json:"updatedTime,omitempty"`
+}
+
+// SaveUserPointsRuleDTO 白名单用户积分配置, ID 为白名单记录主键; 两项各自为空表示取商品全局值.
+type SaveUserPointsRuleDTO struct {
+	ID       int64    `json:"id"`
+	EatRatio *float64 `json:"eatRatio"`
+	EatMode  *string  `json:"eatMode"`
 }
 
 type UserWhitelistQueryDTO struct {
@@ -899,6 +944,10 @@ type UserDetailDTO struct {
 	// 当前余额 / 当前冻结金额。没有 omitempty，0 也要如实传给前端。
 	ActivePoints int64 `json:"activePoints"`
 	BlockPoints  int64 `json:"blockPoints"`
+	// 结算方式 USDT / RMB 与结算通道, 未配置为空.
+	SettleCurrency    string `json:"settleCurrency,omitempty"`
+	SettleChannelID   *int64 `json:"settleChannelId,omitempty"`
+	SettleChannelName string `json:"settleChannelName,omitempty"`
 }
 
 // AdjustUserPointsDTO is a manual points adjustment issued from the console.
@@ -981,12 +1030,43 @@ type UserWithdrawRecordQueryDTO struct {
 	Status    string `json:"status,omitempty" form:"status"`
 	StartTime string `json:"startTime,omitempty" form:"startTime"`
 	EndTime   string `json:"endTime,omitempty" form:"endTime"`
+	// 审核时间区间, 可空, 格式 yyyy-MM-dd HH:mm:ss; 传了之后未审核的记录不会出现.
+	ApproveStartTime string `json:"approveStartTime,omitempty" form:"approveStartTime"`
+	ApproveEndTime   string `json:"approveEndTime,omitempty" form:"approveEndTime"`
 }
 
 type UserWithdrawActionDTO struct {
 	Username                  string `json:"username,omitempty"`
 	UserPointWithdrawRecordID int64  `json:"userPointWithdrawRecordId" binding:"required"`
 	Description               string `json:"description,omitempty"`
+}
+
+// WithdrawSummaryItemDTO barry /point/withdrawSummary 单个状态的汇总.
+type WithdrawSummaryItemDTO struct {
+	Status string `json:"status"`
+	Number int64  `json:"number"`
+	Points int64  `json:"points"`
+	Date   string `json:"date,omitempty"`
+}
+
+// WithdrawSummaryDTO 提现汇总: 一个渠道一天一行.
+type WithdrawSummaryDTO struct {
+	Date             string `json:"date"`
+	Channel          string `json:"channel"`
+	ApprovingNum     int64  `json:"approvingNum"`
+	ApprovingPoints  int64  `json:"approvingPoints"`
+	AccountingNum    int64  `json:"accountingNum"`
+	AccountingPoints int64  `json:"accountingPoints"`
+	FinishNum        int64  `json:"finishNum"`
+	FinishPoints     int64  `json:"finishPoints"`
+	ErrorNum         int64  `json:"errorNum"`
+	ErrorPoints      int64  `json:"errorPoints"`
+}
+
+type WithdrawSummaryQueryDTO struct {
+	Channel   string `json:"channel" form:"channel"`
+	StartDate string `json:"startDate" form:"startDate"`
+	EndDate   string `json:"endDate" form:"endDate"`
 }
 
 type UserQueryDTO struct {
@@ -1302,6 +1382,138 @@ type ManualUserOptionDTO struct {
 	ID       int64  `json:"id"`
 	Username string `json:"username"`
 	Nickname string `json:"nickname,omitempty"`
+}
+
+// ReconManualDimensionQueryDTO 对账工作台人工维度查询, 日期 yyyy-MM-dd 必填且两端包含.
+type ReconManualDimensionQueryDTO struct {
+	StartDate string `json:"startDate" form:"startDate" binding:"required"`
+	EndDate   string `json:"endDate" form:"endDate" binding:"required"`
+}
+
+// ReconManualDimensionDTO 对账工作台人工维度: 任务数来自 order_sum_record(按人工商品),
+// 积分来自 user_points_daily(按做单日期, 不分商品), 所以只有合计有积分.
+type ReconManualDimensionDTO struct {
+	StartDate  string `json:"startDate"`
+	EndDate    string `json:"endDate"`
+	TaskNum    int64  `json:"taskNum"`
+	CheckedNum int64  `json:"checkedNum"`
+	// UnCheckNum 待审核数(order_sum_record.un_check_num), 和人工任务统计的「待审核」一致.
+	UnCheckNum      int64                                 `json:"unCheckNum"`
+	Points          int64                                 `json:"points"`
+	TaskPoints      int64                                 `json:"taskPoints"`
+	ChildrenPoints  int64                                 `json:"childrenPoints"`
+	PointsUserCount int64                                 `json:"pointsUserCount"`
+	ShopCategories  []ReconManualDimensionShopCategoryDTO `json:"shopCategoryList"`
+}
+
+type ReconManualDimensionShopCategoryDTO struct {
+	ShopCategoryID   int64  `json:"shopCategoryId"`
+	ShopCategoryName string `json:"shopCategoryName"`
+	TaskNum          int64  `json:"taskNum"`
+	CheckedNum       int64  `json:"checkedNum"`
+	UnCheckNum       int64  `json:"unCheckNum"`
+	UserCount        int64  `json:"userCount"`
+}
+
+// ReconLedgerQueryDTO 出入账明细查询.
+type ReconLedgerQueryDTO struct {
+	StartDate  string `json:"startDate" form:"startDate" binding:"required"`
+	EndDate    string `json:"endDate" form:"endDate" binding:"required"`
+	RecordType string `json:"recordType,omitempty" form:"recordType"`
+	// Category 类目编码, 多选用逗号分隔.
+	Category string `json:"category,omitempty" form:"category"`
+	// SortField date(默认) / user / category; SortOrder asc / desc(默认). 白名单在 barry 校验.
+	SortField string `json:"sortField,omitempty" form:"sortField"`
+	SortOrder string `json:"sortOrder,omitempty" form:"sortOrder"`
+	Page      int    `json:"page,omitempty" form:"page"`
+	PageSize  int    `json:"pageSize,omitempty" form:"pageSize"`
+}
+
+// ReconLedgerDTO 出入账记录. 人工录入时只用 id、recordDate、category、currency、amount、exchangeRate、settleChannelId、
+// upstreamUserId、remark;
+// 返回时金额看 amountRmb / amountU(按 RMB 记账时 amountU、exchangeRate 为空).
+type ReconLedgerDTO struct {
+	ID                *int64   `json:"id,omitempty"`
+	RecordDate        string   `json:"recordDate"`
+	RecordType        string   `json:"recordType,omitempty"`
+	Category          string   `json:"category"`
+	CategoryName      string   `json:"categoryName,omitempty"`
+	Source            string   `json:"source,omitempty"`
+	Editable          bool     `json:"editable"`
+	ParentID          *int64   `json:"parentId,omitempty"`
+	Currency          string   `json:"currency"`
+	Amount            *float64 `json:"amount,omitempty"`
+	AmountRmb         *float64 `json:"amountRmb,omitempty"`
+	AmountU           *float64 `json:"amountU,omitempty"`
+	ExchangeRate      *float64 `json:"exchangeRate,omitempty"`
+	FeeRate           *float64 `json:"feeRate,omitempty"`
+	SettleChannelID   *int64   `json:"settleChannelId,omitempty"`
+	SettleChannelName string   `json:"settleChannelName,omitempty"`
+	UserID            *int64   `json:"userId,omitempty"`
+	Username          string   `json:"username,omitempty"`
+	// UpstreamUserID 上游社区(suffer user.id), 社区入账必填, 代收手续费随主记录带上.
+	UpstreamUserID string `json:"upstreamUserId,omitempty"`
+	// UpstreamUserName 上游社区名称, 由 BFF 按 suffer 用户表回填, 前端传的值不采用.
+	UpstreamUserName string `json:"upstreamUserName,omitempty"`
+	WithdrawRecordID *int64 `json:"withdrawRecordId,omitempty"`
+	Points           *int64 `json:"points,omitempty"`
+	Remark           string `json:"remark,omitempty"`
+	CreatedBy        string `json:"createdBy,omitempty"`
+}
+
+// ReconLedgerPageDTO 对应 barry 的 PageModel.
+type ReconLedgerPageDTO struct {
+	Total int64             `json:"total"`
+	Data  []*ReconLedgerDTO `json:"data"`
+}
+
+// ReconUpstreamSumDTO 账户状态: 某个上游社区在 [StartDate, EndDate] 内的社区入账、代收手续费合计(RMB).
+// 请求填 Key / UpstreamUserID / 日期, barry 原样带回 Key 并填上两个合计.
+type ReconUpstreamSumDTO struct {
+	Key            string  `json:"key"`
+	UpstreamUserID string  `json:"upstreamUserId"`
+	StartDate      string  `json:"startDate"`
+	EndDate        string  `json:"endDate"`
+	IncomeRmb      float64 `json:"incomeRmb"`
+	CollectFeeRmb  float64 `json:"collectFeeRmb"`
+}
+
+// ReconLedgerDailyDTO 出入账某一天的入账 / 出账 / 净额(RMB, U 记录取折算值).
+type ReconLedgerDailyDTO struct {
+	Date   string  `json:"date"`
+	InRmb  float64 `json:"inRmb"`
+	OutRmb float64 `json:"outRmb"`
+	NetRmb float64 `json:"netRmb"`
+	Count  int64   `json:"count"`
+}
+
+// ReconLedgerSyncResultDTO 同步提现结果: 有失败时管理端要提示, 不能当成「没有需要补记」.
+type ReconLedgerSyncResultDTO struct {
+	WithdrawCount int64  `json:"withdrawCount"`
+	Created       int64  `json:"created"`
+	Failed        int64  `json:"failed"`
+	FirstError    string `json:"firstError,omitempty"`
+}
+
+// ReconLedgerSummaryDTO 出入账按类目汇总. amountRmb 含按 U 记账的折算值, amountU 只累计按 U 记账的记录.
+type ReconLedgerSummaryDTO struct {
+	InRmb        float64                     `json:"inRmb"`
+	InU          float64                     `json:"inU"`
+	OutRmb       float64                     `json:"outRmb"`
+	OutU         float64                     `json:"outU"`
+	NetRmb       float64                     `json:"netRmb"`
+	NetU         float64                     `json:"netU"`
+	CategoryList []ReconLedgerSummaryItemDTO `json:"categoryList"`
+}
+
+type ReconLedgerSummaryItemDTO struct {
+	RecordType   string  `json:"recordType"`
+	Category     string  `json:"category"`
+	CategoryName string  `json:"categoryName"`
+	Count        int64   `json:"count"`
+	ManualCount  int64   `json:"manualCount"`
+	AmountRmb    float64 `json:"amountRmb"`
+	AmountU      float64 `json:"amountU"`
 }
 
 type ShopCategoryTaskSummaryDTO struct {

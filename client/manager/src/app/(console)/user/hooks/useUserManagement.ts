@@ -30,6 +30,7 @@ const defaultQuery: Required<UserListQuery> = {
   search: "",
   role: "",
   status: "",
+  isTrading: "",
 };
 
 interface UserManagementCache {

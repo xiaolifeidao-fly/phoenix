@@ -3983,6 +3983,24 @@ select {
 }
 
 /* --- 概览指标条 --- */
+/* 对账工作台：标题栏 + 概览卡片固定在顶栏（64px）下方，内容从下面滚过 */
+.recon-sticky-head {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+@media (min-width: 768px) {
+  .recon-sticky-head {
+    position: sticky;
+    top: 64px;
+    z-index: 10;
+    margin: -8px 0;
+    padding: 8px 0;
+    background: var(--manager-bg);
+  }
+}
+
 .recon-overview {
   grid-template-columns: repeat(auto-fit, minmax(196px, 1fr));
 }

@@ -8,6 +8,7 @@ import {
   DeleteOutlined,
   EditOutlined,
   MonitorOutlined,
+  PercentageOutlined,
   PlusOutlined,
   ReloadOutlined,
   SaveOutlined,
@@ -17,6 +18,7 @@ import {
 import { Button, DatePicker, Drawer, Form, Input, InputNumber, Modal, Pagination, Popconfirm, Select, Space, Switch, Table, Tabs, Tag, TimePicker, Transfer, Tooltip, Typography } from "antd";
 import { message } from "@/utils/notify";
 import { DropMonitorRuleModal } from "./DropMonitorRuleModal";
+import { PointsRuleModal } from "./PointsRuleModal";
 import type { ColumnsType } from "antd/es/table";
 import { WorkspaceDrawer } from "@/components/manager-shell/WorkspaceDrawer";
 import {
@@ -463,6 +465,7 @@ export function ManualProductManagementPanel() {
   const [refundRuleDirty, setRefundRuleDirty] = useState(false);
   const [refundRuleSaving, setRefundRuleSaving] = useState(false);
   const [dropMonitorProduct, setDropMonitorProduct] = useState<ManualProductRecord | null>(null);
+  const [pointsRuleProduct, setPointsRuleProduct] = useState<ManualProductRecord | null>(null);
   const [editingProduct, setEditingProduct] = useState<ManualProductRecord | null>(null);
   const [filters, setFilters] = useState({
     keyword: "",
@@ -2248,7 +2251,7 @@ export function ManualProductManagementPanel() {
       title: "操作",
       key: "actions",
       fixed: "right",
-      width: 420,
+      width: 520,
       render: (_, record) => (
         <Space size={4}>
           <Tooltip title="分配策略">
@@ -2259,6 +2262,11 @@ export function ManualProductManagementPanel() {
           <Tooltip title="已完成单掉量监控与自动补单配置">
             <Button type="text" icon={<MonitorOutlined />} onClick={() => setDropMonitorProduct(record)}>
               监控配置
+            </Button>
+          </Tooltip>
+          <Tooltip title="吃量比例与吃量方式（全局 / 按白名单用户）">
+            <Button type="text" icon={<PercentageOutlined />} onClick={() => setPointsRuleProduct(record)}>
+              积分配置
             </Button>
           </Tooltip>
           <Tooltip title="编辑">
@@ -3817,6 +3825,12 @@ export function ManualProductManagementPanel() {
         product={dropMonitorProduct}
         open={dropMonitorProduct !== null}
         onClose={() => setDropMonitorProduct(null)}
+      />
+
+      <PointsRuleModal
+        product={pointsRuleProduct}
+        open={pointsRuleProduct !== null}
+        onClose={() => setPointsRuleProduct(null)}
       />
 
       <Modal
