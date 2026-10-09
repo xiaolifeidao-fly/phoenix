@@ -98,7 +98,7 @@ export function ManualBookPanel() {
           {
             key: "ledger",
             label: "出入账",
-            children: <LedgerCard ledger={ledgerState} defaultDate={range[0]} />,
+            children: <LedgerCard ledger={ledgerState} range={range} />,
           },
           {
             key: "manual-book",

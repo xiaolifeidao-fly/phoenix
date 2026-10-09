@@ -56,6 +56,23 @@ func (s *ProductCategoryService) Save(ctx context.Context, req *barryDTO.SavePro
 	return response, nil
 }
 
+// ScoreChanges 人工商品积分(价格)变更流水, barry 侧按时间倒序分页.
+func (s *ProductCategoryService) ScoreChanges(ctx context.Context, query barryDTO.ProductCategoryScoreChangeQueryDTO) (*barryDTO.ProductCategoryScoreChangePageDTO, error) {
+	response := &barryDTO.DetailResponseDTO[barryDTO.ProductCategoryScoreChangePageDTO]{}
+	err := s.client.GetAbsolute(ctx, innerServicePath(barryInnerManualScoreChangeSuffixPath), buildValues(
+		"shopCategoryId", query.ShopCategoryID,
+		"pageIndex", query.PageIndex,
+		"pageSize", query.PageSize,
+	), response)
+	if err != nil {
+		return nil, err
+	}
+	if !response.Success || response.Data == nil {
+		return nil, responseError(response.Message, "barry product category score change response is empty")
+	}
+	return response.Data, nil
+}
+
 // fetchSelectedProductTypes adapts the manager's lightweight type-code input to
 // Barry's legacy save contract, which requires complete shopTypeModelList entries.
 func (s *ProductCategoryService) fetchSelectedProductTypes(ctx context.Context, codes []string) ([]*barryDTO.ProductTypeDTO, error) {

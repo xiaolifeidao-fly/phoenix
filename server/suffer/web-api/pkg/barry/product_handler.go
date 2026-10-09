@@ -32,6 +32,7 @@ func (h *BarryHandler) registerProductRoutes(engine *gin.RouterGroup) {
 	engine.DELETE("/barry/product-categories/:id", h.deleteProductCategory)
 	engine.PUT("/barry/product-categories/:id/expire", h.expireProductCategory)
 	engine.PUT("/barry/product-categories/:id/active", h.activateProductCategory)
+	engine.GET("/barry/product-category-score-changes", h.listProductCategoryScoreChanges)
 	engine.GET("/barry/assign-configs", h.listAssignConfigs)
 	engine.POST("/barry/assign-configs", h.saveAssignConfig)
 	engine.GET("/barry/judge-configs", h.listJudgeConfigs)
@@ -342,6 +343,7 @@ func (h *BarryHandler) activateProductCategory(c *gin.Context) {
 }
 
 func (h *BarryHandler) saveProductCategory(c *gin.Context, req *barryDTO.SaveProductCategoryDTO, isUpdate bool) {
+	req.UpdatedBy = reconOperator(c)
 	response, err := h.barryService.ProductCategory.Save(c.Request.Context(), req)
 	if err != nil {
 		commonRouter.ToJson(c, nil, err)
@@ -360,6 +362,23 @@ func (h *BarryHandler) saveProductCategory(c *gin.Context, req *barryDTO.SavePro
 		return
 	}
 	commonRouter.ToJson(c, response.Data, nil)
+}
+
+// 人工商品积分(价格)变更流水, 不传 shopCategoryId 查全部商品.
+func (h *BarryHandler) listProductCategoryScoreChanges(c *gin.Context) {
+	var q barryDTO.ProductCategoryScoreChangeQueryDTO
+	if c.ShouldBindQuery(&q) != nil {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	if q.PageIndex <= 0 {
+		q.PageIndex = 1
+	}
+	if q.PageSize <= 0 || q.PageSize > 200 {
+		q.PageSize = 20
+	}
+	response, err := h.barryService.ProductCategory.ScoreChanges(c.Request.Context(), q)
+	commonRouter.ToJson(c, response, err)
 }
 
 func (h *BarryHandler) operateProductCategory(c *gin.Context, fallbackMessage string, operation func(*gin.Context, *barryDTO.ProductCategoryOperateDTO) (*barryDTO.ProductCategoryActionResultDTO, error)) {

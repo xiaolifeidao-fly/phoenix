@@ -19,8 +19,9 @@ type ReconHandler struct {
 
 func NewReconHandler() *ReconHandler {
 	service := reconService.NewReconService()
-	// 以 add_recon_account_opening_debt.sql、add_recon_manual_book.sql 为准; 这里和其他模块一样兜底建表, 失败不影响启动
+	// 以 add_recon_account_opening_debt.sql、add_recon_manual_book.sql、add_recon_upstream_balance_snapshot.sql 为准; 这里和其他模块一样兜底建表, 失败不影响启动
 	_ = service.EnsureTable()
+	service.StartBalanceSnapshotJob()
 	return &ReconHandler{BaseHandler: &commonRouter.BaseHandler{}, reconService: service}
 }
 

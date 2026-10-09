@@ -31,7 +31,8 @@ func snapshotOf(book *reconDTO.ManualBookDTO) *manualBookSnapshot {
 	}
 	debts := make([]reconDTO.ManualBookDebtDTO, 0, len(book.Debts))
 	for _, debt := range book.Debts {
-		debt.UpstreamUsername, debt.UpstreamRemark, debt.UpstreamBalance = "", "", 0
+		debt.UpstreamUsername, debt.UpstreamRemark, debt.UpstreamBalance = "", "", nil
+		debt.UpstreamBalanceLive, debt.UpstreamBalanceTime = false, ""
 		debts = append(debts, debt)
 	}
 	return &manualBookSnapshot{

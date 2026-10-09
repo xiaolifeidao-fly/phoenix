@@ -295,3 +295,79 @@ export async function fetchManualUserPointsSummary(query?: ManualUserPointsSumma
     excludedUserIds: query?.excludedUserIds?.trim() || undefined,
   });
 }
+
+/** 积分来源，与 barry PointsSource 一致 */
+export type ManualPointsSource = "TASK_APPROVE" | "CHILDREN" | "MANUAL_ADJUST" | "WITHDRAW";
+
+export const MANUAL_POINTS_SOURCE_LABEL: Record<ManualPointsSource, string> = {
+  TASK_APPROVE: "任务审核",
+  CHILDREN: "徒弟奖励",
+  MANUAL_ADJUST: "人工调整",
+  WITHDRAW: "提现",
+};
+
+/** 积分汇总 / 明细的日期区间最长天数（barry 同样校验） */
+export const MANUAL_POINTS_HISTORY_MAX_DAYS = 93;
+
+/** 某一天（按流水时间）的积分变动，带符号：入账为正，提现、扣减为负 */
+export class ManualUserPointsDailyRecord {
+  date = "";
+
+  taskPoints = 0;
+
+  childrenPoints = 0;
+
+  adjustPoints = 0;
+
+  withdrawPoints = 0;
+
+  /** 枚举外来源的旧数据 */
+  otherPoints = 0;
+
+  netPoints = 0;
+
+  count = 0;
+}
+
+export class ManualUserPointsRecord {
+  id = 0;
+
+  /** YYYY-MM-DD HH:mm:ss */
+  createdTime?: string;
+
+  points = 0;
+
+  /** 变动后的可用积分快照，部分来源没有 */
+  balancePoints?: number;
+
+  source?: string;
+
+  sourceName?: string;
+
+  description?: string;
+
+  serial?: string;
+
+  childrenUserId?: number;
+
+  disposeStatus?: string;
+
+  /** 做单日期，只有做单产生的积分才有 */
+  taskDate?: string;
+}
+
+export interface ManualUserPointsHistoryQuery {
+  userId: number;
+  startDate: string;
+  endDate: string;
+}
+
+export function fetchManualUserPointsDaily(query: ManualUserPointsHistoryQuery) {
+  return getDataList(ManualUserPointsDailyRecord, "/barry/user-points/daily", { ...query });
+}
+
+export function fetchManualUserPointsRecords(
+  query: ManualUserPointsHistoryQuery & { source?: ManualPointsSource; page: number; pageSize: number },
+) {
+  return getPage(ManualUserPointsRecord, "/barry/user-points/records", { ...query });
+}

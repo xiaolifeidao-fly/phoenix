@@ -30,6 +30,7 @@ export interface ShopCategoryTaskSummary {
   shopCategoryName: string;
   distinctUserCount: number;
   distinctExtUserCount: number;
+  /** 审核通过订单的积分（order_sum_record.order_score），不含徒弟奖励 */
   totalOrderScore: number;
   totalNum: number;
   pendingNum: number;

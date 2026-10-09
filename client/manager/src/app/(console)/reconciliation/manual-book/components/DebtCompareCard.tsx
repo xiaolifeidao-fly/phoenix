@@ -22,9 +22,12 @@ const statusMeta: Record<DebtCompareStatus, { label: string; color?: string }> =
 
 const formulas = [
   { label: "核对窗口", expression: "每份人工记账和它的上一份之间（上一份次日 ~ 当天），按社区核对一次" },
+  { label: "核对公式", expression: "应收 = 入账 + 欠款增量 + 入账代收手续费" },
   { label: "应收", expression: "这段时间的充值" },
-  { label: "入账 + 欠款增量", expression: "这段时间的入账（社区入账 + 代收手续费）+（当天人工欠款 − 上一份人工欠款）" },
-  { label: "差值", expression: "（入账 + 欠款增量）− 应收；比例 = 差值 ÷ |应收|" },
+  { label: "入账", expression: "这段时间出入账里挂这个社区的社区入账（U 已折 RMB）" },
+  { label: "欠款增量", expression: "当天人工欠款 − 上一份人工欠款" },
+  { label: "入账代收手续费", expression: "社区入账自动生成的代收手续费" },
+  { label: "差值", expression: "（入账 + 欠款增量 + 入账代收手续费）− 应收；比例 = 差值 ÷ |应收|" },
 ];
 
 const empty = <span className="recon-subcard-caption">—</span>;
@@ -71,9 +74,30 @@ export function DebtCompareCard({ compare }: DebtCompareCardProps) {
       render: (value: number, day) => (day.previousDate ? <MoneyCell value={value} /> : empty),
     },
     {
-      title: "入账 + 欠款增量 RMB",
+      title: "入账",
+      dataIndex: "income",
+      width: 120,
+      align: "right",
+      render: (value: number, day) => (day.previousDate ? <MoneyCell value={value} /> : empty),
+    },
+    {
+      title: "欠款增量",
+      dataIndex: "debtChange",
+      width: 120,
+      align: "right",
+      render: (value: number, day) => (day.previousDate ? <DeltaCell value={value} /> : empty),
+    },
+    {
+      title: "入账代收手续费",
+      dataIndex: "collectFee",
+      width: 130,
+      align: "right",
+      render: (value: number, day) => (day.previousDate ? <MoneyCell value={value} /> : empty),
+    },
+    {
+      title: "三项合计 RMB",
       dataIndex: "manualTotal",
-      width: 170,
+      width: 140,
       align: "right",
       render: (value: number, day) => (day.previousDate ? <MoneyCell value={value} /> : empty),
     },
@@ -128,20 +152,10 @@ export function DebtCompareCard({ compare }: DebtCompareCardProps) {
     },
     {
       title: "入账",
-      dataIndex: "incomeTotal",
+      dataIndex: "income",
       width: 120,
       align: "right",
-      render: (value: number, row) =>
-        row.status === "NO_BASELINE" ? (
-          empty
-        ) : (
-          <Tooltip title={`社区入账 ${money(row.income)} + 代收手续费 ${money(row.collectFee)}`}>
-            <span>
-              <MoneyCell value={value} />
-              {row.collectFee ? <div className="recon-subcard-caption">含手续费 {money(row.collectFee)}</div> : null}
-            </span>
-          </Tooltip>
-        ),
+      render: (value: number, row) => (row.status === "NO_BASELINE" ? empty : <MoneyCell value={value} />),
     },
     {
       title: "上一份欠款",
@@ -183,11 +197,29 @@ export function DebtCompareCard({ compare }: DebtCompareCardProps) {
       render: (value: number | null) => <DeltaCell value={value} />,
     },
     {
-      title: "入账 + 欠款增量",
+      title: "入账代收手续费",
+      dataIndex: "collectFee",
+      width: 130,
+      align: "right",
+      render: (value: number, row) => (row.status === "NO_BASELINE" ? empty : <MoneyCell value={value} />),
+    },
+    {
+      title: "三项合计",
       dataIndex: "manualTotal",
       width: 130,
       align: "right",
-      render: (value: number | null) => (value === null ? empty : <MoneyCell value={value} />),
+      render: (value: number | null, row) =>
+        value === null ? (
+          empty
+        ) : (
+          <Tooltip
+            title={`入账 ${money(row.income)} + 欠款增量 ${money(row.debtChange ?? 0)} + 代收手续费 ${money(row.collectFee)}`}
+          >
+            <span>
+              <MoneyCell value={value} />
+            </span>
+          </Tooltip>
+        ),
     },
     {
       title: "差值",
@@ -232,7 +264,7 @@ export function DebtCompareCard({ compare }: DebtCompareCardProps) {
     <section className="manager-data-card recon-card">
       <SectionHead
         title="欠款核对"
-        caption="每份人工记账和上一份之间，这段时间的充值（应收）应当等于入账 + 人工欠款的增量；有差异的列出可能的原因"
+        caption="每份人工记账和上一份之间核对：应收（充值）= 入账 + 欠款增量 + 入账代收手续费；有差异的列出可能的原因"
       />
 
       {compare.error ? (
@@ -256,7 +288,7 @@ export function DebtCompareCard({ compare }: DebtCompareCardProps) {
             <span className="recon-subcard-title">按天汇总</span>
             <span className="recon-subcard-caption">
               {data
-                ? `区间合计：充值 ${money(data.receivable)}，入账 + 欠款增量 ${money(data.manualTotal)}，差值 ${money(data.diff)}；${data.diffDays} 天有差异，点某一天在抽屉里看各社区明细`
+                ? `区间合计：应收 ${money(data.receivable)}，入账 ${money(data.income)} + 欠款增量 ${money(data.debtChange)} + 代收手续费 ${money(data.collectFee)} = ${money(data.manualTotal)}，差值 ${money(data.diff)}；${data.diffDays} 天有差异，点某一天在抽屉里看各社区明细`
                 : ""}
             </span>
           </div>
@@ -268,7 +300,7 @@ export function DebtCompareCard({ compare }: DebtCompareCardProps) {
             columns={dayColumns}
             dataSource={data?.days ?? []}
             pagination={false}
-            scroll={{ x: 830, y: 280 }}
+            scroll={{ x: 1180, y: 280 }}
             onRow={(day) => ({ onClick: () => setSelectedDate(day.date), style: { cursor: "pointer" } })}
             rowClassName={(day) => (day.date === selectedDate ? "recon-row-total" : day.diffCount ? "recon-row-mismatch" : "")}
             locale={{ emptyText: "所选区间内没有人工记账" }}
@@ -301,7 +333,10 @@ export function DebtCompareCard({ compare }: DebtCompareCardProps) {
               <div className="recon-calc-grid">
                 {[
                   { label: "应收（充值）", value: selected.receivable },
-                  { label: "入账 + 欠款增量", value: selected.manualTotal },
+                  { label: "入账", value: selected.income },
+                  { label: "欠款增量", value: selected.debtChange },
+                  { label: "入账代收手续费", value: selected.collectFee },
+                  { label: "三项合计", value: selected.manualTotal },
                   { label: "差值", value: selected.diff, highlight: true },
                 ].map((item) => (
                   <div className={item.highlight ? "recon-calc-item recon-calc-item--highlight" : "recon-calc-item"} key={item.label}>
@@ -329,7 +364,7 @@ export function DebtCompareCard({ compare }: DebtCompareCardProps) {
               columns={columns}
               dataSource={selected.rows}
               pagination={false}
-              scroll={{ x: 1600 }}
+              scroll={{ x: 1730 }}
               sticky
               rowClassName={(row) => (row.status === "DIFF" ? "recon-row-mismatch" : "")}
               locale={{ emptyText: "没有可核对的上游社区：请先在用户管理把社区设为活跃，或在人工记账里记录社区欠款" }}

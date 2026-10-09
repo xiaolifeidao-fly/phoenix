@@ -12,8 +12,14 @@ export interface ManualBookDebt {
   /** 用户管理里当前的用户名、备注，只用于展示 */
   upstreamUsername?: string;
   upstreamRemark?: string;
-  /** 这个社区当前的账户余额（RMB，已充值还没消费），只有当前值，不随日期变化 */
-  upstreamBalance?: number;
+  /**
+   * 截至记账当天的账户余额（RMB，已充值还没消费），取每天 00:00 打的前一天快照；
+   * 当天还没打快照时是当前余额（upstreamBalanceLive），更早的日期没有快照时为空
+   */
+  upstreamBalance?: number | null;
+  upstreamBalanceLive?: boolean;
+  /** 快照实际打的时间 */
+  upstreamBalanceTime?: string;
   currency: ManualBookCurrency;
   amount: number;
   amountRmb: number;
@@ -51,8 +57,14 @@ export interface ManualBookDebtCompare {
   upstreamUserName?: string;
   upstreamUsername?: string;
   upstreamRemark?: string;
-  /** 这个社区当前的账户余额（RMB，已充值还没消费），只有当前值，不随日期变化 */
-  upstreamBalance?: number;
+  /**
+   * 截至记账当天的账户余额（RMB，已充值还没消费），取每天 00:00 打的前一天快照；
+   * 当天还没打快照时是当前余额（upstreamBalanceLive），更早的日期没有快照时为空
+   */
+  upstreamBalance?: number | null;
+  upstreamBalanceLive?: boolean;
+  /** 快照实际打的时间 */
+  upstreamBalanceTime?: string;
   currency: ManualBookCurrency;
   amount: number;
   amountRmb: number;
@@ -174,7 +186,8 @@ export type DebtCompareStatus = "OK" | "MINOR" | "DIFF" | "NO_BASELINE" | "NO_MA
 
 /**
  * 某个上游社区在 (上一份记账日, 当天] 内的核对（RMB）：
- * 应收 = 这段时间的充值；人工对比值 = 入账（社区入账 + 代收手续费）+ 欠款增量（当天人工欠款 − 上一份人工欠款）；
+ * 应收 = 入账 + 欠款增量 + 入账代收手续费。
+ * 应收 = 这段时间的充值；人工对比值 = 入账（社区入账）+ 欠款增量（当天人工欠款 − 上一份人工欠款）+ 入账代收手续费；
  * 差值 = 人工对比值 − 应收。
  */
 export interface DebtCompareRow {
@@ -185,8 +198,11 @@ export interface DebtCompareRow {
   isTrading: boolean;
   /** 应收 = 这段时间的充值 */
   receivable: number;
+  /** 入账 = 社区入账 */
   income: number;
+  /** 入账代收手续费 */
   collectFee: number;
+  /** 入账 + 入账代收手续费 */
   incomeTotal: number;
   previousDebt: number | null;
   /** 上一份没记这个社区，欠款按 0 算 */
@@ -195,7 +211,7 @@ export interface DebtCompareRow {
   manualAmount: number | null;
   manualDebt: number | null;
   debtChange: number | null;
-  /** 入账 + 欠款增量 */
+  /** 入账 + 欠款增量 + 入账代收手续费 */
   manualTotal: number | null;
   diff: number | null;
   diffRatio: number | null;
@@ -212,8 +228,11 @@ export interface DebtCompareDay {
   previousDate?: string;
   days: number;
   rows: DebtCompareRow[];
-  /** 合计只算两边都有值的社区 */
+  /** 合计只算两边都有值的社区；manualTotal = income + debtChange + collectFee */
   receivable: number;
+  income: number;
+  debtChange: number;
+  collectFee: number;
   manualTotal: number;
   diff: number;
   diffCount: number;
@@ -231,6 +250,12 @@ export class DebtCompare {
 
   /** 整个区间的合计 = 各天合计之和 */
   receivable = 0;
+
+  income = 0;
+
+  debtChange = 0;
+
+  collectFee = 0;
 
   manualTotal = 0;
 

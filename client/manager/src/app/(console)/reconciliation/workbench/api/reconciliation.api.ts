@@ -2,7 +2,7 @@
 
 import { getData, getDataList, instance, unwrapApiResponse, type ApiResponse } from "@/utils/axios";
 
-/** 人工维度里的单个人工商品：只有任务数，积分不分商品 */
+/** 人工维度里的单个人工商品 */
 export interface ReconManualDimensionShopCategory {
   shopCategoryId: number;
   shopCategoryName: string;
@@ -11,12 +11,14 @@ export interface ReconManualDimensionShopCategory {
   checkedNum: number;
   /** 待审核数量（order_sum_record.un_check_num） */
   unCheckNum: number;
+  /** 审核通过订单的积分（order_sum_record.order_score），不含徒弟奖励 */
+  points: number;
   userCount: number;
 }
 
 /**
  * 人工维度：任务数来自 order_sum_record（按人工商品），
- * 积分来自 user_points_daily（按做单日期，不分商品），所以只有合计有积分。
+ * 合计积分来自 user_points_daily（按做单日期，不分商品）；商品行积分取 order_sum_record.order_score，口径不同。
  */
 export class ReconManualDimension {
   startDate = "";

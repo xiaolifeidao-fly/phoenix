@@ -7,6 +7,7 @@ import {
   ArrowUpOutlined,
   DeleteOutlined,
   EditOutlined,
+  HistoryOutlined,
   MonitorOutlined,
   PercentageOutlined,
   PlusOutlined,
@@ -19,6 +20,7 @@ import { Button, DatePicker, Drawer, Form, Input, InputNumber, Modal, Pagination
 import { message } from "@/utils/notify";
 import { DropMonitorRuleModal } from "./DropMonitorRuleModal";
 import { PointsRuleModal } from "./PointsRuleModal";
+import { ManualProductScoreHistoryDrawer } from "./ManualProductScoreHistoryDrawer";
 import type { ColumnsType } from "antd/es/table";
 import { WorkspaceDrawer } from "@/components/manager-shell/WorkspaceDrawer";
 import {
@@ -369,6 +371,7 @@ export function ManualProductManagementPanel() {
   const [assignConfigForm] = Form.useForm<AssignConfigFormValues>();
   const [judgeConfigForm] = Form.useForm<JudgeConfigPreviewRecord>();
   const [products, setProducts] = useState<ManualProductRecord[]>([]);
+  const [scoreHistoryProduct, setScoreHistoryProduct] = useState<ManualProductRecord | null>(null);
   const [productTypes, setProductTypes] = useState<ManualProductTypeRecord[]>([]);
   const [shopGroups, setShopGroups] = useState<ShopGroupRecord[]>([]);
   const [loading, setLoading] = useState(false);
@@ -2251,23 +2254,20 @@ export function ManualProductManagementPanel() {
       title: "操作",
       key: "actions",
       fixed: "right",
-      width: 520,
+      width: 300,
       render: (_, record) => (
         <Space size={4}>
           <Tooltip title="分配策略">
-            <Button type="text" icon={<SettingOutlined />} onClick={() => openStrategyDrawer(record)}>
-              分配策略
-            </Button>
+            <Button type="text" icon={<SettingOutlined />} onClick={() => openStrategyDrawer(record)} />
           </Tooltip>
-          <Tooltip title="已完成单掉量监控与自动补单配置">
-            <Button type="text" icon={<MonitorOutlined />} onClick={() => setDropMonitorProduct(record)}>
-              监控配置
-            </Button>
+          <Tooltip title="监控配置">
+            <Button type="text" icon={<MonitorOutlined />} onClick={() => setDropMonitorProduct(record)} />
           </Tooltip>
-          <Tooltip title="吃量比例与吃量方式（全局 / 按白名单用户）">
-            <Button type="text" icon={<PercentageOutlined />} onClick={() => setPointsRuleProduct(record)}>
-              积分配置
-            </Button>
+          <Tooltip title="积分配置">
+            <Button type="text" icon={<PercentageOutlined />} onClick={() => setPointsRuleProduct(record)} />
+          </Tooltip>
+          <Tooltip title="调价历史">
+            <Button type="text" icon={<HistoryOutlined />} onClick={() => setScoreHistoryProduct(record)} />
           </Tooltip>
           <Tooltip title="编辑">
             <Button type="text" icon={<EditOutlined />} onClick={() => openEditModal(record)} />
@@ -4125,6 +4125,8 @@ export function ManualProductManagementPanel() {
           </Space>
         ) : null}
       </WorkspaceDrawer>
+
+      <ManualProductScoreHistoryDrawer product={scoreHistoryProduct} onClose={() => setScoreHistoryProduct(null)} />
     </div>
   );
 }

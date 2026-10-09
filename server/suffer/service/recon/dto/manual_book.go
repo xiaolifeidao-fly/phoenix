@@ -7,11 +7,15 @@ type ManualBookDebtDTO struct {
 	// UpstreamUsername / UpstreamRemark 用户管理里当前的用户名和备注, 只用于展示, 不进修改记录快照.
 	UpstreamUsername string `json:"upstreamUsername,omitempty"`
 	UpstreamRemark   string `json:"upstreamRemark,omitempty"`
-	// UpstreamBalance 这个社区当前的账户余额(RMB, 已充值还没消费), 只有当前值, 只用于展示.
-	UpstreamBalance float64 `json:"upstreamBalance"`
-	Currency        string  `json:"currency"`
-	Amount          float64 `json:"amount"`
-	AmountRmb       float64 `json:"amountRmb"`
+	// UpstreamBalance 这个社区截至记账当天的账户余额(RMB, 已充值还没消费), 取每天 00:00 打的前一天快照, 只用于展示;
+	// 当天还没打快照时是当前余额(UpstreamBalanceLive = true), 更早的日期没有快照时为 nil.
+	UpstreamBalance     *float64 `json:"upstreamBalance"`
+	UpstreamBalanceLive bool     `json:"upstreamBalanceLive,omitempty"`
+	// UpstreamBalanceTime 快照实际打的时间
+	UpstreamBalanceTime string  `json:"upstreamBalanceTime,omitempty"`
+	Currency            string  `json:"currency"`
+	Amount              float64 `json:"amount"`
+	AmountRmb           float64 `json:"amountRmb"`
 }
 
 // ManualBookDTO 人工记账: 某天的剩余金额 + 各上游社区欠款.
@@ -64,14 +68,17 @@ const (
 // ManualBookDebtCompareDTO 某个社区截至当天的欠款, 以及相对上一份记账的增量.
 // 上一份里没有这个社区时按 0 算增量, IsNew = true.
 type ManualBookDebtCompareDTO struct {
-	UpstreamUserID   uint64  `json:"upstreamUserId"`
-	UpstreamUserName string  `json:"upstreamUserName,omitempty"`
-	UpstreamUsername string  `json:"upstreamUsername,omitempty"`
-	UpstreamRemark   string  `json:"upstreamRemark,omitempty"`
-	UpstreamBalance  float64 `json:"upstreamBalance"`
-	Currency         string  `json:"currency"`
-	Amount           float64 `json:"amount"`
-	AmountRmb        float64 `json:"amountRmb"`
+	UpstreamUserID   uint64 `json:"upstreamUserId"`
+	UpstreamUserName string `json:"upstreamUserName,omitempty"`
+	UpstreamUsername string `json:"upstreamUsername,omitempty"`
+	UpstreamRemark   string `json:"upstreamRemark,omitempty"`
+	// UpstreamBalance 同 ManualBookDebtDTO: 截至当天的余额快照
+	UpstreamBalance     *float64 `json:"upstreamBalance"`
+	UpstreamBalanceLive bool     `json:"upstreamBalanceLive,omitempty"`
+	UpstreamBalanceTime string   `json:"upstreamBalanceTime,omitempty"`
+	Currency            string   `json:"currency"`
+	Amount              float64  `json:"amount"`
+	AmountRmb           float64  `json:"amountRmb"`
 	// Change 按原币种的增量, 只有和上一份同币种(或上一份没有)时有值; ChangeRmb 按 RMB 的增量.
 	Change    *float64 `json:"change"`
 	ChangeRmb *float64 `json:"changeRmb"`

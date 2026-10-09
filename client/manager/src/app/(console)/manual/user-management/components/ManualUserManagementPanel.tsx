@@ -7,6 +7,7 @@ import {
   DatabaseOutlined,
   EditOutlined,
   EyeOutlined,
+  HistoryOutlined,
   KeyOutlined,
   AccountBookOutlined,
   PlusOutlined,
@@ -56,6 +57,7 @@ import {
   type SettleChannelRecord,
   type SettleCurrency,
 } from "../../api/settle.api";
+import { UserPointsHistoryDrawer } from "./UserPointsHistoryDrawer";
 
 const { Text } = Typography;
 
@@ -127,6 +129,8 @@ export function ManualUserManagementPanel() {
   // 调整积分
   const [adjustPointsForm] = Form.useForm<AdjustPointsFormValues>();
   const [adjustDrawerOpen, setAdjustDrawerOpen] = useState(false);
+  // 积分明细（汇总 + 明细）抽屉，null 为关闭
+  const [pointsHistoryUser, setPointsHistoryUser] = useState<ManualUserRecord | null>(null);
   const [adjustUser, setAdjustUser] = useState<ManualUserRecord | null>(null);
   const [adjustSubmitting, setAdjustSubmitting] = useState(false);
   const [adjustPointsPreview, setAdjustPointsPreview] = useState<number | null>(null);
@@ -616,9 +620,9 @@ export function ManualUserManagementPanel() {
       key: "actions",
       fixed: "right",
       // 动作带文字会超宽，表格是 table-layout: fixed，超出的按钮会直接画到固定列外面。
-      // 和渠道、商品列表一致改成图标 + Tooltip：34px 按钮 × 6 + 间距 4 × 5 + 单元格左右内边距 32 = 256，
-      // 列宽留到 280，缩放或主题调 controlHeight 时也不会顶破。
-      width: 280,
+      // 和渠道、商品列表一致改成图标 + Tooltip：34px 按钮 × 7 + 间距 4 × 6 + 单元格左右内边距 32 = 294，
+      // 列宽留到 316，缩放或主题调 controlHeight 时也不会顶破。
+      width: 316,
       render: (_, record) => (
         <Space size={4} wrap={false}>
           <Tooltip title="编辑">
@@ -654,6 +658,14 @@ export function ManualUserManagementPanel() {
               aria-label="调整积分"
               icon={<WalletOutlined />}
               onClick={() => openAdjustPointsDrawer(record)}
+            />
+          </Tooltip>
+          <Tooltip title="积分明细">
+            <Button
+              type="text"
+              aria-label="积分明细"
+              icon={<HistoryOutlined />}
+              onClick={() => setPointsHistoryUser(record)}
             />
           </Tooltip>
           <Tooltip title="结算配置">
@@ -736,7 +748,7 @@ export function ManualUserManagementPanel() {
             onChange: (page, pageSize) => void loadUsers(page, pageSize),
           }}
           // 各列宽度合计 1420，和 scroll.x 保持一致，避免列被压缩后内容溢出
-          scroll={{ x: 1420 }}
+          scroll={{ x: 1456 }}
           style={{ marginTop: 20 }}
         />
       </section>
@@ -1074,6 +1086,8 @@ export function ManualUserManagementPanel() {
           pagination={false}
         />
       </WorkspaceDrawer>
+
+      <UserPointsHistoryDrawer user={pointsHistoryUser} onClose={() => setPointsHistoryUser(null)} />
     </div>
   );
 }

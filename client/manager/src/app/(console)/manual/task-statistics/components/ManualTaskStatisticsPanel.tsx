@@ -4,8 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import dayjs, { type Dayjs } from "dayjs";
 import localeData from "dayjs/plugin/localeData";
 import weekday from "dayjs/plugin/weekday";
-import { CheckCircleOutlined, ClockCircleOutlined, ReloadOutlined, SearchOutlined, TeamOutlined, WarningOutlined } from "@ant-design/icons";
-import { Button, DatePicker, Empty, Select, Space, Switch, Table, Tag, Typography } from "antd";
+import { CheckCircleOutlined, ClockCircleOutlined, QuestionCircleOutlined, ReloadOutlined, SearchOutlined, TeamOutlined, TrophyOutlined, WarningOutlined } from "@ant-design/icons";
+import { Button, DatePicker, Empty, Select, Space, Switch, Table, Tag, Tooltip, Typography } from "antd";
 import { message } from "@/utils/notify";
 import { dateRangePresets } from "@/utils/date-range-presets";
 import type { ColumnsType } from "antd/es/table";
@@ -28,6 +28,7 @@ dayjs.extend(localeData);
 
 const defaultDateRange: [Dayjs, Dayjs] = [dayjs().startOf("day"), dayjs().startOf("day")];
 const USER_SEARCH_DEBOUNCE_MS = 300;
+const POINTS_TIP = "审核通过订单的积分，按做单日期统计；不含徒弟奖励，也不看是否已入账";
 
 const defaultFilters = {
   dateRange: defaultDateRange,
@@ -140,6 +141,16 @@ export function ManualTaskStatisticsPanel() {
   const selectedUser = filters.userId ? userOptionCacheRef.current.get(filters.userId) : undefined;
   const resolvedUserOptions = selectedUser && !userOptions.some((user) => user.id === selectedUser.id) ? [selectedUser, ...userOptions] : userOptions;
 
+  // 审核通过订单的积分（order_sum_record.order_score），不含徒弟奖励
+  const pointsColumn = {
+    title: <Tooltip title={POINTS_TIP}>审核通过积分 <QuestionCircleOutlined /></Tooltip>,
+    dataIndex: "totalOrderScore",
+    width: 130,
+    render: (value?: number) => formatCount(value),
+  };
+  // 商品汇总和顶部卡片同一组筛选条件，直接相加即为合计
+  const totalOrderScore = (overview?.shopCategorySummaryList ?? []).reduce((sum, item) => sum + (item.totalOrderScore || 0), 0);
+
   const categoryColumns: ColumnsType<ShopCategoryTaskSummary> = [
     { title: "人工商品", dataIndex: "shopCategoryName", width: 180, render: (value) => <Text strong>{value || "-"}</Text> },
     { title: "处理用户", dataIndex: "distinctUserCount", width: 100, render: formatCount },
@@ -148,6 +159,7 @@ export function ManualTaskStatisticsPanel() {
     { title: "未提交", dataIndex: "pendingNum", width: 100, render: (value) => <Tag color="processing">{formatCount(value)}</Tag> },
     { title: "待审核", dataIndex: "unCheckNum", width: 100, render: (value) => <Tag color="gold">{formatCount(value)}</Tag> },
     { title: "审核通过", dataIndex: "checkedNum", width: 110, render: (value) => <Tag color="success">{formatCount(value)}</Tag> },
+    pointsColumn,
     { title: "审核异常", dataIndex: "checkErrorNum", width: 110, render: (value) => <Tag color="error">{formatCount(value)}</Tag> },
     { title: "通过率", dataIndex: "approvalRate", width: 100, render: formatPercent },
   ];
@@ -161,6 +173,7 @@ export function ManualTaskStatisticsPanel() {
     { title: "未提交", dataIndex: "pendingNum", width: 100, render: (value) => <Tag color="processing">{formatCount(value)}</Tag> },
     { title: "待审核", dataIndex: "unCheckNum", width: 100, render: (value) => <Tag color="gold">{formatCount(value)}</Tag> },
     { title: "审核通过", dataIndex: "checkedNum", width: 110, render: (value) => <Tag color="success">{formatCount(value)}</Tag> },
+    pointsColumn,
     { title: "审核异常", dataIndex: "checkErrorNum", width: 110, render: (value) => <Tag color="error">{formatCount(value)}</Tag> },
     { title: "通过率", dataIndex: "approvalRate", width: 100, render: formatPercent },
   ];
@@ -170,6 +183,7 @@ export function ManualTaskStatisticsPanel() {
     { label: "总上号数量", value: overview?.distinctUpAccountNum, icon: <TeamOutlined />, color: "#6E43C4" },
     { label: "待审核", value: overview?.unCheckNum, icon: <WarningOutlined />, color: "#B26A16" },
     { label: "审核通过", value: overview?.checkedNum, icon: <CheckCircleOutlined />, color: "#1E8A5A" },
+    { label: "审核通过积分", value: overview ? totalOrderScore : undefined, icon: <TrophyOutlined />, color: "#0E7C86" },
     { label: "审核异常", value: overview?.checkErrorNum, icon: <WarningOutlined />, color: "#BA3C30" },
   ];
 
@@ -200,7 +214,7 @@ export function ManualTaskStatisticsPanel() {
 }
 
 function StatisticTable<T extends object>({ title, description, loading, columns, data, rowKey, pagination = false }: { title: string; description: string; loading: boolean; columns: ColumnsType<T>; data: T[]; rowKey: (record: T) => string | number; pagination?: false | TablePaginationConfig }) {
-  return <section className="manager-shell-card" style={{ borderRadius: 28, padding: 24 }}><Space direction="vertical" size={18} style={{ width: "100%" }}><div><div className="manager-section-label">统计明细</div><Title level={4} style={{ margin: "10px 0 4px" }}>{title}</Title><Text type="secondary">{description}</Text></div><Table<T> rowKey={rowKey} loading={loading} columns={columns} dataSource={data} pagination={pagination} scroll={{ x: 1240 }} locale={{ emptyText: <Empty description="当前筛选条件下暂无任务数据" /> }} /></Space></section>;
+  return <section className="manager-shell-card" style={{ borderRadius: 28, padding: 24 }}><Space direction="vertical" size={18} style={{ width: "100%" }}><div><div className="manager-section-label">统计明细</div><Title level={4} style={{ margin: "10px 0 4px" }}>{title}</Title><Text type="secondary">{description}</Text></div><Table<T> rowKey={rowKey} loading={loading} columns={columns} dataSource={data} pagination={pagination} scroll={{ x: 1370 }} locale={{ emptyText: <Empty description="当前筛选条件下暂无任务数据" /> }} /></Space></section>;
 }
 
 function formatCount(value?: number) { return Number(value || 0).toLocaleString("zh-CN"); }

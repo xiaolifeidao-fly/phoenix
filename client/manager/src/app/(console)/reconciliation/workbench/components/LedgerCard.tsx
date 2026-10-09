@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { DeleteOutlined, EditOutlined, PlusOutlined, SyncOutlined } from "@ant-design/icons";
+import { CalendarOutlined, DeleteOutlined, EditOutlined, PlusOutlined, SyncOutlined } from "@ant-design/icons";
 import {
   Alert,
   Button,
@@ -40,8 +40,8 @@ import { MoneyCell, SectionHead, money, moneyColumn } from "./shared";
 
 interface LedgerCardProps {
   ledger: LedgerState;
-  /** 新增记录时的默认日期 */
-  defaultDate: Dayjs;
+  /** 页面顶部的日期区间：服务端按它查；卡片内的日期筛选只能在它之内再缩小 */
+  range: [Dayjs, Dayjs];
 }
 
 type LedgerView = "summary" | "detail";
@@ -95,9 +95,11 @@ const manualCategoryOptions = (["IN", "OUT"] as LedgerRecordType[]).map((type) =
   })),
 }));
 
+const { RangePicker } = DatePicker;
+
 const filterCategoryOptions = LEDGER_CATEGORIES.map((item) => ({ label: item.label, value: item.value }));
 
-export function LedgerCard({ ledger, defaultDate }: LedgerCardProps) {
+export function LedgerCard({ ledger, range }: LedgerCardProps) {
   const [view, setView] = useState<LedgerView>("summary");
   const [editing, setEditing] = useState<ReconLedgerRecord | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -179,7 +181,7 @@ export function LedgerCard({ ledger, defaultDate }: LedgerCardProps) {
   const openForm = (record: ReconLedgerRecord | null) => {
     setEditing(record);
     form.setFieldsValue({
-      recordDate: record ? dayjs(record.recordDate) : defaultDate,
+      recordDate: record ? dayjs(record.recordDate) : dayjs(ledger.queryStart),
       category: record?.category ?? "COMMUNITY_IN",
       currency: record?.currency ?? "RMB",
       amount: record ? (record.currency === "USDT" ? record.amountU ?? null : record.amountRmb) : null,
@@ -436,6 +438,31 @@ export function LedgerCard({ ledger, defaultDate }: LedgerCardProps) {
         />
       ) : null}
 
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
+        <RangePicker
+          allowClear
+          placeholder={[range[0].format("YYYY-MM-DD"), range[1].format("YYYY-MM-DD")]}
+          suffixIcon={<CalendarOutlined />}
+          style={{ width: 268 }}
+          value={ledger.filters.dateRange ?? null}
+          disabledDate={(current) =>
+            current.isBefore(range[0].startOf("day")) || current.isAfter(range[1].endOf("day"))
+          }
+          onChange={(value) =>
+            ledger.setFilters((current) => ({
+              ...current,
+              dateRange: value?.[0] && value[1] ? [value[0].startOf("day"), value[1].startOf("day")] : undefined,
+              page: 1,
+            }))
+          }
+        />
+        <span className="recon-subcard-caption">
+          {ledger.narrowed
+            ? `汇总和明细只看 ${ledger.queryStart} ~ ${ledger.queryEnd}；清空后回到页面所选日期`
+            : "在页面所选日期内再按日期筛选，汇总和明细都生效"}
+        </span>
+      </div>
+
       {view === "summary" ? (
         <div className="recon-stack">
           <Table<SummaryRow>
@@ -451,7 +478,9 @@ export function LedgerCard({ ledger, defaultDate }: LedgerCardProps) {
           />
 
           <div className="recon-calc-strip">
-            <div className="recon-calc-strip-title">所选日期汇总</div>
+            <div className="recon-calc-strip-title">
+              {ledger.narrowed ? `${ledger.queryStart} ~ ${ledger.queryEnd} 汇总` : "所选日期汇总"}
+            </div>
             <div className="recon-calc-grid">
               {periodTotals.map((item) => (
                 <div

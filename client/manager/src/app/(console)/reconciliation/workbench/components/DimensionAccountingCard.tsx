@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
-import { Alert, Button, Table, Tag, Tooltip } from "antd";
+import { useMemo, type ReactNode } from "react";
+import { Alert, Button, Select, Table, Tag, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { settleCurrencyOptions } from "@/app/(console)/manual/api/settle.api";
 import type { ReconManualDimension, UpstreamDimension } from "../api/reconciliation.api";
-import { FormulaGrid, MoneyCell, SectionHead, money, moneyColumn } from "./shared";
+import { estimateFee, useFeeChannel } from "../hooks/useFeeChannel";
+import { FormulaGrid, MoneyCell, SectionHead, money, moneyColumn, type AmountTone } from "./shared";
 
 interface DimensionAccountingCardProps {
   manualDimension: ReconManualDimension | null;
@@ -17,13 +19,15 @@ interface DimensionAccountingCardProps {
   onUpstreamRetry: () => void;
 }
 
-/** 人工维度一行：合计行带积分，商品行积分为空（积分日汇总不分商品） */
+/** 人工维度一行：商品行积分取审核通过订单积分，合计行为各商品之和 */
 interface ManualDimensionRow {
   key: string;
   name: string;
   taskNum: number;
   unCheckNum: number;
-  points: number | null;
+  points: number;
+  /** 预计代付手续费（RMB）= 积分 ÷ 10000 × 所选通道代付费率 */
+  payoutFee: number;
   total?: boolean;
 }
 
@@ -49,15 +53,21 @@ const manualColumns: ColumnsType<ManualDimensionRow> = [
     dataIndex: "points",
     width: 120,
     align: "right",
-    render: (value: number | null) =>
-      value === null ? (
-        <Tooltip title="积分日汇总按用户和做单日期统计，不分人工商品">
-          <span className="recon-subcard-caption">—</span>
-        </Tooltip>
-      ) : (
-        <MoneyCell value={value} />
-      ),
+    render: (value: number, row) => (
+      <Tooltip
+        title={
+          row.total
+            ? "各商品积分之和（审核通过订单的积分，不含徒弟奖励）；和积分日汇总的对照见表格下方"
+            : "审核通过订单的积分，不含徒弟奖励"
+        }
+      >
+        <span>
+          <MoneyCell value={value} />
+        </span>
+      </Tooltip>
+    ),
   },
+  moneyColumn<ManualDimensionRow>("代付手续费（RMB）", "payoutFee", 130, "fee"),
 ];
 
 /** 上游维度一行：只展示充值 / 赠送 / 消费 / 返点 / 小费，金额为 RMB */
@@ -67,10 +77,28 @@ interface UpstreamRow {
   amount: number;
   /** 悬停说明口径和拆分 */
   detail: string;
+  tone: AmountTone;
+  /** 估算值，类目旁标「估算」 */
+  estimated?: boolean;
 }
 
 const upstreamColumns: ColumnsType<UpstreamRow> = [
-  { title: "类目", dataIndex: "name", width: 120, fixed: "left", render: (value: string) => <span className="recon-row-name">{value}</span> },
+  {
+    title: "类目",
+    dataIndex: "name",
+    width: 120,
+    fixed: "left",
+    render: (value: string, row) => (
+      <span className="recon-row-name">
+        {value}
+        {row.estimated ? (
+          <Tag color="gold" style={{ marginInlineStart: 6, marginInlineEnd: 0 }}>
+            估算
+          </Tag>
+        ) : null}
+      </span>
+    ),
+  },
   {
     title: "金额（RMB）",
     dataIndex: "amount",
@@ -79,7 +107,7 @@ const upstreamColumns: ColumnsType<UpstreamRow> = [
     render: (value: number, row) => (
       <Tooltip title={row.detail}>
         <span>
-          <MoneyCell value={value} />
+          <MoneyCell value={value} tone={row.tone} />
         </span>
       </Tooltip>
     ),
@@ -88,12 +116,47 @@ const upstreamColumns: ColumnsType<UpstreamRow> = [
 
 const formulas = [
   { label: "返点 / 小费", expression: "下单数量 × 类目单位金额 − 退单数量 × 类目单位金额" },
-  { label: "人工预计结算金额", expression: "预计结算积分 ÷ 10000（本人做单积分 + 徒弟奖励积分；待审核任务审核后可能还会增加）" },
-  { label: "利润", expression: "上游消费 − 小费 − 返点 − 退款 − 补款 − 人工预计结算金额" },
+  { label: "返点为 0 时", expression: "返点 = 消费 × 赠送 ÷ 充值（充值为 0 时仍按 0）" },
+  { label: "人工预计结算金额", expression: "预计结算积分 ÷ 10000（预计结算积分 = 各商品积分之和，不含徒弟奖励；待审核任务审核后可能还会增加）" },
+  { label: "积分对照差异", expression: "各商品积分之和 − 积分日汇总的做单积分（徒弟奖励不分商品，不参与对照）" },
+  { label: "代收手续费（预计）", expression: "实际消费（消费 − 退款 − 补款）× 所选通道代收费率（按 U 取 U 费率，按 RMB 取 RMB 费率）" },
+  { label: "代付手续费（预计）", expression: "积分 ÷ 10000 × 所选通道代付费率（按 U 取 U 费率，按 RMB 取 RMB 费率）" },
+  { label: "利润", expression: "上游净额 − 人工预计结算金额 − 代付手续费；上游净额 = 消费 − 小费 − 返点 − 退款 − 补款 − 代收手续费" },
 ];
 
 /** 10000 积分 = 1 元 */
 const POINTS_PER_RMB = 10000;
+
+/** 手续费估算用的通道 / 币种选择，存 localStorage */
+function FeeChannelPicker({ label, state }: { label: string; state: ReturnType<typeof useFeeChannel> }) {
+  return (
+    <span className="recon-fee-picker">
+      <span className="recon-subcard-caption">{label}</span>
+      <Select
+        size="small"
+        style={{ width: 140 }}
+        placeholder="无可用通道"
+        value={state.channel?.id}
+        onChange={state.setChannelId}
+        options={state.channels.map((item) => ({
+          value: item.id,
+          label: `${item.name}${item.defaultChannel ? "（默认）" : ""}`,
+        }))}
+      />
+      <Select
+        size="small"
+        style={{ width: 110 }}
+        value={state.currency}
+        onChange={state.setCurrency}
+        options={settleCurrencyOptions}
+      />
+    </span>
+  );
+}
+
+function feeRateText(rate: number) {
+  return `${money(rate * 100)}%`;
+}
 
 export function DimensionAccountingCard({
   manualDimension,
@@ -105,6 +168,16 @@ export function DimensionAccountingCard({
   upstreamError,
   onUpstreamRetry,
 }: DimensionAccountingCardProps) {
+  const collectChannel = useFeeChannel("recon.workbench.upstreamCollectFee", "USDT");
+  const payoutChannel = useFeeChannel("recon.workbench.manualPayoutFee", "RMB");
+  const payoutRate = estimateFee(1, payoutChannel.channel, payoutChannel.currency, "payout").rate;
+
+  // 合计行积分取各商品之和，和积分日汇总（user_points_daily）分开对照
+  const categoryPoints = useMemo(
+    () => (manualDimension?.shopCategoryList ?? []).reduce((sum, item) => sum + (item.points ?? 0), 0),
+    [manualDimension],
+  );
+
   const manualRows = useMemo<ManualDimensionRow[]>(() => {
     if (!manualDimension) {
       return [];
@@ -115,7 +188,8 @@ export function DimensionAccountingCard({
         name: "合计",
         taskNum: manualDimension.taskNum,
         unCheckNum: manualDimension.unCheckNum,
-        points: manualDimension.points,
+        points: categoryPoints,
+        payoutFee: (categoryPoints / POINTS_PER_RMB) * payoutRate,
         total: true,
       },
       ...manualDimension.shopCategoryList.map((item) => ({
@@ -123,61 +197,108 @@ export function DimensionAccountingCard({
         name: item.shopCategoryName,
         taskNum: item.taskNum,
         unCheckNum: item.unCheckNum,
-        points: null,
+        points: item.points ?? 0,
+        payoutFee: ((item.points ?? 0) / POINTS_PER_RMB) * payoutRate,
       })),
     ];
-  }, [manualDimension]);
+  }, [manualDimension, categoryPoints, payoutRate]);
+
+  // 返点为 0 时按赠送比例估算：消费 × 赠送 ÷ 充值；充值为 0 时无法估算，仍为 0
+  const rebateEstimated = !!upstream && upstream.rebateAmount === 0 && upstream.rechargeAmount > 0;
+  const effectiveRebate = rebateEstimated
+    ? (upstream.consumeAmount * upstream.givenAmount) / upstream.rechargeAmount
+    : (upstream?.rebateAmount ?? 0);
+
+  // 实际消费 = 消费 − 退款 − 补款，代收手续费按它估算
+  const actualConsume = (upstream?.consumeAmount ?? 0) - (upstream?.refundAmount ?? 0) - (upstream?.bkAmount ?? 0);
+  const collectFee = estimateFee(actualConsume, collectChannel.channel, collectChannel.currency, "collect");
 
   const upstreamRows = useMemo<UpstreamRow[]>(() => {
     if (!upstream) {
       return [];
     }
     return [
-      { key: "recharge", name: "充值金额", amount: upstream.rechargeAmount, detail: "账户流水「充值」合计" },
-      { key: "given", name: "赠送金额", amount: upstream.givenAmount, detail: "账户流水「赠送」合计" },
-      { key: "consume", name: "消费金额", amount: upstream.consumeAmount, detail: "账户流水「消费」合计（毛额，不扣退款、补款）" },
+      { key: "recharge", name: "充值金额", amount: upstream.rechargeAmount, detail: "账户流水「充值」合计", tone: "income" },
+      { key: "given", name: "赠送金额", amount: upstream.givenAmount, detail: "账户流水「赠送」合计", tone: "income" },
+      { key: "consume", name: "消费金额", amount: upstream.consumeAmount, detail: "账户流水「消费」合计（毛额，不扣退款、补款）", tone: "income" },
       {
         key: "rebate",
         name: "返点金额",
-        amount: upstream.rebateAmount,
-        detail: `下单 ${money(upstream.orderNum)} 个 ${money(upstream.orderRebate)} − 退单 ${money(upstream.refundNum)} 个 ${money(upstream.refundRebate)}`,
+        amount: effectiveRebate,
+        tone: "cost",
+        estimated: rebateEstimated,
+        detail: rebateEstimated
+          ? `按类目算出的返点为 0，按赠送比例估算：消费 ${money(upstream.consumeAmount)} × 赠送 ${money(upstream.givenAmount)} ÷ 充值 ${money(upstream.rechargeAmount)}`
+          : `下单 ${money(upstream.orderNum)} 个 ${money(upstream.orderRebate)} − 退单 ${money(upstream.refundNum)} 个 ${money(upstream.refundRebate)}`,
       },
       {
         key: "tip",
         name: "小费金额",
         amount: upstream.tipAmount,
+        tone: "cost",
         detail: `下单 ${money(upstream.orderNum)} 个 ${money(upstream.orderTip)} − 退单 ${money(upstream.refundNum)} 个 ${money(upstream.refundTip)}`,
       },
-      { key: "refund", name: "退款金额", amount: upstream.refundAmount, detail: "账户流水「退货」合计" },
-      { key: "bk", name: "补款金额", amount: upstream.bkAmount, detail: "账户流水「补款」合计" },
+      { key: "refund", name: "退款金额", amount: upstream.refundAmount, detail: "账户流水「退货」合计", tone: "cost" },
+      { key: "bk", name: "补款金额", amount: upstream.bkAmount, detail: "账户流水「补款」合计", tone: "cost" },
+      {
+        key: "collectFee",
+        name: "代收手续费",
+        amount: collectFee.feeRmb,
+        tone: "fee",
+        estimated: true,
+        detail: collectChannel.channel
+          ? `实际消费 ${money(actualConsume)} × ${collectChannel.channel.name} ${
+              collectChannel.currency === "USDT" ? "U" : "RMB"
+            } 代收费率 ${feeRateText(collectFee.rate)}${collectFee.feeU !== null ? `，约 ${money(collectFee.feeU)} U` : ""}`
+          : "没有可用的结算通道，按 0 计",
+      },
     ];
-  }, [upstream]);
+  }, [upstream, rebateEstimated, effectiveRebate, actualConsume, collectFee.feeRmb, collectFee.rate, collectFee.feeU, collectChannel.channel, collectChannel.currency]);
 
-  // 利润 = 上游消费 − 小费 − 返点 − 退款 − 补款 − 人工预计结算金额，统一按 RMB
+  // 利润 = 上游净额 − 人工预计结算金额 − 代付手续费，统一按 RMB；返点取上面的 effectiveRebate
   const upstreamNet =
     (upstream?.consumeAmount ?? 0) -
     (upstream?.tipAmount ?? 0) -
-    (upstream?.rebateAmount ?? 0) -
+    effectiveRebate -
     (upstream?.refundAmount ?? 0) -
-    (upstream?.bkAmount ?? 0);
-  const manualPoints = manualDimension?.points ?? 0;
+    (upstream?.bkAmount ?? 0) -
+    collectFee.feeRmb;
+  const manualPoints = categoryPoints;
+  const pointsDiff = categoryPoints - (manualDimension?.taskPoints ?? 0);
   const manualSettleRmb = manualPoints / POINTS_PER_RMB;
+  const payoutFeeRmb = manualSettleRmb * payoutRate;
   const unCheckNum = manualDimension?.unCheckNum ?? 0;
-  const systemCalc: { label: string; value: number; unit: string; sub?: string; note?: string; highlight?: boolean }[] = [
+  const totalProfit = upstreamNet - manualSettleRmb - payoutFeeRmb;
+  const systemCalc: {
+    label: string;
+    value: number;
+    unit: string;
+    tone: AmountTone;
+    sub?: ReactNode;
+    note?: string;
+    highlight?: boolean;
+  }[] = [
     {
       label: "人工预计结算金额",
       value: manualSettleRmb,
       unit: "RMB",
-      sub: `预计结算积分 ${money(manualPoints)}`,
+      tone: "settle",
+      sub: (
+        <>
+          {`预计结算积分 ${money(manualPoints)} · 代付手续费 `}
+          <MoneyCell value={payoutFeeRmb} tone="fee" />
+        </>
+      ),
       note: unCheckNum > 0 ? `还有 ${money(unCheckNum)} 个任务未审核` : undefined,
     },
     {
       label: "上游净额",
       value: upstreamNet,
       unit: "RMB",
-      sub: "消费 − 小费 − 返点 − 退款 − 补款",
+      tone: "income",
+      sub: "消费 − 小费 − 返点 − 退款 − 补款 − 代收手续费",
     },
-    { label: "总计利润", value: upstreamNet - manualSettleRmb, unit: "RMB", highlight: true },
+    { label: "总计利润", value: totalProfit, unit: "RMB", tone: "profit", highlight: true },
   ];
 
   return (
@@ -192,11 +313,7 @@ export function DimensionAccountingCard({
         <div className="recon-subcard">
           <div className="recon-subcard-head">
             <span className="recon-subcard-title">人工维度</span>
-            <span className="recon-subcard-caption">
-              {manualDimension
-                ? `做单积分 ${money(manualDimension.taskPoints)} · 徒弟奖励 ${money(manualDimension.childrenPoints)}`
-                : "任务数量按人工商品拆分，积分只有合计"}
-            </span>
+            <FeeChannelPicker label="代付通道" state={payoutChannel} />
           </div>
           {manualError ? (
             <Alert
@@ -218,15 +335,39 @@ export function DimensionAccountingCard({
             columns={manualColumns}
             dataSource={manualRows}
             pagination={false}
-            scroll={{ x: 480 }}
+            scroll={{ x: 610 }}
             rowClassName={(row) => (row.total ? "recon-row-total" : "")}
           />
+          {manualDimension ? (
+            <div className="recon-points-compare">
+              <span className="recon-points-compare-item">
+                <span className="recon-subcard-caption">商品积分之和</span>
+                <MoneyCell value={categoryPoints} />
+              </span>
+              <Tooltip title="user_points_daily 按做单日期汇总，只统计批次入账；上线前的日期没有数据">
+                <span className="recon-points-compare-item">
+                  <span className="recon-subcard-caption">积分日汇总 · 做单</span>
+                  <MoneyCell value={manualDimension.taskPoints} />
+                </span>
+              </Tooltip>
+              <span className="recon-points-compare-item">
+                <span className="recon-subcard-caption">差异</span>
+                <MoneyCell value={pointsDiff} tone={pointsDiff === 0 ? undefined : "fee"} />
+                <Tag color={pointsDiff === 0 ? "green" : "red"} style={{ marginInlineEnd: 0 }}>
+                  {pointsDiff === 0 ? "一致" : "有差异"}
+                </Tag>
+              </span>
+              <span className="recon-subcard-caption">
+                {`日汇总合计 ${money(manualDimension.points)}（另含徒弟奖励 ${money(manualDimension.childrenPoints)}，不参与对照）`}
+              </span>
+            </div>
+          ) : null}
         </div>
 
         <div className="recon-subcard">
           <div className="recon-subcard-head">
             <span className="recon-subcard-title">上游维度</span>
-            <span className="recon-subcard-caption">金额为 RMB，悬停金额看拆分</span>
+            <FeeChannelPicker label="代收通道" state={collectChannel} />
           </div>
           {upstreamError ? (
             <Alert
@@ -258,20 +399,22 @@ export function DimensionAccountingCard({
         <div className="recon-calc-grid">
           {systemCalc.map((item) => (
             <div
-              className={item.highlight ? "recon-calc-item recon-calc-item--highlight" : "recon-calc-item"}
+              className={`recon-calc-item ${item.highlight ? "recon-calc-item--highlight" : `recon-calc-item--${item.tone}`}`}
               key={item.label}
             >
               <span className="recon-calc-label">
-                {item.label}
-                {item.sub ? <span className="recon-subcard-caption" style={{ marginInlineStart: 8 }}>{item.sub}</span> : null}
-                {item.note ? (
-                  <Tag color="gold" style={{ marginInlineStart: 8 }}>
-                    {item.note}
-                  </Tag>
-                ) : null}
+                <span className="recon-calc-label-title">
+                  {item.label}
+                  {item.note ? (
+                    <Tag color="gold" style={{ marginInlineEnd: 0 }}>
+                      {item.note}
+                    </Tag>
+                  ) : null}
+                </span>
+                {item.sub ? <span className="recon-subcard-caption recon-calc-label-sub">{item.sub}</span> : null}
               </span>
               <span className="recon-calc-value">
-                <MoneyCell value={item.value} />
+                <MoneyCell value={item.value} tone={item.tone} />
                 <em className="recon-calc-unit">{item.unit}</em>
               </span>
             </div>

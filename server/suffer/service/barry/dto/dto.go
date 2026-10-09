@@ -381,6 +381,29 @@ type SaveProductCategoryDTO struct {
 	Status            string            `json:"status"`
 	ShopTypeCodeList  []string          `json:"shopTypeCodeList,omitempty"`
 	ShopTypeModelList []*ProductTypeDTO `json:"shopTypeModelList,omitempty"`
+	// 管理端当前登录人, barry 记积分变更流水的操作人
+	UpdatedBy string `json:"updatedBy,omitempty"`
+}
+
+// ProductCategoryScoreChangeDTO 人工商品积分(价格)变更流水, CreatedBy 是操作人.
+type ProductCategoryScoreChangeDTO struct {
+	BarryBaseDTO
+	ShopCategoryID   int64  `json:"shopCategoryId"`
+	ShopCategoryCode string `json:"shopCategoryCode,omitempty"`
+	ShopCategoryName string `json:"shopCategoryName,omitempty"`
+	OldScore         *int64 `json:"oldScore"`
+	NewScore         *int64 `json:"newScore"`
+}
+
+type ProductCategoryScoreChangePageDTO struct {
+	Total int64                            `json:"total"`
+	Data  []*ProductCategoryScoreChangeDTO `json:"data"`
+}
+
+type ProductCategoryScoreChangeQueryDTO struct {
+	ShopCategoryID int64 `json:"shopCategoryId,omitempty" form:"shopCategoryId"`
+	PageIndex      int   `json:"pageIndex,omitempty" form:"pageIndex"`
+	PageSize       int   `json:"pageSize,omitempty" form:"pageSize"`
 }
 
 type ProductCategoryOperateDTO struct {
@@ -976,6 +999,51 @@ type UserPointsSummaryQueryDTO struct {
 	ExcludedUserIDs string `json:"excludedUserIds,omitempty" form:"excludedUserIds"`
 }
 
+// UserPointsHistoryQueryDTO 做单用户积分汇总 / 明细: 日期 yyyy-MM-dd 两端都包含, 区间最长 93 天(barry 校验).
+type UserPointsHistoryQueryDTO struct {
+	RequestDTO
+	UserID    int64  `json:"userId" form:"userId"`
+	StartDate string `json:"startDate" form:"startDate"`
+	EndDate   string `json:"endDate" form:"endDate"`
+	// 明细才用: 来源(TASK_APPROVE / CHILDREN / MANUAL_ADJUST / WITHDRAW), 空为全部
+	Source   string `json:"source,omitempty" form:"source"`
+	Page     int    `json:"page,omitempty" form:"page"`
+	PageSize int    `json:"pageSize,omitempty" form:"pageSize"`
+}
+
+// UserPointsDailyStatDTO 做单用户某一天(按流水时间)的积分变动, 都是带符号的合计: 入账为正, 提现 / 扣减为负.
+type UserPointsDailyStatDTO struct {
+	Date           string `json:"date"`
+	TaskPoints     int64  `json:"taskPoints"`
+	ChildrenPoints int64  `json:"childrenPoints"`
+	AdjustPoints   int64  `json:"adjustPoints"`
+	WithdrawPoints int64  `json:"withdrawPoints"`
+	OtherPoints    int64  `json:"otherPoints"`
+	NetPoints      int64  `json:"netPoints"`
+	Count          int64  `json:"count"`
+}
+
+// UserPointsRecordDTO 做单用户积分明细一行.
+type UserPointsRecordDTO struct {
+	ID             int64  `json:"id"`
+	CreatedTime    string `json:"createdTime,omitempty"`
+	Points         int64  `json:"points"`
+	BalancePoints  *int64 `json:"balancePoints,omitempty"`
+	Source         string `json:"source,omitempty"`
+	SourceName     string `json:"sourceName,omitempty"`
+	Description    string `json:"description,omitempty"`
+	Serial         string `json:"serial,omitempty"`
+	ChildrenUserID *int64 `json:"childrenUserId,omitempty"`
+	DisposeStatus  string `json:"disposeStatus,omitempty"`
+	TaskDate       string `json:"taskDate,omitempty"`
+}
+
+// UserPointsRecordPageDTO 对应 barry 的 PageModel.
+type UserPointsRecordPageDTO struct {
+	Total int64                  `json:"total"`
+	Data  []*UserPointsRecordDTO `json:"data"`
+}
+
 type UserDetailQueryDTO struct {
 	PageQueryDTO
 	RequestDTO
@@ -1391,7 +1459,7 @@ type ReconManualDimensionQueryDTO struct {
 }
 
 // ReconManualDimensionDTO 对账工作台人工维度: 任务数来自 order_sum_record(按人工商品),
-// 积分来自 user_points_daily(按做单日期, 不分商品), 所以只有合计有积分.
+// 合计积分来自 user_points_daily(按做单日期, 不分商品); 商品行积分取 order_sum_record.order_score, 口径不同.
 type ReconManualDimensionDTO struct {
 	StartDate  string `json:"startDate"`
 	EndDate    string `json:"endDate"`
@@ -1412,6 +1480,7 @@ type ReconManualDimensionShopCategoryDTO struct {
 	TaskNum          int64  `json:"taskNum"`
 	CheckedNum       int64  `json:"checkedNum"`
 	UnCheckNum       int64  `json:"unCheckNum"`
+	Points           int64  `json:"points"` // 审核通过订单的积分(order_sum_record.order_score), 不含徒弟奖励
 	UserCount        int64  `json:"userCount"`
 }
 

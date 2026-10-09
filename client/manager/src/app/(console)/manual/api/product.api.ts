@@ -1,6 +1,6 @@
 "use client";
 
-import { getDataList, instance, unwrapApiResponse, type ApiResponse } from "@/utils/axios";
+import { getDataList, getPage, instance, unwrapApiResponse, type ApiResponse } from "@/utils/axios";
 
 export class ManualProductTypeRecord {
   id = 0;
@@ -173,6 +173,36 @@ export async function expireManualProduct(id: number) {
 export async function activateManualProduct(id: number) {
   const response = await instance.put<ApiResponse<ManualProductRecord | null>>(`/barry/product-categories/${id}/active`);
   return unwrapApiResponse(response.data);
+}
+
+/** 人工商品积分（价格）变更流水，createdBy 是操作人 */
+export class ManualProductScoreChangeRecord {
+  id!: number;
+
+  shopCategoryId = 0;
+
+  shopCategoryCode = "";
+
+  shopCategoryName = "";
+
+  oldScore: number | null = null;
+
+  newScore: number | null = null;
+
+  createdBy?: string;
+
+  createdTime?: string;
+}
+
+export interface ManualProductScoreChangeQuery extends Record<string, string | number | undefined> {
+  pageIndex?: number;
+  pageSize?: number;
+  shopCategoryId?: number;
+}
+
+/** 人工商品调价历史，barry 按时间倒序分页；不传 shopCategoryId 查全部 */
+export async function fetchManualProductScoreChanges(query: ManualProductScoreChangeQuery) {
+  return getPage(ManualProductScoreChangeRecord, "/barry/product-category-score-changes", query);
 }
 
 export class VideoUserRuleRecord {

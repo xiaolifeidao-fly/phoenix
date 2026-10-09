@@ -28,6 +28,7 @@ const (
 type ReconService struct {
 	repository     *reconRepository.OpeningDebtRepository
 	books          *reconRepository.ManualBookRepository
+	snapshots      *reconRepository.BalanceSnapshotRepository
 	reconciliation *barry.ReconciliationService
 }
 
@@ -35,6 +36,7 @@ func NewReconService() *ReconService {
 	return &ReconService{
 		repository:     db.GetRepository[reconRepository.OpeningDebtRepository](),
 		books:          db.GetRepository[reconRepository.ManualBookRepository](),
+		snapshots:      db.GetRepository[reconRepository.BalanceSnapshotRepository](),
 		reconciliation: barry.NewBarryService().Reconciliation,
 	}
 }
@@ -43,7 +45,10 @@ func (s *ReconService) EnsureTable() error {
 	if err := s.repository.EnsureTable(); err != nil {
 		return err
 	}
-	return s.books.EnsureTable()
+	if err := s.books.EnsureTable(); err != nil {
+		return err
+	}
+	return s.snapshots.EnsureTable()
 }
 
 // ListOpeningDebts 某个用户的人工录入欠款时间线, 生效日期倒序(最新在前).

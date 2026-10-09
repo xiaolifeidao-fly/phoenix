@@ -11,8 +11,9 @@ const (
 
 // DebtCompareRowDTO 某个上游社区在 (上一份记账日, 当天] 内的核对, 金额均为 RMB.
 //
+// 核对: 应收 = 入账 + 欠款增量 + 入账代收手续费.
 // 应收 = 这段时间的充值;
-// 人工对比值 = 这段时间的入账(社区入账 + 代收手续费) + 人工欠款增量(当天人工欠款 − 上一份人工欠款);
+// 人工对比值 = 入账(社区入账) + 人工欠款增量(当天人工欠款 − 上一份人工欠款) + 入账代收手续费;
 // 差值 = 人工对比值 − 应收.
 type DebtCompareRowDTO struct {
 	UserID    uint64 `json:"userId"`
@@ -23,9 +24,10 @@ type DebtCompareRowDTO struct {
 
 	// Receivable 应收 = 这段时间的充值
 	Receivable float64 `json:"receivable"`
+	// Income 入账 = 社区入账; CollectFee 入账代收手续费
 	Income     float64 `json:"income"`
 	CollectFee float64 `json:"collectFee"`
-	// IncomeTotal 入账合计 = 社区入账 + 代收手续费
+	// IncomeTotal 入账 + 入账代收手续费
 	IncomeTotal float64 `json:"incomeTotal"`
 
 	// 上一份 / 当天人工记的欠款(RMB, U 已按各自当天汇率折算); 上一份没记这个社区时按 0 算, PreviousMissing = true.
@@ -35,7 +37,7 @@ type DebtCompareRowDTO struct {
 	ManualAmount    *float64 `json:"manualAmount"`
 	ManualDebt      *float64 `json:"manualDebt"`
 	DebtChange      *float64 `json:"debtChange"`
-	// ManualTotal 人工对比值 = 入账 + 欠款增量
+	// ManualTotal 人工对比值 = 入账 + 欠款增量 + 入账代收手续费
 	ManualTotal *float64 `json:"manualTotal"`
 
 	Diff      *float64 `json:"diff"`
@@ -53,8 +55,11 @@ type DebtCompareDayDTO struct {
 	PreviousDate string              `json:"previousDate,omitempty"`
 	Days         int                 `json:"days"`
 	Rows         []DebtCompareRowDTO `json:"rows"`
-	// 合计只算两边都有值的社区
+	// 合计只算两边都有值的社区; ManualTotal = Income + DebtChange + CollectFee
 	Receivable  float64 `json:"receivable"`
+	Income      float64 `json:"income"`
+	DebtChange  float64 `json:"debtChange"`
+	CollectFee  float64 `json:"collectFee"`
 	ManualTotal float64 `json:"manualTotal"`
 	Diff        float64 `json:"diff"`
 	DiffCount   int     `json:"diffCount"`
@@ -69,6 +74,9 @@ type DebtCompareDTO struct {
 	Days      []DebtCompareDayDTO `json:"days"`
 	// 整个区间的合计 = 各天合计之和
 	Receivable  float64 `json:"receivable"`
+	Income      float64 `json:"income"`
+	DebtChange  float64 `json:"debtChange"`
+	CollectFee  float64 `json:"collectFee"`
 	ManualTotal float64 `json:"manualTotal"`
 	Diff        float64 `json:"diff"`
 	// DiffDays 有差异的天数

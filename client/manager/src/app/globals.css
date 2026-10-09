@@ -4133,6 +4133,31 @@ select {
   color: var(--manager-text-faint);
 }
 
+/* 维度核算：手续费估算用的通道 / 币种选择 */
+.recon-fee-picker {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* 人工维度：商品积分之和与积分日汇总的对照 */
+.recon-points-compare {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--manager-border-soft);
+}
+
+.recon-points-compare-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
 /* --- 表格：等宽数字、合计行、差异行 --- */
 .recon-table .ant-table {
   background: transparent;
@@ -4165,6 +4190,39 @@ select {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   color: var(--manager-text);
+}
+
+/* 金额色调：收入 / 扣减 / 手续费 / 结算出款 / 利润；敏感项（手续费、结算出款）带底色 */
+.recon-amount--income {
+  color: var(--manager-blue);
+}
+
+.recon-amount--cost {
+  color: var(--manager-orange);
+}
+
+.recon-amount--fee,
+.recon-amount--settle {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+}
+
+.recon-amount--fee {
+  color: var(--manager-danger);
+  background: var(--manager-danger-bg);
+  border-color: var(--manager-danger-border);
+}
+
+.recon-amount--settle {
+  color: var(--manager-violet);
+  background: rgba(124, 58, 237, 0.08);
+  border-color: rgba(124, 58, 237, 0.28);
+}
+
+.recon-amount--profit {
+  color: var(--manager-success);
 }
 
 .recon-amount--negative {
@@ -4235,6 +4293,7 @@ select {
   border: 1px solid var(--manager-border);
   border-radius: 8px;
   background: var(--manager-surface);
+  min-width: 0;
 }
 
 .recon-calc-item--highlight {
@@ -4242,22 +4301,53 @@ select {
   box-shadow: inset 3px 0 0 var(--manager-primary);
 }
 
+/* 标题行（含未审核提示）和口径说明分两行，都允许换行，避免挤出卡片 */
 .recon-calc-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
   font-size: 12px;
   font-weight: 600;
   color: var(--manager-text-faint);
-  white-space: nowrap;
+}
+
+.recon-calc-label-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+
+.recon-calc-label-sub {
+  font-weight: 500;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
 }
 
 .recon-calc-value {
   display: inline-flex;
   align-items: baseline;
   gap: 5px;
+  white-space: nowrap;
 }
 
 .recon-calc-value .recon-amount {
   font-size: 16px;
   font-weight: 700;
+}
+
+.recon-calc-item--highlight .recon-calc-value .recon-amount {
+  font-size: 20px;
+}
+
+/* 做单维度利润里各项按色调加左侧色条 */
+.recon-calc-item--settle {
+  box-shadow: inset 3px 0 0 var(--manager-violet);
+}
+
+.recon-calc-item--income {
+  box-shadow: inset 3px 0 0 var(--manager-blue);
 }
 
 .recon-calc-unit {

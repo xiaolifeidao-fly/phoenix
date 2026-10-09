@@ -150,6 +150,7 @@ func fillBook(item *reconDTO.ManualBookCompareItemDTO, book *reconDTO.ManualBook
 		item.Debts = append(item.Debts, reconDTO.ManualBookDebtCompareDTO{
 			UpstreamUserID: debt.UpstreamUserID, UpstreamUserName: debt.UpstreamUserName,
 			UpstreamUsername: debt.UpstreamUsername, UpstreamRemark: debt.UpstreamRemark, UpstreamBalance: debt.UpstreamBalance,
+			UpstreamBalanceLive: debt.UpstreamBalanceLive, UpstreamBalanceTime: debt.UpstreamBalanceTime,
 			Currency: debt.Currency, Amount: debt.Amount, AmountRmb: debt.AmountRmb,
 		})
 	}

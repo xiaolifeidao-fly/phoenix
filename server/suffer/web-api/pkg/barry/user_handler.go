@@ -25,6 +25,8 @@ func (h *BarryHandler) registerUserRoutes(engine *gin.RouterGroup) {
 	engine.GET("/barry/user-points", h.listUserPoints)
 	engine.POST("/barry/user-points/adjust", h.adjustUserPoints)
 	engine.GET("/barry/user-points/summary", h.getUserPointsSummary)
+	engine.GET("/barry/user-points/daily", h.getUserPointsDaily)
+	engine.GET("/barry/user-points/records", h.listUserPointsRecords)
 	engine.GET("/barry/point-withdraws", h.listPointWithdraws)
 	engine.GET("/barry/user-withdraw-records", h.listUserWithdrawRecords)
 	engine.POST("/barry/user-withdraws/account", h.accountUserWithdraw)
@@ -208,6 +210,42 @@ func (h *BarryHandler) getUserPointsSummary(c *gin.Context) {
 		return
 	}
 	commonRouter.ToJson(c, response.Data, nil)
+}
+
+// 做单用户积分汇总：按天、按来源汇总积分流水，日期两端都包含。
+func (h *BarryHandler) getUserPointsDaily(c *gin.Context) {
+	var q barryDTO.UserPointsHistoryQueryDTO
+	if c.ShouldBindQuery(&q) != nil || q.UserID <= 0 || q.StartDate == "" || q.EndDate == "" {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	data, err := h.barryService.UserPointsAdmin.Daily(c.Request.Context(), q)
+	if err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	commonRouter.ToJson(c, data, nil)
+}
+
+// 做单用户积分明细：按时间段查询，最新在前分页。
+func (h *BarryHandler) listUserPointsRecords(c *gin.Context) {
+	var q barryDTO.UserPointsHistoryQueryDTO
+	if c.ShouldBindQuery(&q) != nil || q.UserID <= 0 || q.StartDate == "" || q.EndDate == "" {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	if q.Page <= 0 {
+		q.Page = 1
+	}
+	if q.PageSize <= 0 {
+		q.PageSize = 20
+	}
+	page, err := h.barryService.UserPointsAdmin.Records(c.Request.Context(), q)
+	if err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	commonRouter.ToJson(c, baseDTO.BuildPage(int(page.Total), page.Data), nil)
 }
 
 func (h *BarryHandler) listUserDetails(c *gin.Context) {

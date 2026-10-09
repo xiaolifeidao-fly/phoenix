@@ -71,12 +71,12 @@ export function ReconciliationWorkbenchPanel() {
 
   const overview = useMemo(
     () => [
-      { label: "总计入账 RMB", value: ledger.summary?.inRmb ?? 0 },
-      { label: "总计出账 RMB", value: ledger.summary?.outRmb ?? 0 },
-      { label: "净入账 RMB", value: ledger.summary?.netRmb ?? 0 },
+      { label: "总计入账 RMB", value: ledger.overallSummary?.inRmb ?? 0 },
+      { label: "总计出账 RMB", value: ledger.overallSummary?.outRmb ?? 0 },
+      { label: "净入账 RMB", value: ledger.overallSummary?.netRmb ?? 0 },
       { label: "上游应收 RMB", value: baselines.receivable.rmb },
     ],
-    [ledger.summary, baselines],
+    [ledger.overallSummary, baselines],
   );
 
   const handleReset = () => {
@@ -148,10 +148,7 @@ export function ReconciliationWorkbenchPanel() {
       />
 
       <div className="recon-duo-grid">
-        <LedgerCard
-          ledger={ledgerState}
-          defaultDate={range[0]}
-        />
+        <LedgerCard ledger={ledgerState} range={range} />
 
         <AccountStatusCard
           rows={accountStatus.rows}

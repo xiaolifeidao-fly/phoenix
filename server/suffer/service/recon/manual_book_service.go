@@ -304,8 +304,20 @@ func (s *ReconService) toManualBookDTOs(database *gorm.DB, records []*reconRepos
 		return nil, err
 	}
 	usersByID := make(map[uint64]reconRepository.UpstreamUserRow, len(users))
+	current := make(map[uint64]float64, len(users))
 	for _, user := range users {
 		usersByID[user.ID] = user
+		current[user.ID] = user.Balance
+	}
+	dates := make([]time.Time, 0, len(records))
+	for _, record := range records {
+		if record != nil {
+			dates = append(dates, record.BookDate)
+		}
+	}
+	balances, err := s.loadBalanceLookup(dates, current)
+	if err != nil {
+		return nil, err
 	}
 	result := make([]*reconDTO.ManualBookDTO, len(records))
 	for i, record := range records {
@@ -314,7 +326,7 @@ func (s *ReconService) toManualBookDTOs(database *gorm.DB, records []*reconRepos
 			for j := range dto.Debts {
 				user := usersByID[dto.Debts[j].UpstreamUserID]
 				dto.Debts[j].UpstreamUsername, dto.Debts[j].UpstreamRemark = user.Username, user.Remark
-				dto.Debts[j].UpstreamBalance = user.Balance
+				balances.fill(dto.BookDate, &dto.Debts[j])
 			}
 			result[i] = &dto
 		}

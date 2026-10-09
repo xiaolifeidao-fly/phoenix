@@ -312,7 +312,7 @@ export function ManualBookCard({ book, filters }: ManualBookCardProps) {
                   placement="bottom"
                 >
                   <div className="recon-subcard-caption" style={{ cursor: "pointer", textDecoration: "underline dotted" }}>
-                    {row.debts.length} 个社区 · 当前余额 {money(row.debts.reduce((sum, item) => sum + (item.upstreamBalance ?? 0), 0))}
+                    {row.debts.length} 个社区 · 账户余额 {balanceSummary(row.debts)}
                   </div>
                 </Popover>
               ) : null}
@@ -715,11 +715,11 @@ function DebtList({ record, debts }: { record?: ManualBookRecord; debts?: Manual
 function DebtBreakdown({ debts, changeLabel }: { debts: ManualBookDebtCompare[]; changeLabel: string }) {
   if (!debts.length) return <span className="recon-subcard-caption">没有记社区欠款</span>;
   const total = debts.reduce((sum, item) => sum + item.amountRmb, 0);
-  const balance = debts.reduce((sum, item) => sum + (item.upstreamBalance ?? 0), 0);
+  const live = debts.some((item) => item.upstreamBalanceLive);
   return (
     <div className="recon-stack" style={{ gap: 4, minWidth: 460, maxWidth: 640 }}>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 16 }} className="recon-subcard-caption">
-        <span style={{ width: 130, textAlign: "right" }}>当前账户余额</span>
+        <span style={{ width: 130, textAlign: "right" }}>截至当天账户余额</span>
         <span style={{ minWidth: 150, textAlign: "right" }}>欠款</span>
       </div>
       {debts.map((item) => (
@@ -732,7 +732,7 @@ function DebtBreakdown({ debts, changeLabel }: { debts: ManualBookDebtCompare[];
             />
           </span>
           <span style={{ width: 130, textAlign: "right", whiteSpace: "nowrap" }}>
-            <MoneyCell value={item.upstreamBalance ?? 0} />
+            <UpstreamBalanceCell debt={item} />
           </span>
           <span style={{ minWidth: 150, textAlign: "right", whiteSpace: "nowrap" }}>
             <MoneyCell value={item.amount} /> <span className="recon-subcard-caption">{currencyText(item.currency)}</span>
@@ -754,13 +754,43 @@ function DebtBreakdown({ debts, changeLabel }: { debts: ManualBookDebtCompare[];
           合计
         </span>
         <span style={{ width: 130, textAlign: "right", whiteSpace: "nowrap" }}>
-          <MoneyCell value={balance} />
+          {balanceSummary(debts)}
         </span>
         <span style={{ minWidth: 150, textAlign: "right", whiteSpace: "nowrap" }}>
           <MoneyCell value={total} /> <span className="recon-subcard-caption">RMB</span>
         </span>
       </div>
-      <div className="recon-subcard-caption">账户余额是当前值（已充值还没消费的部分），不随所选日期变化</div>
+      <div className="recon-subcard-caption">
+        账户余额是已充值还没消费的部分，取每天 00:00 打的前一天快照，大家看到的都是那天的数
+        {live ? "；当天还没打快照，暂时显示当前余额（实时）" : ""}
+      </div>
     </div>
   );
+}
+
+/** 社区账户余额：有快照显示快照，当天显示实时余额并标出，过去没有快照显示 — */
+function UpstreamBalanceCell({ debt }: { debt: ManualBookDebtCompare }) {
+  if (debt.upstreamBalance === null || debt.upstreamBalance === undefined) {
+    return (
+      <Tooltip title="这一天没有余额快照（快照功能上线前，或当天没打上）">
+        <span className="recon-subcard-caption">—</span>
+      </Tooltip>
+    );
+  }
+  return (
+    <Tooltip title={debt.upstreamBalanceLive ? "当天还没打快照，这是当前余额，会随时变化" : `快照时间 ${debt.upstreamBalanceTime ?? ""}`}>
+      <span>
+        <MoneyCell value={debt.upstreamBalance} />
+        {debt.upstreamBalanceLive ? <span className="recon-subcard-caption"> 实时</span> : null}
+      </span>
+    </Tooltip>
+  );
+}
+
+/** 有余额的社区合计；全都没有快照时显示 —，部分缺失时标出缺几个 */
+function balanceSummary(debts: ManualBookDebtCompare[]) {
+  const known = debts.filter((item) => item.upstreamBalance !== null && item.upstreamBalance !== undefined);
+  if (!known.length) return "—";
+  const total = money(known.reduce((sum, item) => sum + (item.upstreamBalance ?? 0), 0));
+  return known.length < debts.length ? `${total}（${debts.length - known.length} 个无快照）` : total;
 }

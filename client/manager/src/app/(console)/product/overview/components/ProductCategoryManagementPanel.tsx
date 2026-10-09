@@ -11,7 +11,7 @@ import {
   ReloadOutlined,
   SearchOutlined,
 } from "@ant-design/icons";
-import { Button, Drawer, Form, Input, InputNumber, Popconfirm, Select, Space, Table, Tag, Tooltip, Typography } from "antd";
+import { Button, Drawer, Form, Input, InputNumber, Popconfirm, Segmented, Select, Space, Table, Tag, Tooltip, Typography } from "antd";
 import { message } from "@/utils/notify";
 import type { ColumnsType } from "antd/es/table";
 import { WorkspaceDrawer } from "@/components/manager-shell/WorkspaceDrawer";
@@ -25,6 +25,8 @@ import {
   type ShopRecord,
 } from "../../api/product.api";
 import { useProductCategoryManagement } from "../../hooks/useProductCategoryManagement";
+import { CategoryPriceHistoryDrawer } from "./CategoryPriceHistoryDrawer";
+import { RATIO_MAX, RATIO_PATTERN, amountFromRatio, exactRatioOf, type CategoryAmountMode } from "./categoryAmount";
 
 const { Text } = Typography;
 
@@ -38,6 +40,24 @@ interface CategoryFormValues {
   price: string;
   rebateAmount?: string;
   tipAmount?: string;
+  /** 返点默认按价格比例，小费默认直接输入金额 */
+  rebateMode: CategoryAmountMode;
+  rebateRatio?: string;
+  tipMode: CategoryAmountMode;
+  tipRatio?: string;
+}
+
+type AmountKind = "rebate" | "tip";
+
+const amountFieldMeta: Record<AmountKind, { label: string; amount: "rebateAmount" | "tipAmount"; mode: "rebateMode" | "tipMode"; ratio: "rebateRatio" | "tipRatio" }> = {
+  rebate: { label: "返点金额", amount: "rebateAmount", mode: "rebateMode", ratio: "rebateRatio" },
+  tip: { label: "小费金额", amount: "tipAmount", mode: "tipMode", ratio: "tipRatio" },
+};
+
+/** 编辑时：金额能精确换成不超过上限的比例才按比例回显，否则退回按金额，避免没改动也把金额改掉 */
+function editableRatio(price: string, amount?: string) {
+  const ratio = exactRatioOf(price, amount);
+  return ratio !== null && Number(ratio) <= RATIO_MAX ? ratio : null;
 }
 
 /** 非负金额，最多 8 位小数，和后端 decimal(38,8) 一致；留空按 0 保存。 */
@@ -50,6 +70,13 @@ const categoryStatusFilterOptions = [
 
 export function ProductCategoryManagementPanel() {
   const [form] = Form.useForm<CategoryFormValues>();
+  const formPrice = Form.useWatch("price", form);
+  const formValues = {
+    rebateMode: Form.useWatch("rebateMode", form),
+    rebateRatio: Form.useWatch("rebateRatio", form),
+    tipMode: Form.useWatch("tipMode", form),
+    tipRatio: Form.useWatch("tipRatio", form),
+  };
   const {
     categories,
     changes,
@@ -70,6 +97,7 @@ export function ProductCategoryManagementPanel() {
   const [filters, setFilters] = useState({ shopId: 0, name: "", status: "" });
   const [modalOpen, setModalOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [allHistoryOpen, setAllHistoryOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<ShopCategoryRecord | null>(null);
   const [activeHistoryCategory, setActiveHistoryCategory] = useState<ShopCategoryRecord | null>(null);
 
@@ -134,6 +162,10 @@ export function ProductCategoryManagementPanel() {
       price: "",
       rebateAmount: "",
       tipAmount: "",
+      rebateMode: "ratio",
+      rebateRatio: "",
+      tipMode: "amount",
+      tipRatio: "",
     });
     setModalOpen(true);
   };
@@ -141,6 +173,8 @@ export function ProductCategoryManagementPanel() {
   const openEditModal = (record: ShopCategoryRecord) => {
     setEditingCategory(record);
     const matchedManualProduct = manualProducts.find((item) => item.code === record.barryShopCategoryCode);
+    const rebateRatio = editableRatio(record.price, record.rebateAmount);
+    const tipRatio = editableRatio(record.price, record.tipAmount);
     form.setFieldsValue({
       shopId: record.shopId,
       name: record.name,
@@ -151,6 +185,10 @@ export function ProductCategoryManagementPanel() {
       price: record.price,
       rebateAmount: trimAmount(record.rebateAmount),
       tipAmount: trimAmount(record.tipAmount),
+      rebateMode: rebateRatio !== null ? "ratio" : "amount",
+      rebateRatio: rebateRatio && rebateRatio !== "0" ? rebateRatio : "",
+      tipMode: "amount",
+      tipRatio: tipRatio && tipRatio !== "0" ? tipRatio : "",
     });
     setModalOpen(true);
   };
@@ -167,6 +205,13 @@ export function ProductCategoryManagementPanel() {
 
   const handleSubmit = async () => {
     const values = await form.validateFields();
+    const resolveAmount = (kind: AmountKind) => {
+      const meta = amountFieldMeta[kind];
+      if (values[meta.mode] === "ratio") {
+        return amountFromRatio(values.price, values[meta.ratio]) ?? "0";
+      }
+      return values[meta.amount]?.trim() || "0";
+    };
     const payload: ShopCategoryPayload = {
       shopId: Number(values.shopId || 0),
       name: values.name.trim(),
@@ -175,8 +220,8 @@ export function ProductCategoryManagementPanel() {
       lowerLimit: Number(values.lowerLimit || 0),
       upperLimit: Number(values.upperLimit || 0),
       price: values.price.trim(),
-      rebateAmount: values.rebateAmount?.trim() || "0",
-      tipAmount: values.tipAmount?.trim() || "0",
+      rebateAmount: resolveAmount("rebate"),
+      tipAmount: resolveAmount("tip"),
     };
     if (!editingCategory) {
       payload.status = "ACTIVE";
@@ -189,6 +234,95 @@ export function ProductCategoryManagementPanel() {
     } catch (error) {
       message.error(error instanceof Error ? error.message : "保存类目失败");
     }
+  };
+
+  /** 切换输入方式时把当前值带过去：比例 → 金额带出换算结果；金额 → 比例在能精确换算时带出 */
+  const switchAmountMode = (kind: AmountKind, mode: CategoryAmountMode) => {
+    const meta = amountFieldMeta[kind];
+    const price = form.getFieldValue("price") as string | undefined;
+    if (mode === "amount") {
+      const computed = amountFromRatio(price, form.getFieldValue(meta.ratio));
+      if (computed !== null) {
+        form.setFieldValue(meta.amount, computed === "0" ? "" : computed);
+      }
+    } else {
+      const ratio = editableRatio(price ?? "", form.getFieldValue(meta.amount));
+      if (ratio !== null) {
+        form.setFieldValue(meta.ratio, ratio === "0" ? "" : ratio);
+      }
+    }
+    form.setFieldValue(meta.mode, mode);
+  };
+
+  const renderAmountField = (kind: AmountKind) => {
+    const meta = amountFieldMeta[kind];
+    const mode = formValues[meta.mode] ?? (kind === "rebate" ? "ratio" : "amount");
+    const computed = mode === "ratio" ? amountFromRatio(formPrice, formValues[meta.ratio]) : null;
+    return (
+      <Form.Item
+        label={
+          <Space size={8}>
+            <span>{meta.label}</span>
+            <Form.Item name={meta.mode} noStyle>
+              <Segmented<CategoryAmountMode>
+                size="small"
+                options={[
+                  { label: "按价格比例", value: "ratio" },
+                  { label: "按金额", value: "amount" },
+                ]}
+                onChange={(value) => switchAmountMode(kind, value)}
+              />
+            </Form.Item>
+          </Space>
+        }
+        required={false}
+        style={{ marginBottom: 0 }}
+      >
+        {mode === "ratio" ? (
+          <Form.Item
+            name={meta.ratio}
+            dependencies={["price"]}
+            extra={
+              computed !== null
+                ? `${meta.label} = 价格 ￥${trimAmount(formPrice) || "0"} × ${formValues[meta.ratio]?.trim() || "0"}% = ￥${computed}，保存的是换算后的金额`
+                : "先填写正确的价格，才能按比例换算金额"
+            }
+            rules={[
+              { pattern: RATIO_PATTERN, message: "请输入不小于 0 的比例，最多 4 位小数" },
+              {
+                validator: (_, value?: string) =>
+                  value && Number(value) > RATIO_MAX
+                    ? Promise.reject(new Error(`比例不能超过 ${RATIO_MAX}%`))
+                    : amountFromRatio(form.getFieldValue("price"), value) === null
+                      ? Promise.reject(new Error("价格格式不正确，无法按比例换算"))
+                      : Promise.resolve(),
+              },
+            ]}
+          >
+            <Input
+              placeholder="留空为 0"
+              suffix="%"
+              addonAfter={
+                <span style={{ display: "inline-block", minWidth: 120, textAlign: "left" }}>
+                  {meta.label.replace("金额", "")}：
+                  <span style={{ fontWeight: 600, color: "var(--manager-text)" }}>
+                    {computed !== null ? `￥${computed}` : "—"}
+                  </span>
+                </span>
+              }
+            />
+          </Form.Item>
+        ) : (
+          <Form.Item
+            name={meta.amount}
+            extra={kind === "rebate" ? "直接输入金额，不随价格变化" : undefined}
+            rules={[{ pattern: AMOUNT_PATTERN, message: "请输入不小于 0 的金额，最多 8 位小数" }]}
+          >
+            <Input placeholder="留空为 0" prefix="￥" />
+          </Form.Item>
+        )}
+      </Form.Item>
+    );
   };
 
   const categoryColumns: ColumnsType<ShopCategoryRecord> = [
@@ -220,14 +354,14 @@ export function ProductCategoryManagementPanel() {
     {
       title: "返点金额",
       dataIndex: "rebateAmount",
-      width: 120,
-      render: (value?: string) => `￥${trimAmount(value) || "0"}`,
+      width: 140,
+      render: (value: string | undefined, record) => <CategoryAmountCell amount={value} price={record.price} />,
     },
     {
       title: "小费金额",
       dataIndex: "tipAmount",
-      width: 120,
-      render: (value?: string) => `￥${trimAmount(value) || "0"}`,
+      width: 140,
+      render: (value: string | undefined, record) => <CategoryAmountCell amount={value} price={record.price} />,
     },
     {
       title: "下限 / 上限",
@@ -403,6 +537,9 @@ export function ProductCategoryManagementPanel() {
             <Tag style={{ color: "var(--manager-text-soft)", background: "rgba(170,192,238,0.16)", border: "none" }}>
               共 {total} 条
             </Tag>
+            <Button icon={<HistoryOutlined />} onClick={() => setAllHistoryOpen(true)}>
+              调价历史
+            </Button>
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
               新建类目
             </Button>
@@ -474,24 +611,8 @@ export function ProductCategoryManagementPanel() {
           <Form.Item name="price" label="价格" rules={[{ required: true, message: "请输入价格" }]}>
             <Input placeholder="例如：0.012" />
           </Form.Item>
-          <Space style={{ width: "100%" }} size={12}>
-            <Form.Item
-              name="rebateAmount"
-              label="返点金额"
-              style={{ flex: 1 }}
-              rules={[{ pattern: AMOUNT_PATTERN, message: "请输入不小于 0 的金额，最多 8 位小数" }]}
-            >
-              <Input placeholder="留空为 0" />
-            </Form.Item>
-            <Form.Item
-              name="tipAmount"
-              label="小费金额"
-              style={{ flex: 1 }}
-              rules={[{ pattern: AMOUNT_PATTERN, message: "请输入不小于 0 的金额，最多 8 位小数" }]}
-            >
-              <Input placeholder="留空为 0" />
-            </Form.Item>
-          </Space>
+          {renderAmountField("rebate")}
+          {renderAmountField("tip")}
           <Space style={{ width: "100%" }} size={12}>
             <Form.Item name="lowerLimit" label="下限" style={{ flex: 1 }} initialValue={0}>
               <InputNumber min={0} style={{ width: "100%" }} />
@@ -525,7 +646,21 @@ export function ProductCategoryManagementPanel() {
           scroll={{ x: 700 }}
         />
       </Drawer>
+
+      <CategoryPriceHistoryDrawer open={allHistoryOpen} onClose={() => setAllHistoryOpen(false)} products={products} />
     </div>
+  );
+}
+
+/** 金额 + 占价格的比例（能精确换算时显示） */
+function CategoryAmountCell({ amount, price }: { amount?: string; price: string }) {
+  const text = trimAmount(amount) || "0";
+  const ratio = text === "0" ? null : exactRatioOf(price, text);
+  return (
+    <span>
+      ￥{text}
+      {ratio !== null ? <div style={{ fontSize: 12, color: "var(--manager-text-soft)" }}>价格的 {ratio}%</div> : null}
+    </span>
   );
 }
 

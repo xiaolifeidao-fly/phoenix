@@ -11,24 +11,33 @@ export function money(value: number | null | undefined): string {
   return numeric < 0 ? `-${text}` : text;
 }
 
+/**
+ * 金额色调：income 收入（蓝）、cost 扣减（橙）、fee 手续费（红底）、settle 结算出款（紫底）、
+ * profit 利润（正绿负红）；不传为默认色。敏感的 fee / settle 带底色。
+ */
+export type AmountTone = "income" | "cost" | "fee" | "settle" | "profit";
+
 /** 表格里的金额单元格：等宽数字、右对齐、负数标红 */
-export function MoneyCell({ value }: { value: number | null | undefined }) {
+export function MoneyCell({ value, tone }: { value: number | null | undefined; tone?: AmountTone }) {
   const numeric = Number(value) || 0;
-  return (
-    <span className={numeric < 0 ? "recon-amount recon-amount--negative" : "recon-amount"}>
-      {money(numeric)}
-    </span>
-  );
+  const classes = ["recon-amount"];
+  if (tone) {
+    classes.push(`recon-amount--${tone}`);
+  }
+  if (numeric < 0) {
+    classes.push("recon-amount--negative");
+  }
+  return <span className={classes.join(" ")}>{money(numeric)}</span>;
 }
 
 /** 金额列的通用配置，避免每张表重复写 align / render */
-export function moneyColumn<T>(title: string, dataIndex: keyof T & string, width = 120) {
+export function moneyColumn<T>(title: string, dataIndex: keyof T & string, width = 120, tone?: AmountTone) {
   return {
     title,
     dataIndex,
     width,
     align: "right" as const,
-    render: (value: number) => <MoneyCell value={value} />,
+    render: (value: number) => <MoneyCell value={value} tone={tone} />,
   };
 }
 

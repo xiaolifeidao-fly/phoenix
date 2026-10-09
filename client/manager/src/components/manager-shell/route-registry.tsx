@@ -112,6 +112,11 @@ export const routeRegistry: Record<string, ComponentType<any>> = {
       default: m.ManualBookPanel,
     })),
   ),
+  "/reconciliation/profit-calc": lazyPanel(() =>
+    import("@/app/(console)/reconciliation/profit-calc/components/ProfitCalcPanel").then((m) => ({
+      default: m.ProfitCalcPanel,
+    })),
+  ),
   "/user": lazyPanel(() =>
     import("@/app/(console)/user/components/UserManagementDemo").then((m) => ({
       default: m.UserManagementDemo,

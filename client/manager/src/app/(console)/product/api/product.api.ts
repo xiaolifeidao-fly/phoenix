@@ -183,6 +183,18 @@ export async function fetchProductCategoryChanges(shopCategoryId: number) {
   });
 }
 
+export interface ShopCategoryChangeListQuery extends Record<string, string | number | undefined> {
+  pageIndex?: number;
+  pageSize?: number;
+  shopId?: number;
+  shopCategoryId?: number;
+}
+
+/** 全部类目的调价历史，后端按 created_time DESC, id DESC 倒序分页 */
+export async function fetchShopCategoryChangeHistory(query: ShopCategoryChangeListQuery) {
+  return getPage(ShopCategoryChangeRecord, "/shop-category-changes", query);
+}
+
 export async function fetchBarryProductCategories() {
   const response = await instance.get<ApiResponse<BarryProductCategoryRecord[]>>("/barry/product-categories", {
     params: {

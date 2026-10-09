@@ -48,8 +48,8 @@ type debtCommunity struct {
 	isTrading bool
 }
 
-// DebtCompare 欠款核对: 区间内每一份人工记账和它的上一份之间, 按社区比
-// 应收(这段时间的充值) 和 人工对比值(这段时间的入账 + 人工欠款增量). 日期 yyyy-MM-dd, 区间最长 93 天.
+// DebtCompare 欠款核对: 区间内每一份人工记账和它的上一份之间, 按社区核对
+// 应收(这段时间的充值) = 入账(社区入账) + 人工欠款增量 + 入账代收手续费. 日期 yyyy-MM-dd, 区间最长 93 天.
 func (s *ReconService) DebtCompare(ctx context.Context, startDate, endDate string) (*reconDTO.DebtCompareDTO, error) {
 	start, end, err := parseRange(startDate, endDate)
 	if err != nil {
@@ -197,6 +197,9 @@ func (s *ReconService) DebtCompare(ctx context.Context, startDate, endDate strin
 			row := buildDebtCompareRow(input)
 			if row.ManualTotal != nil {
 				day.Receivable += row.Receivable
+				day.Income += row.Income
+				day.DebtChange += *row.DebtChange
+				day.CollectFee += row.CollectFee
 				day.ManualTotal += *row.ManualTotal
 			}
 			switch row.Status {
@@ -217,6 +220,9 @@ func (s *ReconService) DebtCompare(ctx context.Context, startDate, endDate strin
 			result.DiffDays++
 		}
 		result.Receivable += day.Receivable
+		result.Income += day.Income
+		result.DebtChange += day.DebtChange
+		result.CollectFee += day.CollectFee
 		result.ManualTotal += day.ManualTotal
 		result.Days = append(result.Days, day)
 	}
@@ -314,7 +320,8 @@ func buildDebtCompareRow(input *debtCompareInput) reconDTO.DebtCompareRowDTO {
 	}
 	row.PreviousDebt = floatPtr(previous)
 	row.DebtChange = floatPtr(*row.ManualDebt - previous)
-	row.ManualTotal = floatPtr(row.IncomeTotal + *row.DebtChange)
+	// 入账 + 欠款增量 + 入账代收手续费
+	row.ManualTotal = floatPtr(row.Income + *row.DebtChange + row.CollectFee)
 
 	diff := *row.ManualTotal - row.Receivable
 	row.Diff = floatPtr(diff)
@@ -339,16 +346,17 @@ func debtDiffHints(row *reconDTO.DebtCompareRowDTO, input *debtCompareInput) []s
 	diff := *row.Diff
 	matches := func(value float64) bool { return value != 0 && math.Abs(diff-value) <= debtCompareTolerance }
 	window := fmt.Sprintf("%s ~ %s", shortKey(nextDayKey(input.previousDate)), shortKey(input.checkDate))
-	direction := "入账 + 欠款增量比充值多"
+	direction := "入账 + 欠款增量 + 代收手续费比充值多"
 	if diff < 0 {
-		direction = "入账 + 欠款增量比充值少"
+		direction = "入账 + 欠款增量 + 代收手续费比充值少"
 	}
-	hints := []string{fmt.Sprintf("%s %s RMB（充值 %s，入账 %s，欠款增量 %s）", direction,
+	hints := []string{fmt.Sprintf("%s %s RMB（充值 %s，入账 %s，欠款增量 %s，代收手续费 %s）", direction,
 		amountText(math.Abs(diff), reconRepository.CurrencyRMB), amountText(row.Receivable, reconRepository.CurrencyRMB),
-		amountText(row.IncomeTotal, reconRepository.CurrencyRMB), amountText(*row.DebtChange, reconRepository.CurrencyRMB))}
+		amountText(row.Income, reconRepository.CurrencyRMB), amountText(*row.DebtChange, reconRepository.CurrencyRMB),
+		amountText(row.CollectFee, reconRepository.CurrencyRMB))}
 	switch {
 	case matches(row.CollectFee):
-		hints = append(hints, "差值正好等于代收手续费：人工欠款可能没把手续费算进入账")
+		hints = append(hints, "差值正好等于代收手续费：人工欠款可能只按到账金额冲减，没把代收手续费算进入账")
 	case matches(-row.CollectFee):
 		hints = append(hints, "差值正好等于负的代收手续费：人工欠款可能多扣了一次手续费")
 	case matches(row.Income) || matches(row.IncomeTotal):
