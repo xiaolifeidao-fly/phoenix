@@ -32,8 +32,8 @@ interface UserPointsHistoryDrawerProps {
   onClose: () => void;
 }
 
-/** 默认近 30 天（含今天） */
-const buildDefaultRange = (): [Dayjs, Dayjs] => [dayjs().subtract(29, "day").startOf("day"), dayjs().startOf("day")];
+/** 默认近 7 天（含今天） */
+const buildDefaultRange = (): [Dayjs, Dayjs] => [dayjs().subtract(6, "day").startOf("day"), dayjs().startOf("day")];
 
 const sourceColor: Record<string, string> = {
   TASK_APPROVE: "green",
@@ -297,7 +297,7 @@ export function UserPointsHistoryDrawer({ user, onClose }: UserPointsHistoryDraw
             刷新
           </Button>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            按积分流水的时间统计，最长 {MANUAL_POINTS_HISTORY_MAX_DAYS} 天；提现在提现成功时扣除
+            按做单日期统计（人工调整、提现等无做单日期的按流水时间），最长 {MANUAL_POINTS_HISTORY_MAX_DAYS} 天；提现在提现成功时扣除
           </Text>
         </Space>
 

@@ -305,10 +305,11 @@ export function ManualBookCard({ book, filters }: ManualBookCardProps) {
             <span>
               {/* 合计行也是截至区间最后一天的欠款，不是各天相加 */}
               <MoneyCell value={value} />
-              {row.total && row.debts?.length ? (
+              {/* 各社区截至当天的账户余额（取当天的快照）合计，悬浮看明细 */}
+              {row.debts?.length ? (
                 <Popover
                   title={`截至 ${shortDate(row.date)} 各社区欠款`}
-                  content={<DebtBreakdown debts={row.debts} changeLabel="区间增量" />}
+                  content={<DebtBreakdown debts={row.debts} changeLabel={row.total ? "区间增量" : "增量"} />}
                   placement="bottom"
                 >
                   <div className="recon-subcard-caption" style={{ cursor: "pointer", textDecoration: "underline dotted" }}>
