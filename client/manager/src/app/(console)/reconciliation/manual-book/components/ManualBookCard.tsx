@@ -28,7 +28,11 @@ import {
   fetchManualBookDetail,
   type ManualBookCompareItem,
   type ManualBookCompareStatus,
+  type ManualBookIssue,
+  type ManualBookIssueColumn,
+  type ManualBookIssueKind,
   type ManualBookDebtCompare,
+  type ManualBookLedgerCategory,
   type ManualBookCurrency,
   type ManualBookRecord,
 } from "../api/manual-book.api";
@@ -36,6 +40,7 @@ import type { ManualBookState } from "../hooks/useManualBook";
 import { ManualBookLogModal } from "./ManualBookLogModal";
 import { RemoteSearchSelect, type RemoteOption } from "../../workbench/components/RemoteSearchSelect";
 import { FormulaGrid, MoneyCell, SectionHead, UpstreamUserCell, money, upstreamUserLabel } from "../../workbench/components/shared";
+import { PairCell, signed } from "./PairCell";
 
 interface ManualBookCardProps {
   book: ManualBookState;
@@ -69,19 +74,41 @@ const currencyOptions = [
 ];
 
 const statusMeta: Record<ManualBookCompareStatus, { label: string; color?: string; tip: string }> = {
-  OK: { label: "一致", color: "green", tip: "人工利润与出入账利润一致" },
-  DIFF: { label: "有差异", color: "red", tip: "人工利润与出入账利润不一致" },
-  MISSING: { label: "未记账", tip: "这一天没有人工记账；它的出入账会并到下一份记账里对比" },
-  NO_BASELINE: { label: "缺上一份", color: "orange", tip: "往前 31 天内找不到上一份记账，算不出这一天的人工利润" },
+  OK: { label: "一致", color: "green", tip: "人工余额与系统应有余额（初始余额 + 之后入账 − 出账）一致" },
+  DIFF: { label: "有差异", color: "red", tip: "人工余额与系统应有余额不一致（累计差，看「当天新增」判断是不是这天出的问题）" },
+  MISSING: { label: "未记账", tip: "这一天没有人工记账；它的出入账会并到下一份记账的当天利润里" },
+  NO_BASELINE: { label: "未设初始余额", color: "orange", tip: "还没在「账户状态」设初始余额，算不出系统应有余额" },
+  BEFORE_START: { label: "早于初始余额", tip: "这一天早于初始余额日期，不对比" },
+};
+
+/** 差值来源按类别上色，挂在对应那一列的下面 */
+const issueKindMeta: Record<ManualBookIssueKind, { label: string; color: string }> = {
+  balance: { label: "累计差", color: "red" },
+  split: { label: "新增 / 之前", color: "orange" },
+  fx: { label: "汇率", color: "purple" },
+  carry: { label: "之前带过来", color: "blue" },
+  ledger: { label: "等于某类出入账", color: "magenta" },
+  neighbor: { label: "日期错位", color: "geekblue" },
+  check: { label: "待核对", color: "gold" },
 };
 
 const formulas = [
-  { label: "截至当天余额", expression: "这一天结束时账上还剩多少" },
-  { label: "截至当天欠款", expression: "这一天各社区欠款合计（累计值）；增量 = 截至当天欠款 − 截至上一份欠款，合计行是整个区间的增量" },
-  { label: "人工利润（当天）", expression: "截至当天余额 − 截至前一天余额，按余额的币种显示；和出入账对比时按当天汇率折算成 RMB" },
-  { label: "出入账利润", expression: "两份记账之间（上一份次日 ~ 当天）出入账的入账 − 出账，按 RMB" },
-  { label: "差值 / 比例", expression: "差值 = 人工利润 − 出入账利润；比例 = 差值 ÷ |出入账利润|" },
-  { label: "合计", expression: "起点 = 开始日之前最近一份（没有时取区间内第一份），终点 = 区间内最后一份" },
+  { label: "怎么看", expression: "余额和利润一格两行：上面「人工」、下面「系统」，对不上的格子标红；差值的可能原因用彩色标签挂在对应那一列下面，悬浮看完整说明" },
+  {
+    label: "标签颜色",
+    expression: (Object.keys(issueKindMeta) as ManualBookIssueKind[]).map((kind) => (
+      <Tag key={kind} color={issueKindMeta[kind].color} style={{ marginBottom: 4 }}>
+        {issueKindMeta[kind].label}
+      </Tag>
+    )),
+  },
+  { label: "基准", expression: "账户状态里的初始余额（带日期）；系统余额只从它累计，不拿人工记的余额当起点" },
+  { label: "当天余额", expression: "人工 = 记的截至当天余额（U 按当天汇率折 RMB）；系统 = 初始余额 + 初始余额日期次日到当天的入账 − 出账" },
+  { label: "当天利润", expression: "人工 = 当天余额 − 上一份余额（没有上一份时是初始余额）；系统 = 入账 − 出账。余额已经扣过当天出账，所以不用再减" },
+  { label: "入账 / 出账", expression: "上一份次日 ~ 当天的出入账，按类目拆开；出账含人工出款、代付 / 代收手续费、服务器出款、其他出账" },
+  { label: "差值 / 比例", expression: "差值 = 人工余额 − 系统余额（截至当天的累计差）；比例 = 差值 ÷ |系统余额|；当天新增 = 人工利润 − 系统利润" },
+  { label: "截至当天欠款", expression: "这一天各社区欠款合计（累计值）；增量 = 截至当天欠款 − 上一份人工记账的欠款，不参与余额对比" },
+  { label: "合计", expression: "终点 = 区间内最后一份；区间利润的起点 = 开始日之前最近一份（初始余额日期之后），没有就是初始余额" },
 ];
 
 /** 上游社区：suffer「用户管理」列表，按名称 / 账号 / 邮箱 / 手机模糊搜索 */
@@ -243,7 +270,7 @@ export function ManualBookCard({ book, filters }: ManualBookCardProps) {
           return (
             <span>
               <span className="recon-row-name">合计</span>
-              <div className="recon-subcard-caption">{window ?? "需要至少两份记账"}</div>
+              <div className="recon-subcard-caption">{window ?? (row.status === "NO_BASELINE" ? "未设初始余额" : "区间内没有可对比的记账")}</div>
             </span>
           );
         }
@@ -260,27 +287,150 @@ export function ManualBookCard({ book, filters }: ManualBookCardProps) {
       },
     },
     {
-      title: "截至当天余额",
+      title: (
+        <Tooltip title="上面是人工记的截至当天余额；下面是系统应有余额 = 初始余额 + 之后入账 − 出账。两行对不上的格子标红">
+          <span>当天余额 RMB</span>
+        </Tooltip>
+      ),
       key: "balance",
-      width: 150,
+      width: 190,
       align: "right",
       render: (_, row) =>
-        row.balance === null ? (
-          <span className="recon-subcard-caption">—</span>
+        row.status === "MISSING" ? (
+          <div>
+            <span className="recon-subcard-caption">未记账</span>
+            {row.systemBalanceRmb !== null ? (
+              <div className="recon-subcard-caption">系统 {money(row.systemBalanceRmb)}</div>
+            ) : null}
+          </div>
         ) : (
-          <Tooltip
-            title={
-              row.baselineBalanceRmb !== null && row.baselineDate
-                ? `截至 ${shortDate(row.baselineDate)} 余额 ${money(row.baselineBalanceRmb)} RMB`
+          <div>
+            <PairCell
+              manual={row.balanceRmb}
+              system={row.systemBalanceRmb}
+              manualTip={row.currency === "USDT" && row.balance !== null ? `人工记的 ${money(row.balance)} U，按当天汇率折 RMB` : undefined}
+              systemTip={
+                row.systemBalanceRmb !== null
+                  ? `${shortDate(row.openingDate)} 初始余额 ${money(row.openingBalanceRmb)} + 入账 ${money(row.sinceIn)} − 出账 ${money(row.sinceOut)}`
+                  : undefined
+              }
+            />
+            {row.currency === "USDT" && row.balance !== null ? (
+              <div className="recon-subcard-caption">人工记 {money(row.balance)} U</div>
+            ) : null}
+            {row.status === "NO_BASELINE" ? (
+              <div className="recon-subcard-caption">未设初始余额，算不出系统余额</div>
+            ) : row.status === "BEFORE_START" ? (
+              <div className="recon-subcard-caption">早于初始余额日期</div>
+            ) : row.baselineDate ? (
+              <Tooltip
+                title={
+                  row.baselineIsOpening
+                    ? "当天利润从初始余额算起"
+                    : `上一份人工记账；同一天的系统余额 ${money(row.baselineSystemBalanceRmb)}`
+                }
+              >
+                <div className="recon-subcard-caption">
+                  {row.baselineIsOpening ? "初始余额" : "上一份"} {shortDate(row.baselineDate)}：{money(row.baselineBalanceRmb)}
+                </div>
+              </Tooltip>
+            ) : null}
+            <IssueTags issues={row.issues} column="balance" />
+          </div>
+        ),
+    },
+    {
+      title: (
+        <Tooltip title="上面是人工利润 = 当天余额 − 上一份余额（没有上一份时是初始余额）；下面是出入账利润 = 入账 − 出账（出账含手续费）">
+          <span>{"当天利润 RMB"}</span>
+        </Tooltip>
+      ),
+      key: "profit",
+      width: 180,
+      align: "right",
+      render: (_, row) => (
+        <div>
+          <PairCell
+            manual={row.manualProfit}
+            system={row.ledgerProfit}
+            delta
+            manualTip={
+              row.baselineDate
+                ? `${shortDate(row.date)} 余额 − ${shortDate(row.baselineDate)} 余额${row.balanceChange !== null && row.currency === "USDT" ? `（${signed(row.balanceChange)} U）` : ""}`
                 : undefined
             }
-          >
-            <span>
-              <MoneyCell value={row.balance} /> <span className="recon-subcard-caption">{currencyText(row.currency)}</span>
-              {row.currency === "USDT" ? <div className="recon-subcard-caption">≈ {money(row.balanceRmb)} RMB</div> : null}
-            </span>
-          </Tooltip>
+            systemTip={`入账 ${money(row.ledgerIn)} − 出账 ${money(row.ledgerOut)}`}
+          />
+          {row.dayFxEffect !== null && Math.abs(row.dayFxEffect) > 0.01 ? (
+            <div className="recon-subcard-caption">其中汇率变化 {signed(row.dayFxEffect)}</div>
+          ) : null}
+          <IssueTags issues={row.issues} column="profit" />
+        </div>
+      ),
+    },
+    {
+      title: "入账",
+      dataIndex: "ledgerIn",
+      width: 170,
+      align: "right",
+      render: (value: number, row) => (
+        <div>
+          <LedgerBreakdown total={value} categories={row.ledgerCategories} recordType="IN" />
+          <IssueTags issues={row.issues} column="in" />
+        </div>
+      ),
+    },
+    {
+      title: (
+        <Tooltip title="含人工出款、代付手续费、代收手续费、服务器出款、其他出账">
+          <span>出账（含手续费）</span>
+        </Tooltip>
+      ),
+      dataIndex: "ledgerOut",
+      width: 190,
+      align: "right",
+      render: (value: number, row) => (
+        <div>
+          <LedgerBreakdown total={value} categories={row.ledgerCategories} recordType="OUT" />
+          <IssueTags issues={row.issues} column="out" />
+        </div>
+      ),
+    },
+    {
+      title: (
+        <Tooltip title="人工余额 − 系统余额，是截至当天的累计差；下面的「新增」= 人工利润 − 系统利润，不为 0 说明差异出在这段日期">
+          <span>差值 RMB</span>
+        </Tooltip>
+      ),
+      dataIndex: "diff",
+      width: 140,
+      align: "right",
+      render: (value: number | null, row) =>
+        value === null ? (
+          <span className="recon-subcard-caption">—</span>
+        ) : (
+          <span className={row.status === "DIFF" ? "recon-diff--alert" : "recon-diff--zero"}>
+            <MoneyCell value={value} />
+            {row.diffRatio !== null ? <div className="recon-subcard-caption">{ratioText(row.diffRatio)}</div> : null}
+            {row.dayDiff !== null && (Math.abs(row.dayDiff) > 0.01 || row.status === "DIFF") ? (
+              <div className={Math.abs(row.dayDiff) > 0.01 ? "recon-subcard-caption recon-amount--negative" : "recon-subcard-caption"}>
+                {row.total ? "区间新增" : "当天新增"} {signed(row.dayDiff)}
+              </div>
+            ) : null}
+            <IssueTags issues={row.issues} column="diff" />
+          </span>
         ),
+    },
+    {
+      title: "状态",
+      dataIndex: "status",
+      width: 96,
+      align: "center",
+      render: (value: ManualBookCompareStatus) => (
+        <Tooltip title={statusMeta[value].tip}>
+          <Tag color={statusMeta[value].color}>{statusMeta[value].label}</Tag>
+        </Tooltip>
+      ),
     },
     {
       title: (
@@ -297,8 +447,8 @@ export function ManualBookCard({ book, filters }: ManualBookCardProps) {
         ) : (
           <Tooltip
             title={
-              row.baselineDate
-                ? `截至 ${shortDate(row.date)} 欠款 − 截至 ${shortDate(row.baselineDate)} 欠款`
+              row.debtBaselineDate
+                ? `截至 ${shortDate(row.date)} 欠款 − 截至 ${shortDate(row.debtBaselineDate)} 欠款`
                 : "往前找不到上一份记账，算不出增量"
             }
           >
@@ -329,90 +479,6 @@ export function ManualBookCard({ book, filters }: ManualBookCardProps) {
             </span>
           </Tooltip>
         ),
-    },
-    {
-      title: (
-        <Tooltip title="当天余额 − 前一份余额；合计行是整个区间的利润">
-          <span>人工利润（当天）</span>
-        </Tooltip>
-      ),
-      dataIndex: "manualProfit",
-      width: 150,
-      align: "right",
-      render: (value: number | null, row) =>
-        value === null ? (
-          <span className="recon-subcard-caption">—</span>
-        ) : row.balanceChange !== null && row.currency === "USDT" ? (
-          // 和余额同一个单位：U 为主，下面是用于对比的 RMB
-          <Tooltip title={row.baselineDate ? `截至 ${shortDate(row.date)} 余额 − 截至 ${shortDate(row.baselineDate)} 余额` : undefined}>
-            <span>
-              <MoneyCell value={row.balanceChange} /> <span className="recon-subcard-caption">U</span>
-              <div className="recon-subcard-caption">≈ {money(value)} RMB</div>
-            </span>
-          </Tooltip>
-        ) : (
-          <span>
-            <MoneyCell value={value} /> <span className="recon-subcard-caption">RMB</span>
-          </span>
-        ),
-    },
-    {
-      title: "出入账利润 RMB",
-      dataIndex: "ledgerProfit",
-      width: 130,
-      align: "right",
-      render: (value: number, row) => (
-        <Tooltip title={`入账 ${money(row.ledgerIn)} − 出账 ${money(row.ledgerOut)}`}>
-          <span>
-            <MoneyCell value={value} />
-          </span>
-        </Tooltip>
-      ),
-    },
-    {
-      title: "差值 RMB",
-      dataIndex: "diff",
-      width: 120,
-      align: "right",
-      render: (value: number | null, row) =>
-        value === null ? (
-          <span className="recon-subcard-caption">—</span>
-        ) : row.status === "DIFF" ? (
-          <span className="recon-diff--alert">
-            <MoneyCell value={value} />
-          </span>
-        ) : (
-          <span className="recon-diff--zero">{money(value)}</span>
-        ),
-    },
-    {
-      title: "差值比例",
-      dataIndex: "diffRatio",
-      width: 100,
-      align: "right",
-      render: (value: number | null, row) =>
-        row.diff === null ? (
-          <span className="recon-subcard-caption">—</span>
-        ) : value === null ? (
-          <Tooltip title="出入账利润为 0，无法计算比例">
-            <span className="recon-subcard-caption">—</span>
-          </Tooltip>
-        ) : (
-          <span className={row.status === "DIFF" ? "recon-diff--alert" : "recon-diff--zero"}>
-            <span className="recon-amount">{ratioText(value)}</span>
-          </span>
-        ),
-    },
-    {
-      title: "状态",
-      dataIndex: "status",
-      width: 96,
-      align: "center",
-      render: (value: ManualBookCompareStatus) => (
-        <Tooltip title={statusMeta[value].tip}>
-          <Tag color={statusMeta[value].color}>{statusMeta[value].label}</Tag>
-        </Tooltip>
-      ),
     },
     {
       title: "操作",
@@ -464,20 +530,12 @@ export function ManualBookCard({ book, filters }: ManualBookCardProps) {
   ];
 
   const total = data?.total ?? null;
-  const totalItems = [
-    ...(total?.balanceChange != null && total.currency === "USDT"
-      ? [{ label: "人工利润（区间合计）", value: total.balanceChange, unit: "U" }]
-      : []),
-    { label: total?.balanceChange != null && total.currency === "USDT" ? "人工利润折算" : "人工利润（区间合计）", value: total?.manualProfit ?? null, unit: "RMB" },
-    { label: "出入账利润", value: total ? total.ledgerProfit : null, unit: "RMB" },
-    { label: "差值", value: total?.diff ?? null, unit: "RMB", highlight: true },
-  ];
 
   return (
     <section className="manager-data-card recon-card">
       <SectionHead
         title="人工记账"
-        caption="每天记一份截至当天的余额（默认 U）和各社区欠款（默认 RMB）；用余额变化算人工利润，和出入账利润逐日对比"
+        caption="每天记一份截至当天的余额和各社区欠款；人工余额和系统应有余额（初始余额 + 之后入账 − 出账）逐日对照，对不上的标红"
         extra={
           <>
             {filters}
@@ -514,22 +572,35 @@ export function ManualBookCard({ book, filters }: ManualBookCardProps) {
         <div className="recon-calc-strip">
           <div className="recon-calc-strip-title">
             所选日期对比
-            {total ? (
+            <div className="recon-subcard-caption" style={{ fontWeight: 400 }}>
+              {data?.openingBalance
+                ? `基准：${data.openingBalance.balanceDate} 初始余额 ${money(data.openingBalance.balanceRmb)} RMB`
+                : "基准：还没设初始余额，请在对账工作台「账户状态」里设置"}
+            </div>
+            {total?.baselineDate ? (
               <div className="recon-subcard-caption" style={{ fontWeight: 400 }}>
-                {total.baselineDate ? `${shortDate(total.baselineDate)} → ${shortDate(total.date)}，共 ${total.gapDays} 天` : statusMeta[total.status].tip}
+                区间利润 {total.baselineIsOpening ? "初始余额 " : ""}
+                {shortDate(total.baselineDate)} → {shortDate(total.date)}，共 {total.gapDays} 天
               </div>
             ) : null}
           </div>
           <div className="recon-calc-grid">
-            {totalItems.map((item) => (
-              <div className={item.highlight ? "recon-calc-item recon-calc-item--highlight" : "recon-calc-item"} key={item.label}>
-                <span className="recon-calc-label">{item.label}</span>
-                <span className={item.highlight && total?.status === "DIFF" ? "recon-calc-value recon-diff--alert" : "recon-calc-value"}>
-                  {item.value === null ? <span className="recon-subcard-caption">—</span> : <MoneyCell value={item.value} />}
-                  <em className="recon-calc-unit">{item.unit}</em>
-                </span>
-              </div>
-            ))}
+            <div className="recon-calc-item">
+              <span className="recon-calc-label">期末余额</span>
+              <PairCell manual={total?.balanceRmb ?? null} system={total?.systemBalanceRmb ?? null} />
+            </div>
+            <div className="recon-calc-item">
+              <span className="recon-calc-label">区间利润</span>
+              <PairCell manual={total?.manualProfit ?? null} system={total ? total.ledgerProfit : null} delta />
+            </div>
+            <div className="recon-calc-item recon-calc-item--highlight">
+              <span className="recon-calc-label">差值（累计）</span>
+              <span className={total?.status === "DIFF" ? "recon-calc-value recon-diff--alert" : "recon-calc-value"}>
+                {total?.diff == null ? <span className="recon-subcard-caption">—</span> : <MoneyCell value={total.diff} />}
+                <em className="recon-calc-unit">RMB</em>
+                {total?.dayDiff != null ? <div className="recon-subcard-caption">区间新增 {signed(total.dayDiff)}</div> : null}
+              </span>
+            </div>
             <div className="recon-calc-item">
               <span className="recon-calc-label">差值比例</span>
               <span className={total?.status === "DIFF" ? "recon-calc-value recon-diff--alert" : "recon-calc-value"}>
@@ -554,7 +625,7 @@ export function ManualBookCard({ book, filters }: ManualBookCardProps) {
           columns={columns}
           dataSource={rows}
           pagination={false}
-          scroll={{ x: 1100, y: 520 }}
+          scroll={{ x: 1780, y: 560 }}
           rowClassName={(row) => (row.total ? "recon-row-total" : row.status === "DIFF" ? "recon-row-mismatch" : "")}
           expandable={{
             rowExpandable: (row) =>
@@ -563,7 +634,7 @@ export function ManualBookCard({ book, filters }: ManualBookCardProps) {
               row.total ? (
                 <div style={{ padding: "4px 8px" }}>
                   <div className="recon-subcard-caption" style={{ marginBottom: 6 }}>
-                    截至 {shortDate(row.date)} 各社区欠款{row.baselineDate ? `，增量相对 ${shortDate(row.baselineDate)}` : ""}
+                    截至 {shortDate(row.date)} 各社区欠款{row.debtBaselineDate ? `，增量相对 ${shortDate(row.debtBaselineDate)}` : ""}
                   </div>
                   <DebtBreakdown debts={row.debts ?? []} changeLabel="区间增量" />
                 </div>
@@ -794,4 +865,45 @@ function balanceSummary(debts: ManualBookDebtCompare[]) {
   if (!known.length) return "—";
   const total = money(known.reduce((sum, item) => sum + (item.upstreamBalance ?? 0), 0));
   return known.length < debts.length ? `${total}（${debts.length - known.length} 个无快照）` : total;
+}
+
+/** 入账 / 出账合计，下面按类目拆开（只列有金额的类目） */
+/** 某一列下面的差值来源：彩色短标签，悬浮看完整说明 */
+function IssueTags({ issues, column }: { issues?: ManualBookIssue[]; column: ManualBookIssueColumn }) {
+  const items = (issues ?? []).filter((issue) => issue.column === column);
+  if (!items.length) return null;
+  return (
+    <div className="recon-issue-tags">
+      {items.map((issue) => (
+        <Tooltip key={issue.text} title={issue.text}>
+          <Tag color={issueKindMeta[issue.kind]?.color} className="recon-issue-tag">
+            {issue.label}
+          </Tag>
+        </Tooltip>
+      ))}
+    </div>
+  );
+}
+
+function LedgerBreakdown({
+  total,
+  categories,
+  recordType,
+}: {
+  total: number;
+  categories?: ManualBookLedgerCategory[];
+  recordType: "IN" | "OUT";
+}) {
+  const items = (categories ?? []).filter((item) => item.recordType === recordType && Math.abs(item.amountRmb) > 0.001);
+  return (
+    <span>
+      <MoneyCell value={total} />
+      {items.map((item) => (
+        <div className="recon-subcard-caption" key={item.category}>
+          {item.categoryName} {money(item.amountRmb)}
+          {item.count > 1 ? `（${item.count} 笔）` : ""}
+        </div>
+      ))}
+    </span>
+  );
 }

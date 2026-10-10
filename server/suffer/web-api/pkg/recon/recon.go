@@ -11,7 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ReconHandler 对账工作台 - 账户状态: 人工录入欠款时间线 + 系统计算欠款; 人工记账及其与出入账的利润对比.
+// ReconHandler 对账工作台 - 账户状态: 人工录入欠款(和社区一对一) + 系统计算欠款; 人工记账及其与出入账的利润对比.
 type ReconHandler struct {
 	*commonRouter.BaseHandler
 	reconService *reconService.ReconService
@@ -19,7 +19,7 @@ type ReconHandler struct {
 
 func NewReconHandler() *ReconHandler {
 	service := reconService.NewReconService()
-	// 以 add_recon_account_opening_debt.sql、add_recon_manual_book.sql、add_recon_upstream_balance_snapshot.sql 为准; 这里和其他模块一样兜底建表, 失败不影响启动
+	// 以 add_recon_account_opening_debt.sql(+ alter_recon_account_opening_debt_single.sql)、add_recon_manual_book.sql、add_recon_upstream_balance_snapshot.sql、add_recon_opening_balance.sql 为准; 这里和其他模块一样兜底建表, 失败不影响启动
 	_ = service.EnsureTable()
 	service.StartBalanceSnapshotJob()
 	return &ReconHandler{BaseHandler: &commonRouter.BaseHandler{}, reconService: service}
@@ -27,10 +27,13 @@ func NewReconHandler() *ReconHandler {
 
 func (h *ReconHandler) RegisterHandler(engine *gin.RouterGroup) {
 	engine.GET("/reconciliation/account-status", h.accountStatus)
-	engine.GET("/reconciliation/opening-debts", h.listOpeningDebts)
-	engine.POST("/reconciliation/opening-debts", h.createOpeningDebt)
+	engine.GET("/reconciliation/opening-debts", h.getOpeningDebt)
+	engine.POST("/reconciliation/opening-debts", h.saveOpeningDebt)
 	engine.PUT("/reconciliation/opening-debts/:id", h.updateOpeningDebt)
 	engine.DELETE("/reconciliation/opening-debts/:id", h.revokeOpeningDebt)
+	engine.GET("/reconciliation/opening-balance", h.getOpeningBalance)
+	engine.POST("/reconciliation/opening-balance", h.saveOpeningBalance)
+	engine.DELETE("/reconciliation/opening-balance", h.clearOpeningBalance)
 	engine.GET("/reconciliation/manual-books/compare", h.compareManualBooks)
 	engine.GET("/reconciliation/debt-compare", h.debtCompare)
 	engine.GET("/reconciliation/manual-books/detail", h.manualBookDetail)
@@ -38,6 +41,31 @@ func (h *ReconHandler) RegisterHandler(engine *gin.RouterGroup) {
 	engine.POST("/reconciliation/manual-books", h.createManualBook)
 	engine.PUT("/reconciliation/manual-books/:id", h.updateManualBook)
 	engine.DELETE("/reconciliation/manual-books/:id", h.deleteManualBook)
+}
+
+// getOpeningBalance 全局初始余额(人工记账对比的基准), 没录过返回 null.
+func (h *ReconHandler) getOpeningBalance(c *gin.Context) {
+	result, err := h.reconService.GetOpeningBalance()
+	commonRouter.ToJson(c, result, err)
+}
+
+// saveOpeningBalance 只有一条, 已有就改它.
+func (h *ReconHandler) saveOpeningBalance(c *gin.Context) {
+	var req reconDTO.SaveOpeningBalanceDTO
+	if c.ShouldBindJSON(&req) != nil {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	result, err := h.reconService.SaveOpeningBalance(req, operator(c))
+	commonRouter.ToJson(c, result, err)
+}
+
+func (h *ReconHandler) clearOpeningBalance(c *gin.Context) {
+	if err := h.reconService.ClearOpeningBalance(operator(c)); err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	commonRouter.ToJson(c, true, nil)
 }
 
 func (h *ReconHandler) compareManualBooks(c *gin.Context) {
@@ -105,19 +133,21 @@ func (h *ReconHandler) accountStatus(c *gin.Context) {
 	commonRouter.ToJson(c, result, err)
 }
 
-func (h *ReconHandler) listOpeningDebts(c *gin.Context) {
+// getOpeningDebt 某个社区的人工录入欠款, 没录过返回 null.
+func (h *ReconHandler) getOpeningDebt(c *gin.Context) {
 	userID, _ := strconv.ParseUint(c.Query("userId"), 10, 64)
-	result, err := h.reconService.ListOpeningDebts(userID)
+	result, err := h.reconService.GetOpeningDebt(userID)
 	commonRouter.ToJson(c, result, err)
 }
 
-func (h *ReconHandler) createOpeningDebt(c *gin.Context) {
+// saveOpeningDebt 和社区一对一: 已有一条时直接改它.
+func (h *ReconHandler) saveOpeningDebt(c *gin.Context) {
 	var req reconDTO.SaveOpeningDebtDTO
 	if c.ShouldBindJSON(&req) != nil {
 		commonRouter.ToError(c, "参数错误")
 		return
 	}
-	result, err := h.reconService.CreateOpeningDebt(req, operator(c))
+	result, err := h.reconService.SaveOpeningDebt(req, operator(c))
 	commonRouter.ToJson(c, result, err)
 }
 

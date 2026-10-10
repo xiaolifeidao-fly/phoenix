@@ -4229,6 +4229,68 @@ select {
   color: var(--manager-danger);
 }
 
+/* 欠款核对：一格两行，上面人工（蓝）、下面系统（紫）；对不上时整格标红 */
+.recon-pair {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 120px;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.recon-pair-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.recon-pair-tag {
+  flex: none;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.recon-pair-line--manual .recon-pair-tag {
+  color: var(--manager-blue);
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.recon-pair-line--system .recon-pair-tag {
+  color: var(--manager-violet);
+  background: rgba(124, 58, 237, 0.1);
+}
+
+.recon-pair-line--manual .recon-pair-value {
+  color: var(--manager-text);
+}
+
+.recon-pair-line--system .recon-pair-value {
+  color: var(--manager-text-soft);
+}
+
+.recon-pair-value--empty {
+  color: var(--manager-text-faint);
+}
+
+.recon-pair--diff {
+  border-color: var(--manager-danger-border);
+  background: var(--manager-danger-bg);
+}
+
+.recon-pair--diff .recon-pair-value {
+  color: var(--manager-danger);
+  font-weight: 700;
+}
+
 .recon-row-name {
   font-weight: 600;
   color: var(--manager-text);
@@ -4665,4 +4727,23 @@ select {
   .recon-alert {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* 人工记账：差值来源挂在对应列下面的彩色短标签 */
+.recon-issue-tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.recon-issue-tag {
+  margin-inline-end: 0;
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
+  font-size: 11px;
+  line-height: 18px;
+  cursor: help;
 }

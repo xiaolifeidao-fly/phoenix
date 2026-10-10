@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Descriptions, Empty, Table, Tag, Typography } from "antd";
-import dayjs from "dayjs";
+import { DatePicker, Descriptions, Empty, Table, Tag, Typography } from "antd";
+import dayjs, { type Dayjs } from "dayjs";
 import type { ColumnsType } from "antd/es/table";
 import { WorkspaceDrawer } from "@/components/manager-shell/WorkspaceDrawer";
 import { message } from "@/utils/notify";
+import { dateRangePresets } from "@/utils/date-range-presets";
 import {
   fetchAccountRechargeDetails,
   type AccountRechargeDetail,
@@ -13,6 +14,7 @@ import {
 } from "../api/user.api";
 
 const { Text } = Typography;
+const { RangePicker } = DatePicker;
 const PAGE_SIZE = 10;
 
 interface UserRechargeDetailDrawerProps {
@@ -26,12 +28,14 @@ export function UserRechargeDetailDrawer({ open, user, onClose }: UserRechargeDe
   const [total, setTotal] = useState(0);
   const [pageIndex, setPageIndex] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [range, setRange] = useState<[Dayjs, Dayjs] | null>(null);
 
   useEffect(() => {
     if (!open) {
       setDetails([]);
       setTotal(0);
       setPageIndex(1);
+      setRange(null);
       return;
     }
     if (!user?.accountId) {
@@ -42,7 +46,13 @@ export function UserRechargeDetailDrawer({ open, user, onClose }: UserRechargeDe
 
     let cancelled = false;
     setLoading(true);
-    fetchAccountRechargeDetails(user.accountId, pageIndex, PAGE_SIZE)
+    const timeRange = range
+      ? {
+          startTime: range[0].startOf("day").format("YYYY-MM-DD HH:mm:ss"),
+          endTime: range[1].endOf("day").format("YYYY-MM-DD HH:mm:ss"),
+        }
+      : undefined;
+    fetchAccountRechargeDetails(user.accountId, pageIndex, PAGE_SIZE, timeRange)
       .then((result) => {
         if (!cancelled) {
           setDetails(result.data);
@@ -65,7 +75,7 @@ export function UserRechargeDetailDrawer({ open, user, onClose }: UserRechargeDe
     return () => {
       cancelled = true;
     };
-  }, [open, pageIndex, user]);
+  }, [open, pageIndex, range, user]);
 
   const columns: ColumnsType<AccountRechargeDetail> = [
     {
@@ -73,7 +83,7 @@ export function UserRechargeDetailDrawer({ open, user, onClose }: UserRechargeDe
       dataIndex: "type",
       width: 90,
       render: (value: string) => (
-        <Tag color={value === "GIVEN" ? "cyan" : "green"}>{formatRechargeType(value)}</Tag>
+        <Tag color={value === "PAY" ? "green" : value === "INCOME_GIVEN" ? "purple" : "cyan"}>{formatRechargeType(value)}</Tag>
       ),
     },
     {
@@ -130,22 +140,36 @@ export function UserRechargeDetailDrawer({ open, user, onClose }: UserRechargeDe
       {!user?.accountId ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="该用户尚未开通账户" />
       ) : (
-        <Table<AccountRechargeDetail>
-          rowKey="id"
-          size="small"
-          loading={loading}
-          dataSource={details}
-          columns={columns}
-          scroll={{ x: 820 }}
-          pagination={{
-            current: pageIndex,
-            pageSize: PAGE_SIZE,
-            total,
-            showSizeChanger: false,
-            showTotal: (value) => `共 ${value} 条`,
-            onChange: setPageIndex,
-          }}
-        />
+        <>
+          <div style={{ marginBottom: 12 }}>
+            <RangePicker
+              value={range}
+              presets={dateRangePresets}
+              placeholder={["开始日期", "结束日期"]}
+              style={{ width: 268 }}
+              onChange={(value) => {
+                setRange(value?.[0] && value[1] ? [value[0], value[1]] : null);
+                setPageIndex(1);
+              }}
+            />
+          </div>
+          <Table<AccountRechargeDetail>
+            rowKey="id"
+            size="small"
+            loading={loading}
+            dataSource={details}
+            columns={columns}
+            scroll={{ x: 820 }}
+            pagination={{
+              current: pageIndex,
+              pageSize: PAGE_SIZE,
+              total,
+              showSizeChanger: false,
+              showTotal: (value) => `共 ${value} 条`,
+              onChange: setPageIndex,
+            }}
+          />
+        </>
       )}
     </WorkspaceDrawer>
   );
@@ -157,6 +181,9 @@ function formatRechargeType(value: string) {
   }
   if (value === "GIVEN") {
     return "赠送";
+  }
+  if (value === "INCOME_GIVEN") {
+    return "入账赠送";
   }
   return value || "-";
 }

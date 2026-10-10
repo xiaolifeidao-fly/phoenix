@@ -1528,6 +1528,49 @@ type ReconLedgerDTO struct {
 	Points           *int64 `json:"points,omitempty"`
 	Remark           string `json:"remark,omitempty"`
 	CreatedBy        string `json:"createdBy,omitempty"`
+	// ModifyCount 被人工修改的次数, 大于 0 时可查看快照; 只在列表里返回.
+	ModifyCount int `json:"modifyCount"`
+}
+
+// ReconLedgerSnapshotDTO 出入账的一版快照: 人工新增 / 修改 / 删除后这条记录的完整内容.
+// Action: ORIGINAL 首次被改前的原始内容 / CREATE / UPDATE / RESTORE 手续费随主记录恢复 / DELETE.
+type ReconLedgerSnapshotDTO struct {
+	ID                int64    `json:"id"`
+	LedgerID          int64    `json:"ledgerId"`
+	Version           int      `json:"version"`
+	Action            string   `json:"action"`
+	LedgerActive      bool     `json:"ledgerActive"`
+	Operator          string   `json:"operator,omitempty"`
+	SnapshotTime      string   `json:"snapshotTime,omitempty"`
+	RecordDate        string   `json:"recordDate"`
+	RecordType        string   `json:"recordType"`
+	Category          string   `json:"category"`
+	CategoryName      string   `json:"categoryName"`
+	Source            string   `json:"source"`
+	ParentID          *int64   `json:"parentId,omitempty"`
+	Currency          string   `json:"currency"`
+	AmountRmb         *float64 `json:"amountRmb,omitempty"`
+	AmountU           *float64 `json:"amountU,omitempty"`
+	ExchangeRate      *float64 `json:"exchangeRate,omitempty"`
+	FeeRate           *float64 `json:"feeRate,omitempty"`
+	SettleChannelID   *int64   `json:"settleChannelId,omitempty"`
+	SettleChannelName string   `json:"settleChannelName,omitempty"`
+	UserID            *int64   `json:"userId,omitempty"`
+	Username          string   `json:"username,omitempty"`
+	UpstreamUserID    string   `json:"upstreamUserId,omitempty"`
+	UpstreamUserName  string   `json:"upstreamUserName,omitempty"`
+	WithdrawRecordID  *int64   `json:"withdrawRecordId,omitempty"`
+	Points            *int64   `json:"points,omitempty"`
+	Remark            string   `json:"remark,omitempty"`
+}
+
+// ReconLedgerFeeGivenDTO 入账赠送结果: Given 为 false 表示这条入账之前已赠送过, 本次没有加款.
+type ReconLedgerFeeGivenDTO struct {
+	LedgerID         int64   `json:"ledgerId"`
+	UpstreamUserID   string  `json:"upstreamUserId"`
+	UpstreamUserName string  `json:"upstreamUserName,omitempty"`
+	Amount           float64 `json:"amount"`
+	Given            bool    `json:"given"`
 }
 
 // ReconLedgerPageDTO 对应 barry 的 PageModel.
@@ -1554,6 +1597,17 @@ type ReconLedgerDailyDTO struct {
 	OutRmb float64 `json:"outRmb"`
 	NetRmb float64 `json:"netRmb"`
 	Count  int64   `json:"count"`
+	// CategoryList 当天有记录的类目(按类目枚举顺序), 人工记账对比时用来定位差值来自哪一类.
+	CategoryList []ReconLedgerDailyCategoryDTO `json:"categoryList"`
+}
+
+// ReconLedgerDailyCategoryDTO 出入账某一天某个类目的合计(RMB).
+type ReconLedgerDailyCategoryDTO struct {
+	RecordType   string  `json:"recordType"`
+	Category     string  `json:"category"`
+	CategoryName string  `json:"categoryName"`
+	Count        int64   `json:"count"`
+	AmountRmb    float64 `json:"amountRmb"`
 }
 
 // ReconLedgerSyncResultDTO 同步提现结果: 有失败时管理端要提示, 不能当成「没有需要补记」.

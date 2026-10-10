@@ -155,11 +155,13 @@ export function ReconciliationWorkbenchPanel() {
           loading={accountStatus.loading}
           error={accountStatus.error}
           onRetry={() => {
-            // 录入 / 修改 / 撤销人工录入欠款后也走这里，欠款核对的起点跟着变
+            // 录入 / 修改 / 清除人工录入欠款后也走这里，欠款核对的初始欠款跟着变
             void accountStatus.refresh();
             void debtCompare.refresh();
           }}
           range={range}
+          balanceTotal={manualBook.data?.total ?? null}
+          onOpeningBalanceChange={() => void manualBook.refresh()}
         />
       </div>
 

@@ -39,6 +39,8 @@ func (h *BarryHandler) registerReconciliationRoutes(engine *gin.RouterGroup) {
 	engine.POST("/barry/reconciliation/ledgers", h.saveReconLedger)
 	engine.PUT("/barry/reconciliation/ledgers/:id", h.saveReconLedger)
 	engine.DELETE("/barry/reconciliation/ledgers/:id", h.deleteReconLedger)
+	engine.POST("/barry/reconciliation/ledgers/:id/fee-given", h.giveReconLedgerFee)
+	engine.GET("/barry/reconciliation/ledgers/:id/snapshots", h.listReconLedgerSnapshots)
 	engine.POST("/barry/reconciliation/ledgers/sync-withdraw", h.syncReconLedgerWithdraw)
 }
 
@@ -130,6 +132,72 @@ func (h *BarryHandler) deleteReconLedger(c *gin.Context) {
 		return
 	}
 	commonRouter.ToJson(c, true, nil)
+}
+
+// giveReconLedgerFee 入账赠送: 把社区入账的代收手续费加到该上游社区的 Kakrolot 余额.
+// 金额以 barry 记的手续费为准, 不取前端的值; Kakrolot 按入账 ID 幂等, 每条入账只赠送一次.
+func (h *BarryHandler) giveReconLedgerFee(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	var req struct {
+		RecordDate string `json:"recordDate"`
+	}
+	if c.ShouldBindJSON(&req) != nil || strings.TrimSpace(req.RecordDate) == "" {
+		commonRouter.ToError(c, "入账日期不能为空")
+		return
+	}
+	income, fee, err := h.barryService.Reconciliation.FindIncomeWithFee(c.Request.Context(), id, strings.TrimSpace(req.RecordDate))
+	if err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	if income == nil || income.Category != "COMMUNITY_IN" {
+		commonRouter.ToError(c, "社区入账不存在")
+		return
+	}
+	if fee == nil || fee.AmountRmb == nil || *fee.AmountRmb <= 0 {
+		commonRouter.ToError(c, "该入账没有代收手续费")
+		return
+	}
+	upstreamUserID, err := strconv.ParseUint(strings.TrimSpace(income.UpstreamUserID), 10, 64)
+	if err != nil || upstreamUserID == 0 {
+		commonRouter.ToError(c, "该入账没有上游社区")
+		return
+	}
+	token := ""
+	if value, exists := c.Get(webAuth.ContextTokenKey); exists {
+		token, _ = value.(string)
+	}
+	given, err := h.kakrolotAccount.IncomeGiven(c.Request.Context(), upstreamUserID, id, *fee.AmountRmb, token)
+	if err != nil {
+		commonRouter.ToError(c, err.Error())
+		return
+	}
+	commonRouter.ToJson(c, barryDTO.ReconLedgerFeeGivenDTO{
+		LedgerID:         id,
+		UpstreamUserID:   income.UpstreamUserID,
+		UpstreamUserName: income.UpstreamUserName,
+		Amount:           *fee.AmountRmb,
+		Given:            given,
+	}, nil)
+}
+
+// listReconLedgerSnapshots 某条出入账的人工修改快照.
+func (h *BarryHandler) listReconLedgerSnapshots(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	result, err := h.barryService.Reconciliation.LedgerSnapshots(c.Request.Context(), id)
+	if err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	commonRouter.ToJson(c, result, nil)
 }
 
 func (h *BarryHandler) syncReconLedgerWithdraw(c *gin.Context) {

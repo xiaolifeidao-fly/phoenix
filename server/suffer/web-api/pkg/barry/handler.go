@@ -4,6 +4,7 @@ import (
 	commonRouter "common/middleware/routers"
 	"suffer/service/barry"
 	barryDTO "suffer/service/barry/dto"
+	kakrolotService "suffer/service/kakrolot"
 
 	"github.com/gin-gonic/gin"
 )
@@ -11,12 +12,15 @@ import (
 type BarryHandler struct {
 	*commonRouter.BaseHandler
 	barryService *barry.BarryService
+	// kakrolotAccount 入账赠送: 社区入账的代收手续费加到上游用户的 Kakrolot 余额.
+	kakrolotAccount *kakrolotService.AccountService
 }
 
 func NewBarryHandler() *BarryHandler {
 	return &BarryHandler{
-		BaseHandler:  &commonRouter.BaseHandler{},
-		barryService: barry.NewBarryService(),
+		BaseHandler:     &commonRouter.BaseHandler{},
+		barryService:    barry.NewBarryService(),
+		kakrolotAccount: kakrolotService.NewAccountService(kakrolotService.NewClient()),
 	}
 }
 

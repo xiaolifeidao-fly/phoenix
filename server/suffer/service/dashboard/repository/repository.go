@@ -372,33 +372,37 @@ type CategoryRebateTipRow struct {
 }
 
 // SumOrderRebateTip 对账上游维度: [start, end) 内下单(order_record.created_time)的
-// 下单数量 × 类目返点 / 小费单位金额. 取类目当前配置的金额.
+// 下单数量 × 返点 / 小费单位金额. 单位金额取订单快照 order_rebate_tip(Kakrolot 下单时写入),
+// 没有快照(建表前的历史订单或写入失败)时回退到类目当前配置的金额.
 func (r *DashboardRepository) SumOrderRebateTip(start, end time.Time) (CategoryRebateTipRow, error) {
 	var row CategoryRebateTipRow
 	if r.Db == nil {
 		return row, fmt.Errorf("database is not initialized")
 	}
 	err := r.Db.Raw(`SELECT COALESCE(SUM(o.order_num), 0) AS num,
-		COALESCE(SUM(o.order_num * sc.rebate_amount), 0) AS rebate_amount,
-		COALESCE(SUM(o.order_num * sc.tip_amount), 0) AS tip_amount
+		COALESCE(SUM(o.order_num * COALESCE(t.rebate_amount, sc.rebate_amount)), 0) AS rebate_amount,
+		COALESCE(SUM(o.order_num * COALESCE(t.tip_amount, sc.tip_amount)), 0) AS tip_amount
 		FROM order_record o
 		JOIN shop_category sc ON sc.id = o.shop_category_id
+		LEFT JOIN order_rebate_tip t ON t.order_record_id = o.id AND t.active = 1
 		WHERE o.active = 1 AND o.created_time >= ? AND o.created_time < ?`, start, end).Scan(&row).Error
 	return row, err
 }
 
 // SumRefundRebateTip 对账上游维度: [start, end) 内退单完成(order_refund_record 状态 REFUND,
-// 按 updated_time)的退单数量 × 类目返点 / 小费单位金额, 用来冲减.
+// 按 updated_time)的退单数量 × 返点 / 小费单位金额, 用来冲减. 单位金额取原订单的快照,
+// 和下单口径一致; 没有快照时回退到类目当前金额.
 func (r *DashboardRepository) SumRefundRebateTip(start, end time.Time) (CategoryRebateTipRow, error) {
 	var row CategoryRebateTipRow
 	if r.Db == nil {
 		return row, fmt.Errorf("database is not initialized")
 	}
 	err := r.Db.Raw(`SELECT COALESCE(SUM(rr.refund_num), 0) AS num,
-		COALESCE(SUM(rr.refund_num * sc.rebate_amount), 0) AS rebate_amount,
-		COALESCE(SUM(rr.refund_num * sc.tip_amount), 0) AS tip_amount
+		COALESCE(SUM(rr.refund_num * COALESCE(t.rebate_amount, sc.rebate_amount)), 0) AS rebate_amount,
+		COALESCE(SUM(rr.refund_num * COALESCE(t.tip_amount, sc.tip_amount)), 0) AS tip_amount
 		FROM order_refund_record rr
 		JOIN shop_category sc ON sc.id = rr.shop_category_id
+		LEFT JOIN order_rebate_tip t ON t.order_record_id = rr.order_id AND t.active = 1
 		WHERE rr.active = 1 AND rr.order_refund_status = 'REFUND'
 		  AND rr.updated_time >= ? AND rr.updated_time < ?`, start, end).Scan(&row).Error
 	return row, err

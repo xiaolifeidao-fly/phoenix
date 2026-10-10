@@ -92,16 +92,14 @@ export function fetchUpstreamDimension(startDate: string, endDate: string) {
   return getData(UpstreamDimension, "/reconciliation/upstream-dimension", { startDate, endDate });
 }
 
-/** 人工录入欠款（初始欠款）：按生效日期排成时间线，同一时刻只有一条未结清 */
+/** 人工录入欠款（初始欠款）：和上游社区一对一；金额是欠款日期那天结束时的欠款，从次日开始累计 */
 export interface OpeningDebtRecord {
   id: number;
   userId: number;
   accountId: number;
   amount: number;
-  effectiveDate: string;
-  /** UNSETTLED 未结清（当前有效）/ SETTLED 已结清（被后一条接替） */
-  settleStatus: "UNSETTLED" | "SETTLED";
-  settleDate?: string;
+  /** 欠款日期：金额是这天结束时的欠款；旧数据可能为空 */
+  debtDate?: string;
   remark?: string;
   createdBy?: string;
   createdTime?: string;
@@ -112,14 +110,14 @@ export interface OpeningDebtRecord {
 export interface OpeningDebtPayload {
   userId: number;
   amount: number;
-  effectiveDate: string;
+  debtDate: string;
   remark?: string;
 }
 
 /**
  * 账户状态：活跃上游用户一行，金额 RMB。
- * 系统计算欠款（截至 D 日）= 起点金额 + 起点生效日之后到 D 日的（充值 − 社区入账 − 代收手续费）；
- * 起点 = 生效日期 ≤ D 的最近一条人工录入欠款，没有时为 null（未建账）。
+ * 截至 D 日的系统欠款 = 人工录入欠款 + 欠款日期次日到 D 日的（充值 − 社区入账 − 代收手续费）；
+ * 没录入、或 D 早于欠款日期时为 null。
  */
 export class AccountStatusRow {
   userId = 0;
@@ -138,7 +136,7 @@ export class AccountStatusRow {
   /** 当前余额，不随日期变化 */
   balanceAmount = 0;
 
-  /** 当前未结清的那条人工录入欠款 */
+  /** 人工录入欠款，没录过为 null */
   currentDebt: OpeningDebtRecord | null = null;
 
   periodRecharge = 0;
@@ -153,8 +151,7 @@ export class AccountStatusRow {
   /** 期末欠款（截至结束日），即系统计算欠款 */
   closingDebt: number | null = null;
 
-  closingBaseline: OpeningDebtRecord | null = null;
-
+  /** 欠款日期次日到结束日的累计，悬停展示 */
   closingRecharge = 0;
 
   closingIncome = 0;
@@ -167,24 +164,13 @@ export function fetchAccountStatus(startDate: string, endDate: string) {
   return getDataList(AccountStatusRow, "/reconciliation/account-status", { startDate, endDate });
 }
 
-export async function fetchOpeningDebts(userId: number) {
-  const response = await instance.get<ApiResponse<OpeningDebtRecord[]>>("/reconciliation/opening-debts", { params: { userId } });
-  return unwrapApiResponse(response.data) ?? [];
-}
-
-/** 录入新的一条：当前未结清的那条会自动结清 */
-export async function createOpeningDebt(payload: OpeningDebtPayload) {
+/** 录入人工录入欠款：这个社区已有一条时直接改它 */
+export async function saveOpeningDebt(payload: OpeningDebtPayload) {
   const response = await instance.post<ApiResponse<OpeningDebtRecord>>("/reconciliation/opening-debts", payload);
   return unwrapApiResponse(response.data);
 }
 
-/** 只能改当前未结清的那条 */
-export async function updateOpeningDebt(id: number, payload: OpeningDebtPayload) {
-  const response = await instance.put<ApiResponse<OpeningDebtRecord>>(`/reconciliation/opening-debts/${id}`, payload);
-  return unwrapApiResponse(response.data);
-}
-
-/** 撤销当前未结清的那条，上一条恢复未结清 */
+/** 清除人工录入欠款，这个社区回到未建账 */
 export async function revokeOpeningDebt(id: number) {
   const response = await instance.delete<ApiResponse<boolean>>(`/reconciliation/opening-debts/${id}`);
   return unwrapApiResponse(response.data);
@@ -253,6 +239,42 @@ export interface ReconLedgerRecord {
   points?: number;
   remark?: string;
   createdBy?: string;
+  /** 被人工修改的次数，大于 0 时可查看快照 */
+  modifyCount?: number;
+}
+
+/** ORIGINAL 首次被改前的原始内容；RESTORE 手续费随主记录恢复；DELETE 的内容是删除前的样子 */
+export type LedgerSnapshotAction = "ORIGINAL" | "CREATE" | "UPDATE" | "RESTORE" | "DELETE";
+
+/** 出入账的一版快照：人工改动后这条记录的完整内容，字段同 ReconLedgerRecord */
+export interface ReconLedgerSnapshot {
+  id: number;
+  ledgerId: number;
+  version: number;
+  action: LedgerSnapshotAction;
+  /** 这一版记录是否有效，删除那一版为 false */
+  ledgerActive: boolean;
+  operator?: string;
+  /** yyyy-MM-dd HH:mm:ss */
+  snapshotTime?: string;
+  recordDate: string;
+  recordType: LedgerRecordType;
+  category: string;
+  categoryName: string;
+  source: LedgerSource;
+  currency: LedgerCurrency;
+  amountRmb: number;
+  amountU?: number;
+  exchangeRate?: number;
+  feeRate?: number;
+  settleChannelId?: number;
+  settleChannelName?: string;
+  userId?: number;
+  username?: string;
+  upstreamUserId?: string;
+  upstreamUserName?: string;
+  points?: number;
+  remark?: string;
 }
 
 export class ReconLedgerPage {
@@ -332,6 +354,31 @@ export async function saveLedger(id: number | null, payload: ReconLedgerPayload)
     ? await instance.put<ApiResponse<ReconLedgerRecord>>(`/barry/reconciliation/ledgers/${id}`, payload)
     : await instance.post<ApiResponse<ReconLedgerRecord>>("/barry/reconciliation/ledgers", payload);
   return unwrapApiResponse(response.data);
+}
+
+export interface ReconLedgerFeeGivenResult {
+  ledgerId: number;
+  upstreamUserId: string;
+  upstreamUserName?: string;
+  /** 赠送金额（RMB），即该入账的代收手续费 */
+  amount: number;
+  /** false：这条入账之前已赠送过，本次没有加款 */
+  given: boolean;
+}
+
+/** 入账赠送：把社区入账的代收手续费加到该上游社区的余额；金额以服务端记的手续费为准，每条入账只赠送一次 */
+export async function giveLedgerFee(id: number, recordDate: string) {
+  const response = await instance.post<ApiResponse<ReconLedgerFeeGivenResult>>(
+    `/barry/reconciliation/ledgers/${id}/fee-given`,
+    { recordDate },
+  );
+  return unwrapApiResponse(response.data);
+}
+
+/** 某条出入账的快照，按版本升序；没被人工改过的为空 */
+export async function fetchLedgerSnapshots(id: number) {
+  const response = await instance.get<ApiResponse<ReconLedgerSnapshot[]>>(`/barry/reconciliation/ledgers/${id}/snapshots`);
+  return unwrapApiResponse(response.data) ?? [];
 }
 
 export async function deleteLedger(id: number) {

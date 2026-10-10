@@ -7,13 +7,18 @@ import (
 	reconDTO "suffer/service/recon/dto"
 )
 
-func debtInput(recharge, income, fee float64, previous, manual *float64) *debtCompareInput {
+// debtInput 初始欠款 3900 是 10-06 的欠款, 上一份人工记账 10-07, 核对 10-08.
+// day 是 10-08 当天的流水, total 是 10-07 ~ 10-08 的累计流水.
+func debtInput(day, total flowSum, prevManual, manual *float64) *debtCompareInput {
+	opening := 3900.0
 	input := &debtCompareInput{
-		userID: 1, name: "火车头", isTrading: true, recharge: recharge, income: income, collectFee: fee,
-		hasPrevious: true, previousDate: "2026-10-05", checkDate: "2026-10-06",
+		userID: 1, name: "火车头", isTrading: true, opening: &opening, openingDate: "2026-10-06",
+		base: "2026-10-06", prevDate: "2026-10-07", checkDate: "2026-10-08", day: day, total: total,
 	}
-	if previous != nil {
-		input.previous = &reconDTO.ManualBookDebtDTO{UpstreamUserID: 1, Currency: "RMB", Amount: *previous, AmountRmb: *previous}
+	if prevManual != nil {
+		input.prevManual = &reconDTO.ManualBookDebtDTO{UpstreamUserID: 1, Currency: "RMB", Amount: *prevManual, AmountRmb: *prevManual}
+	} else {
+		input.prevDate = input.base
 	}
 	if manual != nil {
 		input.manual = &reconDTO.ManualBookDebtDTO{UpstreamUserID: 1, Currency: "RMB", Amount: *manual, AmountRmb: *manual}
@@ -24,51 +29,81 @@ func debtInput(recharge, income, fee float64, previous, manual *float64) *debtCo
 func TestBuildDebtCompareRow(t *testing.T) {
 	amount := func(v float64) *float64 { return &v }
 	joined := func(row reconDTO.DebtCompareRowDTO) string { return strings.Join(row.Issues, ";") }
+	// 10-07: 充值 1000; 10-08: 充值 5000, 入账 2910, 手续费 90
+	day := flowSum{recharge: 5000, income: 2910, collectFee: 90}
+	total := flowSum{recharge: 6000, income: 2910, collectFee: 90}
 
-	// 充值 5000 = 入账 2910 + 手续费 90 + 欠款增量 (5900 − 3900)
-	ok := buildDebtCompareRow(debtInput(5000, 2910, 90, amount(3900), amount(5900)))
-	if ok.Status != reconDTO.DebtCompareStatusOK || !near(ok.DebtChange, 2000) || !near(ok.ManualTotal, 5000) || !near(ok.Diff, 0) {
+	// 系统: 10-07 欠款 3900 + 1000 = 4900, 10-08 欠款 4900 + 2000 = 6900; 人工两天都对得上
+	ok := buildDebtCompareRow(debtInput(day, total, amount(4900), amount(6900)))
+	if ok.Status != reconDTO.DebtCompareStatusOK || ok.Recharge != 5000 || ok.DebtChange != 2000 || ok.PrevSystemDebt != 4900 ||
+		ok.SystemDebt != 6900 || ok.SystemReceivable != 5000 || !near(ok.ManualReceivable, 5000) ||
+		!near(ok.ManualDebtChange, 2000) || !near(ok.Diff, 0) || !near(ok.DayDiff, 0) || ok.PrevIsOpening || ok.DayStart != "2026-10-08" {
 		t.Fatalf("ok = %+v", ok)
 	}
 
-	// 人工欠款没扣手续费: 欠款多记 90 → 差 90 = 代收手续费
-	fee := buildDebtCompareRow(debtInput(5000, 2910, 90, amount(3900), amount(5990)))
-	if fee.Status != reconDTO.DebtCompareStatusDiff || !near(fee.Diff, 90) || !strings.Contains(joined(fee), "代收手续费") {
+	// 10-08 人工没扣手续费: 当天新增差异 90 = 代收手续费(90 ÷ 9900 < 1%, 相差较小); 人工应收比充值多 90
+	fee := buildDebtCompareRow(debtInput(day, total, amount(4900), amount(6990)))
+	if fee.Status != reconDTO.DebtCompareStatusMinor || !near(fee.Diff, 90) || !near(fee.DayDiff, 90) || !near(fee.ManualReceivable, 5090) ||
+		!strings.Contains(joined(fee), "当天代收手续费") || !strings.Contains(joined(fee), "人工欠款比系统欠款多") || !strings.Contains(joined(fee), "10-08 新增差异") || strings.Contains(joined(fee), "~") {
 		t.Fatalf("fee = %+v", fee)
 	}
 
-	// 人工欠款没加充值: 欠款没变, 差 −5000
-	recharge := buildDebtCompareRow(debtInput(5000, 0, 0, amount(3900), amount(3900)))
-	if !near(recharge.Diff, -5000) || !strings.Contains(joined(recharge), "没把这段时间的充值加进去") {
-		t.Fatalf("recharge = %+v", recharge)
+	// 10-07 就差了 100, 10-08 没有新增: 指向之前
+	carried := buildDebtCompareRow(debtInput(day, total, amount(5000), amount(7000)))
+	if !near(carried.Diff, 100) || !near(carried.DayDiff, 0) || !strings.Contains(joined(carried), "10-07 之前就已经差了") {
+		t.Fatalf("carried = %+v", carried)
 	}
 
-	// 差 30 / 5000 = 0.6% → 相差较小
-	minor := buildDebtCompareRow(debtInput(5000, 2910, 90, amount(3900), amount(5930)))
-	if minor.Status != reconDTO.DebtCompareStatusMinor || !near(minor.DiffRatio, 30.0/5000) {
-		t.Fatalf("minor = %+v", minor)
+	// 没有上一份人工记账: 上一份就是初始欠款, 当天窗口从欠款日期次日开始(= 累计窗口)
+	first := buildDebtCompareRow(debtInput(total, total, nil, amount(6900)))
+	if first.Status != reconDTO.DebtCompareStatusOK || !first.PrevIsOpening || first.PrevManualDebt != 3900 || first.PrevSystemDebt != 3900 ||
+		first.DayStart != "2026-10-07" || first.DebtChange != 3000 || !near(first.ManualDebtChange, 3000) {
+		t.Fatalf("first = %+v", first)
 	}
 
-	// 上一份没记这个社区: 按 0 算, 有提示
-	missing := buildDebtCompareRow(debtInput(5000, 3000, 0, nil, amount(2000)))
-	if missing.Status != reconDTO.DebtCompareStatusOK || !missing.PreviousMissing || !strings.Contains(joined(missing), "按 0 算") {
-		t.Fatalf("missing = %+v", missing)
-	}
-
-	noManual := buildDebtCompareRow(debtInput(5000, 0, 0, amount(3900), nil))
-	if noManual.Status != reconDTO.DebtCompareStatusNoManual || noManual.ManualTotal != nil {
+	// 当天没记这个社区: 系统照算, 人工为空
+	noManual := buildDebtCompareRow(debtInput(day, total, amount(4900), nil))
+	if noManual.Status != reconDTO.DebtCompareStatusNoManual || noManual.Diff != nil || noManual.ManualDebtChange != nil || noManual.SystemDebt != 6900 {
 		t.Fatalf("noManual = %+v", noManual)
 	}
 
-	first := debtInput(5000, 0, 0, nil, amount(3900))
-	first.hasPrevious = false
-	if row := buildDebtCompareRow(first); row.Status != reconDTO.DebtCompareStatusNoBaseline || !near(row.ManualDebt, 3900) {
-		t.Fatalf("first = %+v", row)
+	// 记账日早于欠款日期: 没法核对
+	early := debtInput(day, total, nil, amount(3900))
+	early.checkDate = "2026-10-05"
+	if row := buildDebtCompareRow(early); row.Status != reconDTO.DebtCompareStatusBeforeStart || row.Diff != nil ||
+		!strings.Contains(joined(row), "早于初始欠款的欠款日期 10-06") {
+		t.Fatalf("early = %+v", row)
 	}
 
-	notTrading := debtInput(0, 0, 0, amount(100), amount(100))
+	// 没录初始欠款: 按 0 算, 有提示
+	missing := debtInput(flowSum{}, flowSum{}, nil, amount(0))
+	missing.opening, missing.openingDate = nil, ""
+	if row := buildDebtCompareRow(missing); row.Status != reconDTO.DebtCompareStatusOK || !row.OpeningMissing || !strings.Contains(joined(row), "按 0 算") {
+		t.Fatalf("missing = %+v", row)
+	}
+
+	notTrading := debtInput(flowSum{}, flowSum{}, amount(3900), amount(3900))
 	notTrading.isTrading = false
 	if row := buildDebtCompareRow(notTrading); row.Status != reconDTO.DebtCompareStatusOK || !strings.Contains(row.Issues[0], "不是活跃用户") {
 		t.Fatalf("notTrading = %+v", row)
+	}
+}
+
+func TestPreviousManualDebt(t *testing.T) {
+	book := func(date string, users ...uint64) *reconDTO.ManualBookDTO {
+		result := &reconDTO.ManualBookDTO{BookDate: date}
+		for _, user := range users {
+			result.Debts = append(result.Debts, reconDTO.ManualBookDebtDTO{UpstreamUserID: user, AmountRmb: float64(user)})
+		}
+		return result
+	}
+	books := []*reconDTO.ManualBookDTO{book("2026-10-05", 1), book("2026-10-06", 1), book("2026-10-07", 2), book("2026-10-08", 1)}
+	// 10-07 没记社区 1, 往前找到 10-06
+	if date, debt := previousManualDebt(books, 1, "2026-10-01", "2026-10-08"); date != "2026-10-06" || debt == nil {
+		t.Fatalf("got %s %+v", date, debt)
+	}
+	// 只认欠款日期之后的记账: 10-06 当天的记账不算上一份, 上一份就是初始欠款
+	if date, debt := previousManualDebt(books, 1, "2026-10-06", "2026-10-08"); date != "2026-10-06" || debt != nil {
+		t.Fatalf("got %s %+v", date, debt)
 	}
 }

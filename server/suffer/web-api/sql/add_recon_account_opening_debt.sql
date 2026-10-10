@@ -1,4 +1,5 @@
 -- 对账工作台 - 账户状态：上游用户账户的人工录入欠款（初始欠款），在 surfer 库执行。
+-- 2026-10-09 起改为和社区一对一，用 debt_date（欠款日期）代替生效日期，已有表再执行 alter_recon_account_opening_debt_single.sql；下面的时间线规则已停用。
 -- 时间线规则：同一用户同一时刻只有一条未结清；录入新的一条时上一条自动结清，结清日期 = 新记录的生效日期；
 -- 已结清的不能改、不能删，只能撤销当前未结清的那条（撤销后上一条恢复未结清）。
 -- 系统计算欠款（截至 D 日）= 生效日期 <= D 的最近一条金额 + 生效日之后到 D 日的（充值 − 社区入账 − 代收手续费）。
@@ -13,9 +14,10 @@ CREATE TABLE IF NOT EXISTS `recon_account_opening_debt` (
   `user_id` bigint unsigned NOT NULL COMMENT '上游用户（user.id）',
   `account_id` bigint unsigned DEFAULT NULL COMMENT '账户（account.id），录入时快照',
   `amount` decimal(38,8) NOT NULL DEFAULT '0.00000000' COMMENT '欠款金额 RMB，可为负（多付）',
-  `effective_date` date NOT NULL COMMENT '生效日期',
-  `settle_status` varchar(16) NOT NULL DEFAULT 'UNSETTLED' COMMENT 'UNSETTLED 未结清 / SETTLED 已结清',
-  `settle_date` date DEFAULT NULL COMMENT '结清日期（= 接替它的那条的生效日期）',
+  `debt_date` date DEFAULT NULL COMMENT '欠款日期：金额是这天结束时的欠款，从次日开始累计',
+  `effective_date` date DEFAULT NULL COMMENT '已停用（2026-10-09 起不再使用）',
+  `settle_status` varchar(16) DEFAULT NULL COMMENT '已停用（2026-10-09 起不再使用）',
+  `settle_date` date DEFAULT NULL COMMENT '已停用（2026-10-09 起不再使用）',
   `remark` varchar(255) DEFAULT NULL COMMENT '备注',
   PRIMARY KEY (`id`),
   KEY `idx_opening_debt_user_date` (`user_id`, `effective_date`)

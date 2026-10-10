@@ -14,21 +14,60 @@ func (r *OpeningDebtRepository) EnsureTable() error {
 	if r.Db == nil {
 		return fmt.Errorf("database is not initialized")
 	}
-	return r.Db.AutoMigrate(&OpeningDebt{})
+	if err := r.Db.AutoMigrate(&OpeningDebt{}); err != nil {
+		return err
+	}
+	if err := r.relaxLegacyColumns(); err != nil {
+		return err
+	}
+	return r.fillDebtDate()
 }
 
-// ListByUsers 这些用户的全部有效录入, 按用户、生效日期升序.
+// fillDebtDate 没执行 alter_recon_account_opening_debt_single.sql 的环境兜底补欠款日期:
+// 旧版生效日当天的流水算在欠款里, 和欠款日期同义; 开发期的 start_date 录的也是欠款日期.
+func (r *OpeningDebtRepository) fillDebtDate() error {
+	for _, column := range []string{"start_date", "effective_date"} {
+		if !r.Db.Migrator().HasColumn(&OpeningDebt{}, column) {
+			continue
+		}
+		if err := r.Db.Exec("UPDATE `recon_account_opening_debt` SET debt_date = `" + column + "` WHERE debt_date IS NULL AND `" + column + "` IS NOT NULL").Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// relaxLegacyColumns 旧版按生效日期排时间线, effective_date 是 NOT NULL 且没有默认值, 模型去掉它之后新增会失败;
+// 没执行 alter_recon_account_opening_debt_single.sql 的环境这里兜底改成可空.
+func (r *OpeningDebtRepository) relaxLegacyColumns() error {
+	columns, err := r.Db.Migrator().ColumnTypes(&OpeningDebt{})
+	if err != nil {
+		return err
+	}
+	for _, column := range columns {
+		if column.Name() != "effective_date" {
+			continue
+		}
+		if nullable, ok := column.Nullable(); ok && nullable {
+			return nil
+		}
+		return r.Db.Exec("ALTER TABLE `recon_account_opening_debt` MODIFY `effective_date` date DEFAULT NULL COMMENT '已停用'").Error
+	}
+	return nil
+}
+
+// ListByUsers 这些用户的有效录入, 按用户、id 升序; 正常每个用户最多一条, 有多条时以最后一条为准.
 func (r *OpeningDebtRepository) ListByUsers(database *gorm.DB, userIDs []uint64) ([]*OpeningDebt, error) {
 	rows := make([]*OpeningDebt, 0)
 	if len(userIDs) == 0 {
 		return rows, nil
 	}
 	err := r.orDefault(database).Where("active = 1 AND user_id IN ?", userIDs).
-		Order("user_id ASC, effective_date ASC, id ASC").Find(&rows).Error
+		Order("user_id ASC, id ASC").Find(&rows).Error
 	return rows, err
 }
 
-// LockUser 在事务里锁住用户行, 同一用户的录入 / 修改 / 撤销串行执行, 保证时间线不乱.
+// LockUser 在事务里锁住用户行, 同一用户的录入 / 修改 / 清除串行执行, 保证每个用户最多一条.
 func (r *OpeningDebtRepository) LockUser(tx *gorm.DB, userID uint64) (bool, error) {
 	var ids []uint64
 	if err := tx.Raw("SELECT id FROM `user` WHERE id = ? AND active = 1 FOR UPDATE", userID).Scan(&ids).Error; err != nil {

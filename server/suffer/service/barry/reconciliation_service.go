@@ -61,6 +61,39 @@ func (s *ReconciliationService) ListLedger(ctx context.Context, query barryDTO.R
 	return response.Data, nil
 }
 
+// FindIncomeWithFee 按 ID 找某天的社区入账和它的代收手续费(barry 没有按 ID 查询, 只能按当天列表翻页找);
+// 入账不存在返回 nil, 没有手续费时 fee 为 nil.
+func (s *ReconciliationService) FindIncomeWithFee(ctx context.Context, ledgerID int64, recordDate string) (income, fee *barryDTO.ReconLedgerDTO, err error) {
+	const pageSize = 100
+	for page := 1; ; page++ {
+		result, err := s.ListLedger(ctx, barryDTO.ReconLedgerQueryDTO{
+			StartDate: recordDate,
+			EndDate:   recordDate,
+			Category:  "COMMUNITY_IN,COLLECT_FEE",
+			SortField: "date",
+			SortOrder: "asc",
+			Page:      page,
+			PageSize:  pageSize,
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, row := range result.Data {
+			if row == nil || row.ID == nil {
+				continue
+			}
+			if *row.ID == ledgerID {
+				income = row
+			} else if row.Category == "COLLECT_FEE" && row.ParentID != nil && *row.ParentID == ledgerID {
+				fee = row
+			}
+		}
+		if (income != nil && fee != nil) || len(result.Data) < pageSize {
+			return income, fee, nil
+		}
+	}
+}
+
 func (s *ReconciliationService) LedgerSummary(ctx context.Context, startDate, endDate string) (*barryDTO.ReconLedgerSummaryDTO, error) {
 	response := &barryDTO.DetailResponseDTO[barryDTO.ReconLedgerSummaryDTO]{}
 	err := s.client.GetAbsolute(ctx, innerServicePath(barryInnerReconLedgerSummaryPath), buildValues(
@@ -90,6 +123,19 @@ func (s *ReconciliationService) DeleteLedger(ctx context.Context, id int64, oper
 	response := &barryDTO.DetailResponseDTO[string]{}
 	err := s.client.PostAbsolute(ctx, innerServicePath(barryInnerReconLedgerDeletePath)+"?"+buildValues("id", id, "operator", operator).Encode(), nil, response)
 	return unwrapReconResponse(response.Success, true, response.Message, err, "ledger delete")
+}
+
+// LedgerSnapshots 某条出入账的快照, 按版本升序; 没被人工改过的为空列表.
+func (s *ReconciliationService) LedgerSnapshots(ctx context.Context, ledgerID int64) ([]*barryDTO.ReconLedgerSnapshotDTO, error) {
+	response := &barryDTO.ListResponseDTO[barryDTO.ReconLedgerSnapshotDTO]{}
+	err := s.client.GetAbsolute(ctx, innerServicePath(barryInnerReconLedgerSnapshotsPath), buildValues("ledgerId", ledgerID), response)
+	if err := unwrapReconResponse(response.Success, true, response.Message, err, "ledger snapshots"); err != nil {
+		return nil, err
+	}
+	if response.Data == nil {
+		return []*barryDTO.ReconLedgerSnapshotDTO{}, nil
+	}
+	return response.Data, nil
 }
 
 // SyncWithdraw 补记区间内提现成功但还没记账的记录.

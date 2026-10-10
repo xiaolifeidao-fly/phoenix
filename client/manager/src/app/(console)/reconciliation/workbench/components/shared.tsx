@@ -64,7 +64,7 @@ export function SectionHead({ title, caption, extra }: SectionHeadProps) {
 }
 
 /** 公式说明条，统一放在卡片底部 */
-export function FormulaGrid({ items }: { items: { label: string; expression: string }[] }) {
+export function FormulaGrid({ items }: { items: { label: string; expression: ReactNode }[] }) {
   return (
     <div className="recon-formula-grid">
       {items.map((item) => (

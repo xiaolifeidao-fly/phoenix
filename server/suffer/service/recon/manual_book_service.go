@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	barryDTO "suffer/service/barry/dto"
 	reconDTO "suffer/service/recon/dto"
 	reconRepository "suffer/service/recon/repository"
 
@@ -16,7 +17,11 @@ import (
 	"gorm.io/gorm"
 )
 
-const manualBookMaxDebts = 200
+const (
+	manualBookMaxDebts = 200
+	// ledgerDailyMaxDays barry /reconciliation/ledger/daily 单次最长天数
+	ledgerDailyMaxDays = 186
+)
 
 type normalizedDebt struct {
 	userID    uint64
@@ -162,15 +167,29 @@ func (s *ReconService) DeleteManualBook(id uint, operator string) error {
 	})
 }
 
-// CompareManualBooks 所选区间人工记账利润 vs 出入账利润: 总的一行 + 每天一行. 区间最长 93 天.
+// CompareManualBooks 所选区间人工余额 vs 系统应有余额(以初始余额为基准): 总的一行 + 每天一行. 区间最长 93 天.
 func (s *ReconService) CompareManualBooks(ctx context.Context, startDate, endDate string) (*reconDTO.ManualBookCompareDTO, error) {
 	start, end, err := parseRange(startDate, endDate)
 	if err != nil {
 		return nil, err
 	}
+	opening, err := s.GetOpeningBalance()
+	if err != nil {
+		return nil, err
+	}
+	// 往前多取的记账: 算社区欠款增量要上一份; 算当天利润要初始余额日期之后的上一份, 可能更早
 	records, err := s.books.ListBetween(start.AddDate(0, 0, -manualBookLookbackDays), end)
 	if err != nil {
 		return nil, err
+	}
+	if opening != nil && (len(records) == 0 || dateKey(records[0].BookDate) >= dateKey(start)) {
+		latest, err := s.books.FindLatestBefore(start)
+		if err != nil {
+			return nil, err
+		}
+		if latest != nil && dateKey(latest.BookDate) >= opening.BalanceDate {
+			records = append([]*reconRepository.ManualBook{latest}, records...)
+		}
 	}
 	books, err := s.toManualBookDTOs(nil, records)
 	if err != nil {
@@ -180,21 +199,40 @@ func (s *ReconService) CompareManualBooks(ctx context.Context, startDate, endDat
 	for _, book := range books {
 		list = append(list, *book)
 	}
-	// 出入账从最早可能用到的那天开始取: 开始日之前最近一份的次日, 没有就从开始日
+	// 出入账: 有初始余额时从它的次日累计到结束日, 区间里早于它的天也要单天的出入账
 	ledgerStart := start
-	for i := len(list) - 1; i >= 0; i-- {
-		if list[i].BookDate < dateKey(start) {
-			ledgerStart, _ = time.ParseInLocation(dateLayout, list[i].BookDate, time.Local)
-			ledgerStart = ledgerStart.AddDate(0, 0, 1)
-			break
+	if opening != nil {
+		if from, err := time.ParseInLocation(dateLayout, opening.BalanceDate, time.Local); err == nil && from.AddDate(0, 0, 1).Before(ledgerStart) {
+			ledgerStart = from.AddDate(0, 0, 1)
 		}
 	}
-	daily, err := s.reconciliation.LedgerDaily(ctx, dateKey(ledgerStart), dateKey(end))
-	if err != nil {
-		return nil, fmt.Errorf("查询出入账失败：%w", err)
+	ledger := make(map[string]ledgerDay)
+	if !ledgerStart.After(end) {
+		daily, err := s.ledgerDaily(ctx, ledgerStart, end)
+		if err != nil {
+			return nil, fmt.Errorf("查询出入账失败：%w", err)
+		}
+		ledger = toLedgerDays(daily)
 	}
-	result := buildManualBookCompare(list, toLedgerDays(daily), start, end)
+	result := buildManualBookCompare(list, opening, ledger, start, end)
 	return &result, nil
+}
+
+// ledgerDaily barry 每次最多查 186 天, 初始余额日期较早时分段取.
+func (s *ReconService) ledgerDaily(ctx context.Context, start, end time.Time) ([]barryDTO.ReconLedgerDailyDTO, error) {
+	result := make([]barryDTO.ReconLedgerDailyDTO, 0)
+	for from := start; !from.After(end); from = from.AddDate(0, 0, ledgerDailyMaxDays) {
+		to := from.AddDate(0, 0, ledgerDailyMaxDays-1)
+		if to.After(end) {
+			to = end
+		}
+		rows, err := s.reconciliation.LedgerDaily(ctx, dateKey(from), dateKey(to))
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, rows...)
+	}
+	return result, nil
 }
 
 // writeManualBook 写记账行(新增 / 恢复 / 修改), 欠款整组替换: 旧的置无效, 再写入这次的.

@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -109,6 +110,29 @@ func TestReconciliationServiceLedger(t *testing.T) {
 	}
 }
 
+func TestReconciliationServiceLedgerSnapshots(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/reconciliation/ledger/snapshots" || r.URL.Query().Get("ledgerId") != "9" {
+			t.Fatalf("path = %q query = %q", r.URL.Path, r.URL.RawQuery)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":"0","data":[` +
+			`{"id":1,"ledgerId":9,"version":1,"action":"ORIGINAL","ledgerActive":true,"operator":"alice","snapshotTime":"2026-10-08 10:00:00","recordDate":"2026-10-08","category":"MANUAL_SETTLE","categoryName":"人工出款","currency":"RMB","amountRmb":195122},` +
+			`{"id":2,"ledgerId":9,"version":2,"action":"UPDATE","ledgerActive":true,"operator":"bob","snapshotTime":"2026-10-09 11:00:00","recordDate":"2026-10-08","category":"MANUAL_SETTLE","categoryName":"人工出款","currency":"RMB","amountRmb":195000,"remark":"整体出款"}]}`))
+	}))
+	defer server.Close()
+	viper.Set(barryInnerPrefixPath, server.URL)
+	viper.Set(barryInnerReconLedgerSnapshotsPath, "/reconciliation/ledger/snapshots")
+	defer viper.Reset()
+
+	service := NewReconciliationService(&Client{timeout: time.Second})
+	result, err := service.LedgerSnapshots(context.Background(), 9)
+	if err != nil || len(result) != 2 || result[0].Action != "ORIGINAL" || result[1].Version != 2 ||
+		*result[1].AmountRmb != 195000 || result[1].Operator != "bob" || result[1].SnapshotTime != "2026-10-09 11:00:00" {
+		t.Fatalf("snapshots = %+v err %v", result, err)
+	}
+}
+
 func TestReconciliationServiceUpstreamSums(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -152,5 +176,47 @@ func TestReconciliationServiceLedgerDaily(t *testing.T) {
 	result, err := service.LedgerDaily(context.Background(), "2026-10-01", "2026-10-02")
 	if err != nil || len(result) != 2 || result[0].NetRmb != 414 || result[1].Date != "2026-10-02" {
 		t.Fatalf("unexpected %+v %v", result, err)
+	}
+}
+
+func TestReconciliationServiceFindIncomeWithFee(t *testing.T) {
+	// 第 1 页满 100 条(含入账 7), 手续费在第 2 页: 要翻到第 2 页才算找全
+	firstPage := make([]string, 0, 100)
+	firstPage = append(firstPage, `{"id":7,"recordDate":"2026-10-08","category":"COMMUNITY_IN","currency":"RMB","amountRmb":1000,"upstreamUserId":"12"}`)
+	for i := 1; i < 100; i++ {
+		firstPage = append(firstPage, `{"id":`+strconv.Itoa(100+i)+`,"recordDate":"2026-10-08","category":"COMMUNITY_IN","currency":"RMB","amountRmb":1}`)
+	}
+	pages := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("startDate") != "2026-10-08" || q.Get("endDate") != "2026-10-08" || q.Get("category") != "COMMUNITY_IN,COLLECT_FEE" || q.Get("pageSize") != "100" {
+			t.Fatalf("list query = %v", q)
+		}
+		pages++
+		w.Header().Set("Content-Type", "application/json")
+		switch q.Get("page") {
+		case "1":
+			_, _ = w.Write([]byte(`{"code":"0","data":{"total":101,"data":[` + strings.Join(firstPage, ",") + `]}}`))
+		case "2":
+			_, _ = w.Write([]byte(`{"code":"0","data":{"total":101,"data":[{"id":8,"recordDate":"2026-10-08","category":"COLLECT_FEE","parentId":7,"currency":"RMB","amountRmb":6.5}]}}`))
+		default:
+			t.Fatalf("page = %q", q.Get("page"))
+		}
+	}))
+	defer server.Close()
+	viper.Set(barryInnerPrefixPath, server.URL)
+	viper.Set(barryInnerReconLedgerListPath, "/reconciliation/ledger/list")
+	defer viper.Reset()
+
+	service := NewReconciliationService(&Client{timeout: time.Second})
+	income, fee, err := service.FindIncomeWithFee(context.Background(), 7, "2026-10-08")
+	if err != nil || income == nil || income.UpstreamUserID != "12" || fee == nil || *fee.AmountRmb != 6.5 || pages != 2 {
+		t.Fatalf("income = %+v fee = %+v pages = %d err %v", income, fee, pages, err)
+	}
+
+	pages = 0
+	income, fee, err = service.FindIncomeWithFee(context.Background(), 99, "2026-10-08")
+	if err != nil || income != nil || fee != nil || pages != 2 {
+		t.Fatalf("missing ledger: income = %+v fee = %+v pages = %d err %v", income, fee, pages, err)
 	}
 }

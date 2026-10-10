@@ -253,11 +253,17 @@ export async function rechargeAccount(accountId: number, amount: number, givenSc
   return unwrapApiResponse(response.data);
 }
 
-export async function fetchAccountRechargeDetails(accountId: number, pageIndex: number, pageSize: number) {
+export async function fetchAccountRechargeDetails(
+  accountId: number,
+  pageIndex: number,
+  pageSize: number,
+  range?: { startTime?: string; endTime?: string },
+) {
   return getPage(AccountRechargeDetail, "/account-details", {
     accountId,
-    type: "PAY,GIVEN",
+    type: "PAY,GIVEN,INCOME_GIVEN",
     pageIndex,
     pageSize,
+    ...range,
   });
 }

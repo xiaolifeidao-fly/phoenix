@@ -2,19 +2,24 @@ package dto
 
 // 欠款核对状态
 const (
-	DebtCompareStatusOK         = "OK"          // 一致
-	DebtCompareStatusMinor      = "MINOR"       // 相差较小(差值比例在阈值内)
-	DebtCompareStatusDiff       = "DIFF"        // 有差异
-	DebtCompareStatusNoBaseline = "NO_BASELINE" // 往前找不到上一份人工记账, 算不出欠款增量
-	DebtCompareStatusNoManual   = "NO_MANUAL"   // 当天人工记账里没有这个社区
+	DebtCompareStatusOK       = "OK"        // 一致
+	DebtCompareStatusMinor    = "MINOR"     // 相差较小(差值比例在阈值内)
+	DebtCompareStatusDiff     = "DIFF"      // 有差异
+	DebtCompareStatusNoManual = "NO_MANUAL" // 当天人工记账里没有这个社区
+	// DebtCompareStatusBeforeStart 记账日早于初始欠款的欠款日期, 没法核对
+	DebtCompareStatusBeforeStart = "BEFORE_START"
 )
 
-// DebtCompareRowDTO 某个上游社区在 (上一份记账日, 当天] 内的核对, 金额均为 RMB.
+// DebtCompareRowDTO 某个上游社区在某个记账日的核对, 金额均为 RMB. 每个指标都有人工和系统两个值.
 //
-// 核对: 应收 = 入账 + 欠款增量 + 入账代收手续费.
-// 应收 = 这段时间的充值;
-// 人工对比值 = 入账(社区入账) + 人工欠款增量(当天人工欠款 − 上一份人工欠款) + 入账代收手续费;
-// 差值 = 人工对比值 − 应收.
+// 当天窗口 = [PrevDate 次日, 记账日]: PrevDate 是这个社区上一份有记欠款的人工记账日, 没有时为初始欠款的欠款日期;
+// 充值 / 入账 / 手续费只算当天窗口.
+//
+// 上一份欠款: 人工 = 上一份人工记账里的欠款(没有时为初始欠款); 系统 = 截至 PrevDate 的系统欠款.
+// 当天增量: 人工 = 当天人工欠款 − 上一份人工欠款; 系统 = 充值 − 入账 − 代收手续费.
+// 当天欠款: 人工 = 当天人工记账里的欠款; 系统 = 初始欠款 + 欠款日期次日到记账日的累计增量.
+// 应收: 人工 = 人工增量 + 入账 + 代收手续费; 系统 = 当天充值. 两者之差 = 当天新增差值.
+// 差值 = 人工欠款 − 系统欠款(截至当天的累计); 当天新增差值 = 人工增量 − 系统增量.
 type DebtCompareRowDTO struct {
 	UserID    uint64 `json:"userId"`
 	Name      string `json:"name"`
@@ -22,48 +27,72 @@ type DebtCompareRowDTO struct {
 	Remark    string `json:"remark,omitempty"`
 	IsTrading bool   `json:"isTrading"`
 
-	// Receivable 应收 = 这段时间的充值
-	Receivable float64 `json:"receivable"`
-	// Income 入账 = 社区入账; CollectFee 入账代收手续费
+	// OpeningDebt 初始欠款(人工录入欠款), OpeningDate 它的欠款日期; 没录时按 0 算, OpeningMissing = true.
+	OpeningDebt    float64 `json:"openingDebt"`
+	OpeningDate    string  `json:"openingDate,omitempty"`
+	OpeningMissing bool    `json:"openingMissing"`
+
+	// PrevDate 上一份欠款的日期; PrevIsOpening = true 表示上一份就是初始欠款; DayStart 当天窗口从哪天开始
+	PrevDate      string `json:"prevDate,omitempty"`
+	PrevIsOpening bool   `json:"prevIsOpening"`
+	DayStart      string `json:"dayStart,omitempty"`
+
+	// 当天窗口的充值 / 入账(社区入账) / 入账代收手续费
+	Recharge   float64 `json:"recharge"`
 	Income     float64 `json:"income"`
 	CollectFee float64 `json:"collectFee"`
-	// IncomeTotal 入账 + 入账代收手续费
-	IncomeTotal float64 `json:"incomeTotal"`
 
-	// 上一份 / 当天人工记的欠款(RMB, U 已按各自当天汇率折算); 上一份没记这个社区时按 0 算, PreviousMissing = true.
-	PreviousDebt    *float64 `json:"previousDebt"`
-	PreviousMissing bool     `json:"previousMissing"`
-	ManualCurrency  string   `json:"manualCurrency,omitempty"`
-	ManualAmount    *float64 `json:"manualAmount"`
-	ManualDebt      *float64 `json:"manualDebt"`
-	DebtChange      *float64 `json:"debtChange"`
-	// ManualTotal 人工对比值 = 入账 + 欠款增量 + 入账代收手续费
-	ManualTotal *float64 `json:"manualTotal"`
+	PrevManualDebt float64 `json:"prevManualDebt"`
+	PrevSystemDebt float64 `json:"prevSystemDebt"`
 
+	// ManualDebtChange 人工增量(当天没记时为 nil); DebtChange 系统增量
+	ManualDebtChange *float64 `json:"manualDebtChange"`
+	DebtChange       float64  `json:"debtChange"`
+
+	// ManualDebt 当天人工记账里的欠款(RMB, U 已按当天汇率折算), 没记时为 nil; SystemDebt 截至当天的系统欠款
+	ManualCurrency string   `json:"manualCurrency,omitempty"`
+	ManualAmount   *float64 `json:"manualAmount"`
+	ManualDebt     *float64 `json:"manualDebt"`
+	SystemDebt     float64  `json:"systemDebt"`
+
+	ManualReceivable *float64 `json:"manualReceivable"`
+	SystemReceivable float64  `json:"systemReceivable"`
+
+	// Diff 累计差值 = 人工欠款 − 系统欠款; DayDiff 当天新增差值 = 人工增量 − 系统增量;
+	// DiffRatio = Diff ÷ |系统欠款 + 当天入账 + 手续费|
 	Diff      *float64 `json:"diff"`
+	DayDiff   *float64 `json:"dayDiff"`
 	DiffRatio *float64 `json:"diffRatio"`
 	Status    string   `json:"status"`
 	// Issues 哪里有问题: 缺数据的原因, 或差值的可能来源
 	Issues []string `json:"issues"`
 }
 
-// DebtCompareDayDTO 某一份人工记账那天的核对, 对比窗口 (PreviousDate, Date].
+// DebtCompareTotals 合计, 只算算出了差值的社区(当天记了欠款、且记账日不早于欠款日期).
+type DebtCompareTotals struct {
+	Recharge         float64 `json:"recharge"`
+	Income           float64 `json:"income"`
+	CollectFee       float64 `json:"collectFee"`
+	PrevManualDebt   float64 `json:"prevManualDebt"`
+	PrevSystemDebt   float64 `json:"prevSystemDebt"`
+	ManualDebtChange float64 `json:"manualDebtChange"`
+	DebtChange       float64 `json:"debtChange"`
+	ManualDebt       float64 `json:"manualDebt"`
+	SystemDebt       float64 `json:"systemDebt"`
+	ManualReceivable float64 `json:"manualReceivable"`
+	SystemReceivable float64 `json:"systemReceivable"`
+	Diff             float64 `json:"diff"`
+	DayDiff          float64 `json:"dayDiff"`
+}
+
+// DebtCompareDayDTO 某一份人工记账那天的核对.
 type DebtCompareDayDTO struct {
-	Date   string `json:"date"`
-	BookID int    `json:"bookId"`
-	// PreviousDate 上一份人工记账的日期, 往前 31 天内找不到时为空
-	PreviousDate string              `json:"previousDate,omitempty"`
-	Days         int                 `json:"days"`
-	Rows         []DebtCompareRowDTO `json:"rows"`
-	// 合计只算两边都有值的社区; ManualTotal = Income + DebtChange + CollectFee
-	Receivable  float64 `json:"receivable"`
-	Income      float64 `json:"income"`
-	DebtChange  float64 `json:"debtChange"`
-	CollectFee  float64 `json:"collectFee"`
-	ManualTotal float64 `json:"manualTotal"`
-	Diff        float64 `json:"diff"`
-	DiffCount   int     `json:"diffCount"`
-	// IssueCount 有问题的社区数(有差异 + 缺上一份 + 人工未记)
+	Date   string              `json:"date"`
+	BookID int                 `json:"bookId"`
+	Rows   []DebtCompareRowDTO `json:"rows"`
+	DebtCompareTotals
+	DiffCount int `json:"diffCount"`
+	// IssueCount 有问题的社区数(有差异 + 人工未记 + 早于欠款日期)
 	IssueCount int `json:"issueCount"`
 }
 
@@ -72,13 +101,6 @@ type DebtCompareDTO struct {
 	StartDate string              `json:"startDate"`
 	EndDate   string              `json:"endDate"`
 	Days      []DebtCompareDayDTO `json:"days"`
-	// 整个区间的合计 = 各天合计之和
-	Receivable  float64 `json:"receivable"`
-	Income      float64 `json:"income"`
-	DebtChange  float64 `json:"debtChange"`
-	CollectFee  float64 `json:"collectFee"`
-	ManualTotal float64 `json:"manualTotal"`
-	Diff        float64 `json:"diff"`
 	// DiffDays 有差异的天数
 	DiffDays int `json:"diffDays"`
 	// Notices 整体层面的提示(比如区间内没有人工记账)

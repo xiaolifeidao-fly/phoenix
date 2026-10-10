@@ -59,10 +59,11 @@ type ManualBookDetailDTO struct {
 
 // 对比状态
 const (
-	CompareStatusOK         = "OK"          // 一致
-	CompareStatusDiff       = "DIFF"        // 有差异
-	CompareStatusMissing    = "MISSING"     // 当天没记账
-	CompareStatusNoBaseline = "NO_BASELINE" // 当天记了账, 但往前找不到上一份, 算不出利润
+	CompareStatusOK          = "OK"           // 一致
+	CompareStatusDiff        = "DIFF"         // 有差异
+	CompareStatusMissing     = "MISSING"      // 当天没记账
+	CompareStatusNoBaseline  = "NO_BASELINE"  // 还没设初始余额, 算不出系统应有余额
+	CompareStatusBeforeStart = "BEFORE_START" // 早于初始余额日期, 不对比
 )
 
 // ManualBookDebtCompareDTO 某个社区截至当天的欠款, 以及相对上一份记账的增量.
@@ -85,24 +86,30 @@ type ManualBookDebtCompareDTO struct {
 	IsNew     bool     `json:"isNew"`
 }
 
-// ManualBookCompareItemDTO 人工记账利润 vs 出入账利润, 对比窗口为 (BaselineDate, BookDate].
-// 人工利润 = 当天剩余金额 − 上一份剩余金额(RMB); 出入账利润 = 窗口内入账 − 出账(RMB).
-// 上一份不是前一天时(中间有天没记账), 窗口跨多天, GapDays > 1.
+// ManualBookCompareItemDTO 某天人工余额 vs 系统应有余额, 基准是账户状态里的初始余额.
+// 系统应有余额 = 初始余额 + 初始余额日期次日到当天的(入账 − 出账); 差值 = 人工余额 − 系统应有余额(累计差).
+// 当天窗口 (BaselineDate, Date]: BaselineDate = 初始余额日期之后上一份人工记账, 没有时就是初始余额(BaselineIsOpening);
+// 人工利润 = 当天余额 − 上一份余额, 系统利润 = 窗口内入账 − 出账, 两者之差 = 当天新增差值 DayDiff.
+// 窗口跨多天(中间有天没记账)时 GapDays > 1.
 type ManualBookCompareItemDTO struct {
-	Date         string `json:"date"`
-	Status       string `json:"status"`
-	BaselineDate string `json:"baselineDate,omitempty"`
+	Date              string `json:"date"`
+	Status            string `json:"status"`
+	BaselineDate      string `json:"baselineDate,omitempty"`
+	BaselineIsOpening bool   `json:"baselineIsOpening,omitempty"`
 	// GapDays 窗口天数
 	GapDays int `json:"gapDays"`
 
-	BookID          int      `json:"bookId,omitempty"`
-	Currency        string   `json:"currency,omitempty"`
-	Balance         *float64 `json:"balance"`
-	BalanceRmb      *float64 `json:"balanceRmb"`
-	BaselineBalance *float64 `json:"baselineBalanceRmb"`
-	DebtTotalRmb    *float64 `json:"debtTotalRmb"`
-	// DebtChangeRmb 欠款合计相对上一份的增量(RMB), 没有上一份时为 nil.
-	DebtChangeRmb *float64 `json:"debtChangeRmb"`
+	BookID     int      `json:"bookId,omitempty"`
+	Currency   string   `json:"currency,omitempty"`
+	Balance    *float64 `json:"balance"`
+	BalanceRmb *float64 `json:"balanceRmb"`
+	// BaselineBalance 上一份人工余额(或初始余额); BaselineSystemBalance 截至上一份日期的系统应有余额.
+	BaselineBalance       *float64 `json:"baselineBalanceRmb"`
+	BaselineSystemBalance *float64 `json:"baselineSystemBalanceRmb"`
+	DebtTotalRmb          *float64 `json:"debtTotalRmb"`
+	// DebtBaselineDate / DebtChangeRmb 欠款合计相对上一份人工记账的增量(RMB), 没有上一份时为空; 欠款不参与余额对比.
+	DebtBaselineDate string   `json:"debtBaselineDate,omitempty"`
+	DebtChangeRmb    *float64 `json:"debtChangeRmb"`
 	// Debts 截至当天各社区的欠款及增量.
 	Debts []ManualBookDebtCompareDTO `json:"debts"`
 	// BalanceChange 剩余金额按原币种的变化, 只有和上一份同币种时有值.
@@ -112,20 +119,78 @@ type ManualBookCompareItemDTO struct {
 	LedgerIn     float64  `json:"ledgerIn"`
 	LedgerOut    float64  `json:"ledgerOut"`
 	LedgerProfit float64  `json:"ledgerProfit"`
-	// Diff = 人工利润 − 出入账利润; DiffRatio = Diff / |出入账利润|, 出入账利润为 0 时为 nil.
+	// LedgerCategories 窗口内出入账按类目拆开(按类目枚举顺序), 出账含各类手续费.
+	LedgerCategories []ManualBookLedgerCategoryDTO `json:"ledgerCategories"`
+
+	// OpeningDate / OpeningBalanceRmb 用到的初始余额; SinceIn / SinceOut 初始余额日期次日到当天的累计入账 / 出账.
+	OpeningDate       string   `json:"openingDate,omitempty"`
+	OpeningBalanceRmb *float64 `json:"openingBalanceRmb"`
+	SinceIn           float64  `json:"sinceIn"`
+	SinceOut          float64  `json:"sinceOut"`
+	// SystemBalanceRmb 系统应有余额 = 初始余额 + 累计入账 − 累计出账; 没设初始余额或早于初始余额日期时为 nil.
+	SystemBalanceRmb *float64 `json:"systemBalanceRmb"`
+	// FxEffect 初始余额和当天都按 U 记、汇率不同时, 汇率变化带来的差 = 初始 U 余额 × (当天汇率 − 初始汇率);
+	// DayFxEffect 同理, 相对上一份.
+	FxEffect    *float64 `json:"fxEffect"`
+	DayFxEffect *float64 `json:"dayFxEffect"`
+	// Diff = 人工余额 − 系统应有余额(累计差); DiffRatio = Diff / |系统应有余额|, 系统应有余额为 0 时为 nil.
+	// DayDiff = 人工利润 − 系统利润 = 当天新增的差值.
 	Diff      *float64 `json:"diff"`
 	DiffRatio *float64 `json:"diffRatio"`
+	DayDiff   *float64 `json:"dayDiff"`
+	// Issues 有差异时, 差值可能来自哪里; 每条挂在它对应的那一列
+	Issues []ManualBookIssueDTO `json:"issues"`
+}
+
+// 差值来源挂在哪一列.
+const (
+	IssueColumnBalance = "balance"
+	IssueColumnProfit  = "profit"
+	IssueColumnIn      = "in"
+	IssueColumnOut     = "out"
+	IssueColumnDiff    = "diff"
+)
+
+// 差值来源的类别, 前端按它上色.
+const (
+	IssueKindBalance  = "balance"  // 累计差: 人工余额比系统应有余额多 / 少多少
+	IssueKindSplit    = "split"    // 这段日期新增多少、之前累计多少
+	IssueKindFx       = "fx"       // 汇率变化
+	IssueKindCarry    = "carry"    // 没有新增, 差异是之前带过来的
+	IssueKindLedger   = "ledger"   // 正好等于某一类出入账
+	IssueKindNeighbor = "neighbor" // 和相邻那天互相抵消, 记错了日期
+	IssueKindCheck    = "check"    // 找不到明确来源, 需要人工核对
+)
+
+// ManualBookIssueDTO 差值的一条可能来源; Label 是放在格子里的短标签, Text 是完整说明(悬浮显示).
+type ManualBookIssueDTO struct {
+	Column string `json:"column"`
+	Kind   string `json:"kind"`
+	Label  string `json:"label"`
+	Text   string `json:"text"`
+}
+
+// ManualBookLedgerCategoryDTO 窗口内某个出入账类目的合计(RMB).
+type ManualBookLedgerCategoryDTO struct {
+	Category     string `json:"category"`
+	CategoryName string `json:"categoryName"`
+	// RecordType IN 入账 / OUT 出账
+	RecordType string  `json:"recordType"`
+	Count      int64   `json:"count"`
+	AmountRmb  float64 `json:"amountRmb"`
 }
 
 // ManualBookCompareDTO 所选区间的总对比 + 每天的对比(区间内每天一行, 日期升序).
-// 总对比: 起点 = 开始日之前最近一份(往前最多找 31 天), 没有时取区间内第一份; 终点 = 区间内最后一份.
+// 总对比: 终点 = 区间内最后一份记账, 差值同样以初始余额为基准; 区间利润的起点 = 开始日之前(初始余额日期之后)最近一份, 没有就是初始余额.
 type ManualBookCompareDTO struct {
-	StartDate string                     `json:"startDate"`
-	EndDate   string                     `json:"endDate"`
-	Total     ManualBookCompareItemDTO   `json:"total"`
-	Days      []ManualBookCompareItemDTO `json:"days"`
-	Books     []ManualBookDTO            `json:"books"`
-	DiffDays  int                        `json:"diffDays"`
+	StartDate string `json:"startDate"`
+	EndDate   string `json:"endDate"`
+	// OpeningBalance 对比基准(账户状态里的初始余额), 没设为 nil.
+	OpeningBalance *OpeningBalanceDTO         `json:"openingBalance"`
+	Total          ManualBookCompareItemDTO   `json:"total"`
+	Days           []ManualBookCompareItemDTO `json:"days"`
+	Books          []ManualBookDTO            `json:"books"`
+	DiffDays       int                        `json:"diffDays"`
 	// Tolerance 差异绝对值不超过它算一致(RMB), 用来吸收折算的舍入.
 	Tolerance float64 `json:"tolerance"`
 }

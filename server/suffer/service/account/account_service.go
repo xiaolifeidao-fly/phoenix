@@ -177,6 +177,12 @@ func (s *AccountService) ListAccountDetails(query accountDTO.AccountDetailQueryD
 	if value := strings.TrimSpace(query.Description); value != "" {
 		dbQuery = dbQuery.Where("description LIKE ?", "%"+value+"%")
 	}
+	if value := strings.TrimSpace(query.StartTime); value != "" {
+		dbQuery = dbQuery.Where("created_time >= ?", value)
+	}
+	if value := strings.TrimSpace(query.EndTime); value != "" {
+		dbQuery = dbQuery.Where("created_time <= ?", value)
+	}
 
 	var total int64
 	if err := dbQuery.Count(&total).Error; err != nil {

@@ -5,23 +5,17 @@ import (
 	"time"
 )
 
-const (
-	SettleStatusUnsettled = "UNSETTLED"
-	SettleStatusSettled   = "SETTLED"
-)
-
-// OpeningDebt 上游用户账户的人工录入欠款(初始欠款), 按生效日期排成一条时间线:
-// 同一用户同一时刻只有一条未结清; 录入新的一条时, 上一条自动结清, 结清日期 = 新记录的生效日期.
-// 算某天的系统欠款时, 取生效日期 <= 该天的最近一条作为起点(不论是否已结清).
+// OpeningDebt 上游社区的人工录入欠款(初始欠款), 和社区一对一: 每个社区最多一条有效记录.
+// DebtDate 欠款日期: 金额是这天结束时的欠款(和人工记账的口径一样), 从次日开始累计充值 / 入账 / 手续费.
+// 旧数据没填欠款日期时, 核对和账户状态从所选开始日累计.
+// 表里旧的 effective_date / settle_status / settle_date 列已停用(见 alter_recon_account_opening_debt_single.sql).
 type OpeningDebt struct {
 	db.BaseEntity
-	UserID        uint64     `gorm:"column:user_id;type:bigint unsigned;not null;index:idx_opening_debt_user_date,priority:1" description:"上游用户(user.id)"`
-	AccountID     uint64     `gorm:"column:account_id;type:bigint unsigned" description:"账户(account.id), 录入时快照"`
-	Amount        string     `gorm:"column:amount;type:decimal(38,8);not null;default:0.00000000" description:"欠款金额 RMB, 可为负"`
-	EffectiveDate time.Time  `gorm:"column:effective_date;type:date;not null;index:idx_opening_debt_user_date,priority:2" description:"生效日期"`
-	SettleStatus  string     `gorm:"column:settle_status;type:varchar(16);not null;default:UNSETTLED" description:"UNSETTLED 未结清 / SETTLED 已结清"`
-	SettleDate    *time.Time `gorm:"column:settle_date;type:date" description:"结清日期"`
-	Remark        string     `gorm:"column:remark;type:varchar(255)" description:"备注"`
+	UserID    uint64     `gorm:"column:user_id;type:bigint unsigned;not null;index:idx_opening_debt_user_date,priority:1" description:"上游用户(user.id)"`
+	AccountID uint64     `gorm:"column:account_id;type:bigint unsigned" description:"账户(account.id), 录入时快照"`
+	Amount    string     `gorm:"column:amount;type:decimal(38,8);not null;default:0.00000000" description:"欠款金额 RMB, 可为负"`
+	DebtDate  *time.Time `gorm:"column:debt_date;type:date" description:"欠款日期"`
+	Remark    string     `gorm:"column:remark;type:varchar(255)" description:"备注"`
 }
 
 func (o *OpeningDebt) TableName() string { return "recon_account_opening_debt" }

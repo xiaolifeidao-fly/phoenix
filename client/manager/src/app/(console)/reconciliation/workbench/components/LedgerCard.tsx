@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarOutlined, DeleteOutlined, EditOutlined, PlusOutlined, SyncOutlined } from "@ant-design/icons";
+import { CalendarOutlined, DeleteOutlined, EditOutlined, HistoryOutlined, PlusOutlined, SyncOutlined } from "@ant-design/icons";
 import {
   Alert,
   Button,
+  Checkbox,
   DatePicker,
   Empty,
   Form,
@@ -28,6 +29,7 @@ import {
   LEDGER_CATEGORIES,
   LEDGER_SOURCE_LABEL,
   LEDGER_TYPE_LABEL,
+  giveLedgerFee,
   type LedgerCurrency,
   type LedgerRecordType,
   type LedgerSortField,
@@ -35,6 +37,7 @@ import {
   type ReconLedgerSummaryItem,
 } from "../api/reconciliation.api";
 import type { LedgerState } from "../hooks/useLedger";
+import { LedgerSnapshotModal } from "./LedgerSnapshotModal";
 import { RemoteSearchSelect, type RemoteOption } from "./RemoteSearchSelect";
 import { MoneyCell, SectionHead, money, moneyColumn } from "./shared";
 
@@ -56,6 +59,8 @@ interface LedgerFormValues {
   upstreamUserId?: string | null;
   userId?: number | null;
   remark?: string;
+  /** 社区入账：保存后把代收手续费赠送到该上游社区余额 */
+  giveFee?: boolean;
 }
 
 /** 上游社区：suffer「用户管理」列表，按名称 / 账号 / 邮箱 / 手机模糊搜索 */
@@ -103,6 +108,7 @@ export function LedgerCard({ ledger, range }: LedgerCardProps) {
   const [view, setView] = useState<LedgerView>("summary");
   const [editing, setEditing] = useState<ReconLedgerRecord | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [snapshotRecord, setSnapshotRecord] = useState<ReconLedgerRecord | null>(null);
   const [channels, setChannels] = useState<SettleChannelRecord[]>([]);
   const [form] = Form.useForm<LedgerFormValues>();
   const formCategory = Form.useWatch("category", form);
@@ -190,6 +196,7 @@ export function LedgerCard({ ledger, range }: LedgerCardProps) {
       upstreamUserId: record?.upstreamUserId ?? null,
       userId: record?.userId ?? null,
       remark: record?.remark ?? "",
+      giveFee: false,
     });
     setFormOpen(true);
   };
@@ -210,8 +217,9 @@ export function LedgerCard({ ledger, range }: LedgerCardProps) {
 
   const handleSubmit = async () => {
     const values = await form.validateFields();
+    let saved;
     try {
-      await ledger.save(editing?.id ?? null, {
+      saved = await ledger.save(editing?.id ?? null, {
         recordDate: values.recordDate.format("YYYY-MM-DD"),
         category: values.category,
         currency: values.currency,
@@ -227,6 +235,27 @@ export function LedgerCard({ ledger, range }: LedgerCardProps) {
       setView("detail");
     } catch (err) {
       message.error(err instanceof Error ? err.message : "保存失败");
+      return;
+    }
+    if (values.giveFee && values.category === "COMMUNITY_IN" && saved?.id) {
+      await handleGiveFee(saved.id, saved.recordDate || values.recordDate.format("YYYY-MM-DD"));
+    }
+  };
+
+  /** 入账已保存后再赠送：失败不影响入账，编辑该记录重新勾选即可重试（服务端按入账 ID 幂等） */
+  const handleGiveFee = async (id: number, recordDate: string) => {
+    try {
+      const result = await giveLedgerFee(id, recordDate);
+      const target = result?.upstreamUserName || (result?.upstreamUserId ? `#${result.upstreamUserId}` : "该社区");
+      if (result?.given) {
+        message.success(`已把代收手续费 ${money(result.amount)} RMB 赠送给 ${target}`);
+      } else {
+        message.info(`这条入账之前已赠送过手续费，未重复赠送`);
+      }
+    } catch (err) {
+      message.error(
+        `入账已保存，但手续费赠送失败：${err instanceof Error ? err.message : "未知错误"}。可编辑该记录勾选赠送重试`,
+      );
     }
   };
 
@@ -301,7 +330,7 @@ export function LedgerCard({ ledger, range }: LedgerCardProps) {
       title: "类目",
       dataIndex: "categoryName",
       key: "category",
-      width: 240,
+      width: 300,
       sorter: true,
       sortOrder: sortOrderOf("category"),
       render: (value: string, record) => (
@@ -311,6 +340,13 @@ export function LedgerCard({ ledger, range }: LedgerCardProps) {
           </Tag>
           {value}
           <SourceTag record={record} />
+          {record.modifyCount ? (
+            <Tooltip title="人工修改过，点击查看每一版快照">
+              <Tag color="purple" style={{ cursor: "pointer" }} onClick={() => setSnapshotRecord(record)}>
+                已改 {record.modifyCount} 次
+              </Tag>
+            </Tooltip>
+          ) : null}
         </span>
       ),
     },
@@ -362,39 +398,47 @@ export function LedgerCard({ ledger, range }: LedgerCardProps) {
     {
       title: "操作",
       key: "actions",
-      width: 84,
+      width: 112,
       fixed: "right",
       align: "center",
-      render: (_, record) =>
-        record.editable ? (
-          <>
-            <Tooltip title="编辑">
-              <Button type="text" size="small" icon={<EditOutlined />} onClick={() => openForm(record)} />
+      render: (_, record) => (
+        <>
+          {record.modifyCount ? (
+            <Tooltip title="修改快照">
+              <Button type="text" size="small" icon={<HistoryOutlined />} onClick={() => setSnapshotRecord(record)} />
             </Tooltip>
-            <Popconfirm
-              title="删除该条记录"
-              description={
-                record.category === "COMMUNITY_IN"
-                  ? "对应的代收手续费会一起删除。"
-                  : record.category === "MANUAL_SETTLE"
-                    ? "对应的代付手续费会一起删除。"
-                    : "删除后汇总会立即重算。"
-              }
-              okText="删除"
-              cancelText="取消"
-              okButtonProps={{ danger: true }}
-              onConfirm={() => handleDelete(record)}
-            >
-              <Tooltip title="删除">
-                <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+          ) : null}
+          {record.editable ? (
+            <>
+              <Tooltip title="编辑">
+                <Button type="text" size="small" icon={<EditOutlined />} onClick={() => openForm(record)} />
               </Tooltip>
-            </Popconfirm>
-          </>
-        ) : (
-          <Tooltip title="系统生成的记录不能修改、删除">
-            <span className="recon-subcard-caption">—</span>
-          </Tooltip>
-        ),
+              <Popconfirm
+                title="删除该条记录"
+                description={
+                  record.category === "COMMUNITY_IN"
+                    ? "对应的代收手续费会一起删除。"
+                    : record.category === "MANUAL_SETTLE"
+                      ? "对应的代付手续费会一起删除。"
+                      : "删除后汇总会立即重算。"
+                }
+                okText="删除"
+                cancelText="取消"
+                okButtonProps={{ danger: true }}
+                onConfirm={() => handleDelete(record)}
+              >
+                <Tooltip title="删除">
+                  <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+                </Tooltip>
+              </Popconfirm>
+            </>
+          ) : record.modifyCount ? null : (
+            <Tooltip title="系统生成的记录不能修改、删除">
+              <span className="recon-subcard-caption">—</span>
+            </Tooltip>
+          )}
+        </>
+      ),
     },
   ];
 
@@ -528,7 +572,7 @@ export function LedgerCard({ ledger, range }: LedgerCardProps) {
             loading={ledger.loading}
             columns={detailColumns}
             dataSource={ledger.rows}
-            scroll={{ x: 1044 }}
+            scroll={{ x: 1132 }}
             pagination={{
               current: ledger.filters.page,
               pageSize: ledger.filters.pageSize,
@@ -555,6 +599,8 @@ export function LedgerCard({ ledger, range }: LedgerCardProps) {
           />
         </div>
       )}
+
+      <LedgerSnapshotModal record={snapshotRecord} onClose={() => setSnapshotRecord(null)} />
 
       <Modal
         title={editing ? "编辑出入账" : "新增出入账"}
@@ -663,6 +709,16 @@ export function LedgerCard({ ledger, range }: LedgerCardProps) {
             {feePreview ? (
               <Form.Item className="recon-form-wide">
                 <Alert type="info" showIcon message={`将同时生成${feePreview}`} />
+              </Form.Item>
+            ) : null}
+            {formCategory === "COMMUNITY_IN" ? (
+              <Form.Item
+                className="recon-form-wide"
+                name="giveFee"
+                valuePropName="checked"
+                extra="保存后把这条入账的代收手续费加到该上游社区的余额（账户流水「入账赠送」）；每条入账只赠送一次，之后改金额不会补差"
+              >
+                <Checkbox>代收手续费赠送给该社区</Checkbox>
               </Form.Item>
             ) : null}
             <Form.Item className="recon-form-wide" name="remark" label="备注" rules={[{ max: 255, message: "备注不能超过 255 个字符" }]}>

@@ -72,4 +72,6 @@ type AccountDetailQueryDTO struct {
 	BusinessID  string `form:"businessId"`
 	Operator    string `form:"operator"`
 	Description string `form:"description"`
+	StartTime   string `form:"startTime"`
+	EndTime     string `form:"endTime"`
 }
