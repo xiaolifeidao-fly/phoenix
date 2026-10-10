@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, type ReactNode } from "react";
-import { Alert, Button, Select, Table, Tag, Tooltip } from "antd";
+import { Alert, Button, InputNumber, Select, Table, Tag, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { settleCurrencyOptions } from "@/app/(console)/manual/api/settle.api";
 import type { ReconManualDimension, UpstreamDimension } from "../api/reconciliation.api";
@@ -119,15 +119,24 @@ const formulas = [
   { label: "返点为 0 时", expression: "返点 = 消费 × 赠送 ÷ 充值（充值为 0 时仍按 0）" },
   { label: "人工预计结算金额", expression: "预计结算积分 ÷ 10000（预计结算积分 = 各商品积分之和，不含徒弟奖励；待审核任务审核后可能还会增加）" },
   { label: "积分对照差异", expression: "各商品积分之和 − 积分日汇总的做单积分（徒弟奖励不分商品，不参与对照）" },
-  { label: "代收手续费（预计）", expression: "实际消费（消费 − 退款 − 补款）× 所选通道代收费率（按 U 取 U 费率，按 RMB 取 RMB 费率）" },
-  { label: "代付手续费（预计）", expression: "积分 ÷ 10000 × 所选通道代付费率（按 U 取 U 费率，按 RMB 取 RMB 费率）" },
+  { label: "代收手续费（预计）", expression: "实际消费（消费 − 退款 − 补款）× 代收费率（默认取所选通道的配置，按 U 取 U 费率，按 RMB 取 RMB 费率；可在本页改，只影响本页）" },
+  { label: "代付手续费（预计）", expression: "积分 ÷ 10000 × 代付费率（默认取所选通道的配置，按 U 取 U 费率，按 RMB 取 RMB 费率；可在本页改，只影响本页）" },
   { label: "利润", expression: "上游净额 − 人工预计结算金额 − 代付手续费；上游净额 = 消费 − 小费 − 返点 − 退款 − 补款 − 代收手续费" },
 ];
 
 /** 10000 积分 = 1 元 */
 const POINTS_PER_RMB = 10000;
 
-/** 手续费估算用的通道 / 币种选择，存 localStorage */
+/** 费率（小数）↔ 输入框里的百分比，百分比最多 4 位小数 */
+function rateToPercent(rate: number) {
+  return Number((rate * 100).toFixed(4));
+}
+
+function percentToRate(percent: number) {
+  return Number((percent / 100).toFixed(6));
+}
+
+/** 手续费估算用的通道 / 币种 / 费率选择，存 localStorage；费率默认取通道配置，可在本页改 */
 function FeeChannelPicker({ label, state }: { label: string; state: ReturnType<typeof useFeeChannel> }) {
   return (
     <span className="recon-fee-picker">
@@ -150,6 +159,25 @@ function FeeChannelPicker({ label, state }: { label: string; state: ReturnType<t
         onChange={state.setCurrency}
         options={settleCurrencyOptions}
       />
+      <Tooltip title={state.channel ? `通道配置费率 ${feeRateText(state.channelRate)}，改动只影响本页估算` : undefined}>
+        <InputNumber<number>
+          size="small"
+          style={{ width: 100 }}
+          min={0}
+          max={100}
+          precision={4}
+          controls={false}
+          suffix="%"
+          disabled={!state.channel}
+          value={rateToPercent(state.rate)}
+          onChange={(value) => state.setRate(value === null ? null : percentToRate(value))}
+        />
+      </Tooltip>
+      {state.rateOverridden ? (
+        <Button size="small" type="link" style={{ padding: 0 }} onClick={() => state.setRate(null)}>
+          恢复通道费率
+        </Button>
+      ) : null}
     </span>
   );
 }
@@ -168,9 +196,9 @@ export function DimensionAccountingCard({
   upstreamError,
   onUpstreamRetry,
 }: DimensionAccountingCardProps) {
-  const collectChannel = useFeeChannel("recon.workbench.upstreamCollectFee", "USDT");
-  const payoutChannel = useFeeChannel("recon.workbench.manualPayoutFee", "RMB");
-  const payoutRate = estimateFee(1, payoutChannel.channel, payoutChannel.currency, "payout").rate;
+  const collectChannel = useFeeChannel("recon.workbench.upstreamCollectFee", "USDT", "collect");
+  const payoutChannel = useFeeChannel("recon.workbench.manualPayoutFee", "RMB", "payout");
+  const payoutRate = payoutChannel.rate;
 
   // 合计行积分取各商品之和，和积分日汇总（user_points_daily）分开对照
   const categoryPoints = useMemo(
@@ -211,7 +239,8 @@ export function DimensionAccountingCard({
 
   // 实际消费 = 消费 − 退款 − 补款，代收手续费按它估算
   const actualConsume = (upstream?.consumeAmount ?? 0) - (upstream?.refundAmount ?? 0) - (upstream?.bkAmount ?? 0);
-  const collectFee = estimateFee(actualConsume, collectChannel.channel, collectChannel.currency, "collect");
+  const collectFee = estimateFee(actualConsume, collectChannel);
+  const collectRate = collectChannel.rate;
 
   const upstreamRows = useMemo<UpstreamRow[]>(() => {
     if (!upstream) {
@@ -249,11 +278,11 @@ export function DimensionAccountingCard({
         detail: collectChannel.channel
           ? `实际消费 ${money(actualConsume)} × ${collectChannel.channel.name} ${
               collectChannel.currency === "USDT" ? "U" : "RMB"
-            } 代收费率 ${feeRateText(collectFee.rate)}${collectFee.feeU !== null ? `，约 ${money(collectFee.feeU)} U` : ""}`
+            } 代收费率 ${feeRateText(collectRate)}${collectChannel.rateOverridden ? "（本页修改）" : ""}${collectFee.feeU !== null ? `，约 ${money(collectFee.feeU)} U` : ""}`
           : "没有可用的结算通道，按 0 计",
       },
     ];
-  }, [upstream, rebateEstimated, effectiveRebate, actualConsume, collectFee.feeRmb, collectFee.rate, collectFee.feeU, collectChannel.channel, collectChannel.currency]);
+  }, [upstream, rebateEstimated, effectiveRebate, actualConsume, collectFee.feeRmb, collectRate, collectFee.feeU, collectChannel.channel, collectChannel.currency, collectChannel.rateOverridden]);
 
   // 利润 = 上游净额 − 人工预计结算金额 − 代付手续费，统一按 RMB；返点取上面的 effectiveRebate
   const upstreamNet =

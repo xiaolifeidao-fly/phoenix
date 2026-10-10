@@ -4296,8 +4296,14 @@ select {
   color: var(--manager-text);
 }
 
+/* 冻结列横向滚动时要盖住下面的单元格，底色必须不透明（primary-light 是 rgba） */
 .recon-row-total > td {
-  background: var(--manager-primary-light) !important;
+  background: color-mix(in srgb, var(--manager-primary) 10%, var(--manager-surface)) !important;
+}
+
+.recon-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-left,
+.recon-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-right {
+  background: color-mix(in srgb, var(--manager-primary) 3.5%, var(--manager-surface));
 }
 
 .recon-row-total .recon-amount,
