@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CalendarOutlined, DeleteOutlined, EditOutlined, HistoryOutlined, PlusOutlined, SyncOutlined } from "@ant-design/icons";
 import {
   Alert,
+  App,
   Button,
   Checkbox,
   DatePicker,
@@ -111,6 +112,7 @@ export function LedgerCard({ ledger, range }: LedgerCardProps) {
   const [snapshotRecord, setSnapshotRecord] = useState<ReconLedgerRecord | null>(null);
   const [channels, setChannels] = useState<SettleChannelRecord[]>([]);
   const [form] = Form.useForm<LedgerFormValues>();
+  const { modal } = App.useApp();
   const formCategory = Form.useWatch("category", form);
   const formCurrency = Form.useWatch("currency", form);
   const formChannelId = Form.useWatch("settleChannelId", form);
@@ -215,8 +217,35 @@ export function LedgerCard({ ledger, range }: LedgerCardProps) {
     }
   };
 
+  /** 勾了手续费赠送时，保存前再确认一次：赠送会直接给上游社区加余额 */
+  const confirmGiveFee = (values: LedgerFormValues) =>
+    new Promise<boolean>((resolve) => {
+      const target =
+        editing?.upstreamUserId && editing.upstreamUserId === values.upstreamUserId
+          ? editing.upstreamUserName || `#${editing.upstreamUserId}`
+          : "所选上游社区";
+      modal.confirm({
+        title: "确认赠送代收手续费？",
+        content: (
+          <>
+            <p>
+              保存后会把这条入账的{feePreview ?? "代收手续费"}加到 {target} 的余额（账户流水「入账赠送」）。
+            </p>
+            <p>每条入账只赠送一次，已赠送过的不会重复加款；之后修改金额不会补差，删除入账也不会扣回。</p>
+          </>
+        ),
+        okText: "确认保存并赠送",
+        cancelText: "再想想",
+        onOk: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+
   const handleSubmit = async () => {
     const values = await form.validateFields();
+    if (values.giveFee && values.category === "COMMUNITY_IN" && !(await confirmGiveFee(values))) {
+      return;
+    }
     let saved;
     try {
       saved = await ledger.save(editing?.id ?? null, {
