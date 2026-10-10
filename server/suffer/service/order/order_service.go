@@ -339,6 +339,9 @@ func (s *OrderService) ListOrderRecords(query orderDTO.OrderRecordQueryDTO) (*ba
 	if value := strings.TrimSpace(query.BusinessID); value != "" {
 		dbQuery = dbQuery.Where("business_id LIKE ?", "%"+value+"%")
 	}
+	if query.EmptyBusinessIDOnly {
+		dbQuery = dbQuery.Where("(business_id IS NULL OR TRIM(business_id) = '')")
+	}
 	if value := strings.TrimSpace(query.BusinessKey); value != "" {
 		dbQuery = dbQuery.Where("business_key = ?", value)
 	}

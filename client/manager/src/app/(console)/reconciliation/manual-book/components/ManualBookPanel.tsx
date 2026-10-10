@@ -18,8 +18,8 @@ const { RangePicker } = DatePicker;
 
 type PanelTab = "ledger" | "manual-book" | "debt-compare";
 
-/** 默认本月：月初到今天 */
-const buildDefaultRange = (): [Dayjs, Dayjs] => [dayjs().startOf("month"), dayjs().startOf("day")];
+/** 默认当天 */
+const buildDefaultRange = (): [Dayjs, Dayjs] => [dayjs().startOf("day"), dayjs().startOf("day")];
 
 /**
  * 对账 - 人工记账：两个页签共用一个时间段。
@@ -61,7 +61,7 @@ export function ManualBookPanel() {
     void ledger.refresh();
     void book.refresh();
     void debtCompare.refresh();
-    message.success("已重置为本月");
+    message.success("已重置为当天");
   };
 
   const filters = (
@@ -80,7 +80,7 @@ export function ManualBookPanel() {
           value?.[0] && value[1] ? setRange([value[0].startOf("day"), value[1].startOf("day")]) : undefined
         }
       />
-      <Tooltip title="日期重置为本月并重新加载">
+      <Tooltip title="日期重置为当天并重新加载">
         <Button icon={<ReloadOutlined />} onClick={handleReset}>
           重置
         </Button>

@@ -140,6 +140,8 @@ type OrderRecordQueryDTO struct {
 	StartTime       string `form:"startTime"`
 	EndTime         string `form:"endTime"`
 	AbnormalOnly    bool   `form:"abnormalOnly"`
+	// 只看下单链接（business_id）为空的订单
+	EmptyBusinessIDOnly bool `form:"emptyBusinessIdOnly"`
 	// 提交率（%）区间：order_submit_num / order_assign_num
 	SubmitRateMin *float64 `form:"submitRateMin"`
 	SubmitRateMax *float64 `form:"submitRateMax"`

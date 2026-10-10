@@ -110,6 +110,7 @@ interface OrderFilters {
   channel: string;
   range: [Dayjs, Dayjs] | null;
   abnormalOnly: boolean;
+  emptyBusinessIdOnly: boolean;
 }
 
 const emptyFilters: OrderFilters = {
@@ -122,6 +123,7 @@ const emptyFilters: OrderFilters = {
   channel: "",
   range: null,
   abnormalOnly: false,
+  emptyBusinessIdOnly: false,
 };
 
 /** 已生效的筛选条件快照，用于渲染条件摘要 */
@@ -242,6 +244,7 @@ export function OrderManagementPanel() {
     externalOrderId: nextFilters.externalOrderId.trim() || undefined,
     channel: nextFilters.channel.trim() || undefined,
     abnormalOnly: nextFilters.abnormalOnly || undefined,
+    emptyBusinessIdOnly: nextFilters.emptyBusinessIdOnly || undefined,
     startTime: nextFilters.range?.[0] ? nextFilters.range[0].format("YYYY-MM-DD HH:mm:ss") : undefined,
     endTime: nextFilters.range?.[1] ? nextFilters.range[1].format("YYYY-MM-DD HH:mm:ss") : undefined,
     ...buildMetricQuery(nextMetrics),
@@ -370,6 +373,7 @@ export function OrderManagementPanel() {
       );
     }
     if (af.abnormalOnly) push("abnormalOnly", "仅异常订单", { abnormalOnly: false });
+    if (af.emptyBusinessIdOnly) push("emptyBusinessIdOnly", "仅空链接", { emptyBusinessIdOnly: false });
     if (af.businessId.trim()) push("businessId", `下单链接：${af.businessId.trim()}`, { businessId: "" });
     if (af.businessKey.trim()) push("businessKey", `视频 ID：${af.businessKey.trim()}`, { businessKey: "" });
     if (af.externalOrderId.trim()) {
@@ -1031,6 +1035,12 @@ export function OrderManagementPanel() {
                   onChange={(event) => setFilters((current) => ({ ...current, abnormalOnly: event.target.checked }))}
                 >
                   仅异常订单
+                </Checkbox>
+                <Checkbox
+                  checked={filters.emptyBusinessIdOnly}
+                  onChange={(event) => setFilters((current) => ({ ...current, emptyBusinessIdOnly: event.target.checked }))}
+                >
+                  仅空链接
                 </Checkbox>
               </Space>
             </div>

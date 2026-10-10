@@ -23,7 +23,11 @@ interface DimensionAccountingCardProps {
 interface ManualDimensionRow {
   key: string;
   name: string;
+  /** 提交总量（order_sum_record.total_num） */
   taskNum: number;
+  /** 总数量 = 审核通过 + 待审核 + 审核失败 + 私密 + 删除 */
+  statusTotalNum: number;
+  checkedNum: number;
   unCheckNum: number;
   points: number;
   /** 预计代付手续费（RMB）= 积分 ÷ 10000 × 所选通道代付费率 */
@@ -31,11 +35,29 @@ interface ManualDimensionRow {
   total?: boolean;
 }
 
+type StatusCounts = Pick<ReconManualDimension, "checkedNum" | "unCheckNum" | "checkErrorNum" | "secretNum" | "deleteNum">;
+
+/** 各审核状态之和；老接口没返回的字段按 0 算 */
+const statusTotal = (counts: StatusCounts) =>
+  (counts.checkedNum ?? 0) + (counts.unCheckNum ?? 0) + (counts.checkErrorNum ?? 0) + (counts.secretNum ?? 0) + (counts.deleteNum ?? 0);
+
 const manualColumns: ColumnsType<ManualDimensionRow> = [
   { title: "类目", dataIndex: "name", width: 140, fixed: "left", render: (value: string) => <span className="recon-row-name">{value}</span> },
-  moneyColumn<ManualDimensionRow>("任务数量", "taskNum", 110),
   {
-    title: "待审核数量",
+    title: (
+      <Tooltip title="审核通过 + 待审核 + 审核失败 + 私密 + 删除">
+        <span>总数量</span>
+      </Tooltip>
+    ),
+    dataIndex: "statusTotalNum",
+    width: 110,
+    align: "right",
+    render: (value: number) => <MoneyCell value={value} />,
+  },
+  moneyColumn<ManualDimensionRow>("提交总量", "taskNum", 110),
+  moneyColumn<ManualDimensionRow>("审核成功量", "checkedNum", 110),
+  {
+    title: "待审核量",
     dataIndex: "unCheckNum",
     width: 110,
     align: "right",
@@ -122,6 +144,7 @@ const formulas = [
   { label: "代收手续费（预计）", expression: "实际消费（消费 − 退款 − 补款）× 代收费率（默认取所选通道的配置，按 U 取 U 费率，按 RMB 取 RMB 费率；可在本页改，只影响本页）" },
   { label: "代付手续费（预计）", expression: "积分 ÷ 10000 × 代付费率（默认取所选通道的配置，按 U 取 U 费率，按 RMB 取 RMB 费率；可在本页改，只影响本页）" },
   { label: "利润", expression: "上游净额 − 人工预计结算金额 − 代付手续费；上游净额 = 消费 − 小费 − 返点 − 退款 − 补款 − 代收手续费" },
+  { label: "利润率", expression: "利润 ÷ 上游净额（上游净额 ≤ 0 时显示 —）" },
 ];
 
 /** 10000 积分 = 1 元 */
@@ -215,6 +238,8 @@ export function DimensionAccountingCard({
         key: "total",
         name: "合计",
         taskNum: manualDimension.taskNum,
+        statusTotalNum: statusTotal(manualDimension),
+        checkedNum: manualDimension.checkedNum,
         unCheckNum: manualDimension.unCheckNum,
         points: categoryPoints,
         payoutFee: (categoryPoints / POINTS_PER_RMB) * payoutRate,
@@ -224,6 +249,8 @@ export function DimensionAccountingCard({
         key: `category-${item.shopCategoryId}`,
         name: item.shopCategoryName,
         taskNum: item.taskNum,
+        statusTotalNum: statusTotal(item),
+        checkedNum: item.checkedNum,
         unCheckNum: item.unCheckNum,
         points: item.points ?? 0,
         payoutFee: ((item.points ?? 0) / POINTS_PER_RMB) * payoutRate,
@@ -298,6 +325,8 @@ export function DimensionAccountingCard({
   const payoutFeeRmb = manualSettleRmb * payoutRate;
   const unCheckNum = manualDimension?.unCheckNum ?? 0;
   const totalProfit = upstreamNet - manualSettleRmb - payoutFeeRmb;
+  // 利润率 = 利润 ÷ 上游净额；上游净额 ≤ 0 时无意义，不展示
+  const profitRate = upstreamNet > 0 ? totalProfit / upstreamNet : null;
   const systemCalc: {
     label: string;
     value: number;
@@ -327,7 +356,14 @@ export function DimensionAccountingCard({
       tone: "income",
       sub: "消费 − 小费 − 返点 − 退款 − 补款 − 代收手续费",
     },
-    { label: "总计利润", value: totalProfit, unit: "RMB", tone: "profit", highlight: true },
+    {
+      label: "总计利润",
+      value: totalProfit,
+      unit: "RMB",
+      tone: "profit",
+      sub: `利润率 ${profitRate === null ? "—" : `${(profitRate * 100).toFixed(2)}%`}（利润 ÷ 上游净额）`,
+      highlight: true,
+    },
   ];
 
   return (
@@ -364,7 +400,7 @@ export function DimensionAccountingCard({
             columns={manualColumns}
             dataSource={manualRows}
             pagination={false}
-            scroll={{ x: 610 }}
+            scroll={{ x: 940 }}
             rowClassName={(row) => (row.total ? "recon-row-total" : "")}
           />
           {manualDimension ? (

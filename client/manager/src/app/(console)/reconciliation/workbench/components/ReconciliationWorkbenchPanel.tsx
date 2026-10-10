@@ -22,8 +22,8 @@ import { MoneyCell } from "./shared";
 const { RangePicker } = DatePicker;
 const { Text } = Typography;
 
-/** 默认本月：月初到今天 */
-const buildDefaultRange = (): [Dayjs, Dayjs] => [dayjs().startOf("month"), dayjs().startOf("day")];
+/** 默认当天 */
+const buildDefaultRange = (): [Dayjs, Dayjs] => [dayjs().startOf("day"), dayjs().startOf("day")];
 
 export function ReconciliationWorkbenchPanel() {
   const [range, setRange] = useState<[Dayjs, Dayjs]>(buildDefaultRange);
@@ -88,7 +88,7 @@ export function ReconciliationWorkbenchPanel() {
     void accountStatus.refresh();
     void manualBook.refresh();
     void debtCompare.refresh();
-    message.success("已重置为本月");
+    message.success("已重置为当天");
   };
 
   return (
@@ -115,7 +115,7 @@ export function ReconciliationWorkbenchPanel() {
                   value?.[0] && value[1] ? setRange([value[0].startOf("day"), value[1].startOf("day")]) : undefined
                 }
               />
-              <Tooltip title="日期重置为本月并重新加载">
+              <Tooltip title="日期重置为当天并重新加载">
                 <Button icon={<ReloadOutlined />} onClick={handleReset}>
                   重置
                 </Button>

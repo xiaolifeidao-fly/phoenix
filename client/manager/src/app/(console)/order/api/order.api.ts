@@ -96,6 +96,8 @@ export interface OrderListQuery extends Record<string, string | number | boolean
   startTime?: string;
   endTime?: string;
   abnormalOnly?: boolean;
+  /** 只看下单链接为空的订单 */
+  emptyBusinessIdOnly?: boolean;
   /** 提交率区间（百分比，0-100） */
   submitRateMin?: number;
   submitRateMax?: number;

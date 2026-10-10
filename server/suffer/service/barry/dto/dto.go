@@ -1467,6 +1467,9 @@ type ReconManualDimensionDTO struct {
 	CheckedNum int64  `json:"checkedNum"`
 	// UnCheckNum 待审核数(order_sum_record.un_check_num), 和人工任务统计的「待审核」一致.
 	UnCheckNum      int64                                 `json:"unCheckNum"`
+	CheckErrorNum   int64                                 `json:"checkErrorNum"`
+	SecretNum       int64                                 `json:"secretNum"`
+	DeleteNum       int64                                 `json:"deleteNum"`
 	Points          int64                                 `json:"points"`
 	TaskPoints      int64                                 `json:"taskPoints"`
 	ChildrenPoints  int64                                 `json:"childrenPoints"`
@@ -1480,6 +1483,9 @@ type ReconManualDimensionShopCategoryDTO struct {
 	TaskNum          int64  `json:"taskNum"`
 	CheckedNum       int64  `json:"checkedNum"`
 	UnCheckNum       int64  `json:"unCheckNum"`
+	CheckErrorNum    int64  `json:"checkErrorNum"`
+	SecretNum        int64  `json:"secretNum"`
+	DeleteNum        int64  `json:"deleteNum"`
 	Points           int64  `json:"points"` // 审核通过订单的积分(order_sum_record.order_score), 不含徒弟奖励
 	UserCount        int64  `json:"userCount"`
 }

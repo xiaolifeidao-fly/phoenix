@@ -11,6 +11,9 @@ export interface ReconManualDimensionShopCategory {
   checkedNum: number;
   /** 待审核数量（order_sum_record.un_check_num） */
   unCheckNum: number;
+  checkErrorNum: number;
+  secretNum: number;
+  deleteNum: number;
   /** 审核通过订单的积分（order_sum_record.order_score），不含徒弟奖励 */
   points: number;
   userCount: number;
@@ -31,6 +34,12 @@ export class ReconManualDimension {
 
   /** 待审核数量合计，和「人工 - 任务统计」的待审核同一口径 */
   unCheckNum = 0;
+
+  checkErrorNum = 0;
+
+  secretNum = 0;
+
+  deleteNum = 0;
 
   /** 积分合计 = taskPoints + childrenPoints */
   points = 0;
