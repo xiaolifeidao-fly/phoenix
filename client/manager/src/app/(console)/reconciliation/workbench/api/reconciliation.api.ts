@@ -347,6 +347,8 @@ export interface ReconLedgerPayload {
   upstreamUserId?: string;
   /** 人工出款必填：下游人工用户（barry 做单用户 ID） */
   userId?: number;
+  /** 新增社区入账：人工微调后的代收手续费（RMB），不传按通道费率算；只能在费率算出的值上下 100 以内 */
+  collectFeeRmb?: number;
   remark?: string;
 }
 

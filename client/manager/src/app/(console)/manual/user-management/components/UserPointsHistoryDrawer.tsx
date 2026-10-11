@@ -16,6 +16,7 @@ import {
   type ManualUserPointsRecord,
   type ManualUserRecord,
 } from "../../api/user.api";
+import { fetchManualWithdrawRecords, formatPaymentType, type ManualWithdrawRecord } from "../../api/withdraw.api";
 
 const { RangePicker } = DatePicker;
 const { Text } = Typography;
@@ -25,12 +26,30 @@ const POINTS_PER_YUAN = 10000;
 
 const PAGE_SIZE = 20;
 
-type HistoryTab = "summary" | "detail";
+type HistoryTab = "summary" | "withdraw" | "detail";
+
+/** 抽屉只需要用户 id、用户名；余额有就显示在右上角 */
+export type UserPointsHistoryTarget = Pick<ManualUserRecord, "id" | "username"> &
+  Partial<Pick<ManualUserRecord, "activePoints" | "blockPoints">>;
 
 interface UserPointsHistoryDrawerProps {
-  user: ManualUserRecord | null;
+  user: UserPointsHistoryTarget | null;
   onClose: () => void;
+  /** 显示「提现记录」页签（提现和结算管理里打开时用） */
+  showWithdraws?: boolean;
 }
+
+/** 提现记录页签不展示进行中的提现：待审核 / 审核中 / 结算中 */
+const IN_PROGRESS_WITHDRAW_STATUSES = new Set(["UN_APPROVE", "APPROVING", "ACCOUNTING"]);
+
+const withdrawStatusMeta: Record<string, { text: string; color: string }> = {
+  FINISH: { text: "提现成功", color: "success" },
+  ERROR: { text: "提现失败", color: "error" },
+  CANCEL: { text: "取消成功", color: "default" },
+  CANCELING: { text: "取消中", color: "default" },
+  UN_FINISH: { text: "待完成", color: "default" },
+};
+
 
 /** 默认近 7 天（含今天） */
 const buildDefaultRange = (): [Dayjs, Dayjs] => [dayjs().subtract(6, "day").startOf("day"), dayjs().startOf("day")];
@@ -55,12 +74,32 @@ function PointsCell({ value, muted }: { value: number; muted?: boolean }) {
   );
 }
 
+/** 抽屉顶部的余额卡片：大号数字 + 约合金额 */
+function BalanceCard({ label, points, color }: { label: string; points: number; color: string }) {
+  return (
+    <div className="manager-data-card" style={{ padding: "14px 18px", borderLeft: `4px solid ${color}` }}>
+      <Text type="secondary" style={{ fontSize: 13 }}>
+        {label}
+      </Text>
+      <div style={{ marginTop: 4, fontSize: 26, fontWeight: 700, lineHeight: 1.3, color, fontVariantNumeric: "tabular-nums" }}>
+        {points.toLocaleString("zh-CN")}
+        <Text type="secondary" style={{ marginLeft: 6, fontSize: 13, fontWeight: 400 }}>
+          积分
+        </Text>
+      </div>
+      <Text type="secondary" style={{ fontSize: 12 }}>
+        ≈ {yuan(points)} 元
+      </Text>
+    </div>
+  );
+}
+
 function yuan(points: number) {
   return (points / POINTS_PER_YUAN).toLocaleString("zh-CN", { maximumFractionDigits: 4 });
 }
 
-/** 做单用户积分明细：积分汇总（按天）+ 积分明细（倒序分页），共用一个日期区间 */
-export function UserPointsHistoryDrawer({ user, onClose }: UserPointsHistoryDrawerProps) {
+/** 用户积分明细：积分汇总（按天）+ 提现记录（可选）+ 积分明细（倒序分页），共用一个日期区间 */
+export function UserPointsHistoryDrawer({ user, onClose, showWithdraws = false }: UserPointsHistoryDrawerProps) {
   const [tab, setTab] = useState<HistoryTab>("summary");
   const [range, setRange] = useState<[Dayjs, Dayjs]>(buildDefaultRange);
   const [source, setSource] = useState<ManualPointsSource | undefined>();
@@ -68,12 +107,14 @@ export function UserPointsHistoryDrawer({ user, onClose }: UserPointsHistoryDraw
 
   const [daily, setDaily] = useState<ManualUserPointsDailyRecord[]>([]);
   const [records, setRecords] = useState<ManualUserPointsRecord[]>([]);
+  const [withdraws, setWithdraws] = useState<ManualWithdrawRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestSeq = useRef(0);
 
   const userId = user?.id ?? 0;
+  const username = user?.username ?? "";
   const startDate = range[0].format("YYYY-MM-DD");
   const endDate = range[1].format("YYYY-MM-DD");
   const days = range[1].diff(range[0], "day") + 1;
@@ -86,6 +127,7 @@ export function UserPointsHistoryDrawer({ user, onClose }: UserPointsHistoryDraw
     setPage(1);
     setDaily([]);
     setRecords([]);
+    setWithdraws([]);
     setTotal(0);
     setError(null);
   }, [userId]);
@@ -99,6 +141,7 @@ export function UserPointsHistoryDrawer({ user, onClose }: UserPointsHistoryDraw
       setError(`日期区间最长 ${MANUAL_POINTS_HISTORY_MAX_DAYS} 天，请缩小范围`);
       setDaily([]);
       setRecords([]);
+      setWithdraws([]);
       setTotal(0);
       return;
     }
@@ -109,6 +152,20 @@ export function UserPointsHistoryDrawer({ user, onClose }: UserPointsHistoryDraw
         const result = await fetchManualUserPointsDaily({ userId, startDate, endDate });
         if (seq === requestSeq.current) {
           setDaily(result);
+        }
+      } else if (tab === "withdraw") {
+        // 按申请时间查，只保留已结束的提现（进行中的在提现记录列表里处理）
+        const result = await fetchManualWithdrawRecords({
+          username,
+          startTime: `${startDate} 00:00:00`,
+          endTime: `${endDate} 23:59:59`,
+        });
+        if (seq === requestSeq.current) {
+          setWithdraws(
+            result
+              .filter((item) => !IN_PROGRESS_WITHDRAW_STATUSES.has(item.status))
+              .sort((a, b) => (b.applyTime || "").localeCompare(a.applyTime || "") || b.id - a.id),
+          );
         }
       } else {
         const result = await fetchManualUserPointsRecords({ userId, startDate, endDate, source, page, pageSize: PAGE_SIZE });
@@ -126,7 +183,7 @@ export function UserPointsHistoryDrawer({ user, onClose }: UserPointsHistoryDraw
         setLoading(false);
       }
     }
-  }, [userId, tab, startDate, endDate, days, source, page]);
+  }, [userId, username, tab, startDate, endDate, days, source, page]);
 
   useEffect(() => {
     void load();
@@ -198,6 +255,68 @@ export function UserPointsHistoryDrawer({ user, onClose }: UserPointsHistoryDraw
     { title: "笔数", dataIndex: "count", width: 70, align: "right" },
   ];
 
+  const withdrawTotal = useMemo(
+    () => withdraws.filter((item) => item.status === "FINISH").reduce((sum, item) => sum + Number(item.points || 0), 0),
+    [withdraws],
+  );
+
+  const withdrawColumns: ColumnsType<ManualWithdrawRecord> = [
+    { title: "申请时间", dataIndex: "applyTime", width: 170, fixed: "left", render: (value?: string) => value || "-" },
+    {
+      title: "积分",
+      dataIndex: "points",
+      width: 130,
+      align: "right",
+      render: (value: number) => (
+        <span>
+          <Text style={{ fontVariantNumeric: "tabular-nums" }}>{Number(value || 0).toLocaleString("zh-CN")}</Text>
+          <div>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              ≈ {yuan(Number(value || 0))} 元
+            </Text>
+          </div>
+        </span>
+      ),
+    },
+    {
+      title: "状态",
+      dataIndex: "status",
+      width: 100,
+      render: (value: string) => {
+        const meta = withdrawStatusMeta[value];
+        return <Tag color={meta?.color}>{meta?.text || value || "-"}</Tag>;
+      },
+    },
+    {
+      title: "支付方式",
+      key: "payment",
+      width: 200,
+      render: (_, record) => (
+        <div>
+          {formatPaymentType(record.paymentType)}
+          <div>
+            <Text type="secondary" style={{ fontSize: 12, wordBreak: "break-all" }}>
+              {[record.paymentName, record.paymentAccount].filter(Boolean).join(" / ") || "-"}
+            </Text>
+          </div>
+        </div>
+      ),
+    },
+    { title: "审核时间", dataIndex: "approveTime", width: 170, render: (value?: string) => value || "-" },
+    {
+      title: "备注",
+      dataIndex: "description",
+      width: 220,
+      render: (value?: string) => <div style={{ whiteSpace: "normal", wordBreak: "break-all" }}>{value || "-"}</div>,
+    },
+    {
+      title: "记录ID",
+      dataIndex: "id",
+      width: 90,
+      render: (value: number) => <Text type="secondary">{value || "-"}</Text>,
+    },
+  ];
+
   const recordColumns: ColumnsType<ManualUserPointsRecord> = [
     { title: "时间", dataIndex: "createdTime", width: 170, fixed: "left", render: (value?: string) => value || "-" },
     {
@@ -254,15 +373,14 @@ export function UserPointsHistoryDrawer({ user, onClose }: UserPointsHistoryDraw
       width="min(1080px, 92vw)"
       title={user ? `积分明细 · ${user.username}` : "积分明细"}
       onClose={onClose}
-      extra={
-        user ? (
-          <Text type="secondary">
-            当前余额 {user.activePoints.toLocaleString("zh-CN")}，冻结 {user.blockPoints.toLocaleString("zh-CN")}
-          </Text>
-        ) : null
-      }
     >
       <Space direction="vertical" size={12} style={{ width: "100%" }}>
+        {user && user.activePoints != null && user.blockPoints != null ? (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+            <BalanceCard label="当前可用余额" points={user.activePoints} color="var(--manager-primary)" />
+            <BalanceCard label="冻结（提现中）" points={user.blockPoints} color="var(--manager-amber)" />
+          </div>
+        ) : null}
         <Space size={8} wrap>
           <RangePicker
             value={range}
@@ -297,7 +415,11 @@ export function UserPointsHistoryDrawer({ user, onClose }: UserPointsHistoryDraw
             刷新
           </Button>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            按做单日期统计（人工调整、提现等无做单日期的按流水时间），最长 {MANUAL_POINTS_HISTORY_MAX_DAYS} 天；提现在提现成功时扣除
+            {tab === "withdraw"
+              ? `按申请时间筛选，不含待审核、审核中、结算中的提现，最长 ${MANUAL_POINTS_HISTORY_MAX_DAYS} 天`
+              : tab === "summary"
+                ? `任务入账、徒弟奖励取积分日汇总表；人工调整、提现、笔数取流水（按流水时间归日，流水被清理的日期为 0），最长 ${MANUAL_POINTS_HISTORY_MAX_DAYS} 天`
+                : `按做单日期统计（人工调整、提现等无做单日期的按流水时间），最长 ${MANUAL_POINTS_HISTORY_MAX_DAYS} 天；提现在提现成功时扣除`}
           </Text>
         </Space>
 
@@ -371,6 +493,44 @@ export function UserPointsHistoryDrawer({ user, onClose }: UserPointsHistoryDraw
                 />
               ),
             },
+            ...(showWithdraws
+              ? [
+                  {
+                    key: "withdraw",
+                    label: "提现记录",
+                    children: (
+                      <Table<ManualWithdrawRecord>
+                        rowKey="id"
+                        size="small"
+                        loading={loading}
+                        columns={withdrawColumns}
+                        dataSource={withdraws}
+                        pagination={false}
+                        scroll={{ x: 1080, y: "calc(100vh - 360px)" }}
+                        locale={{ emptyText: <Empty description="所选日期内没有已结束的提现" /> }}
+                        summary={() =>
+                          withdraws.length ? (
+                            <Table.Summary fixed="top">
+                              <Table.Summary.Row style={{ fontWeight: 600 }}>
+                                <Table.Summary.Cell index={0}>共 {withdraws.length} 笔</Table.Summary.Cell>
+                                <Table.Summary.Cell index={1} align="right">
+                                  {withdrawTotal.toLocaleString("zh-CN")}
+                                  <div>
+                                    <Text type="secondary" style={{ fontSize: 12, fontWeight: 400 }}>
+                                      提现成功合计 ≈ {yuan(withdrawTotal)} 元
+                                    </Text>
+                                  </div>
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell index={2} colSpan={5} />
+                              </Table.Summary.Row>
+                            </Table.Summary>
+                          ) : null
+                        }
+                      />
+                    ),
+                  },
+                ]
+              : []),
             {
               key: "detail",
               label: "积分明细",

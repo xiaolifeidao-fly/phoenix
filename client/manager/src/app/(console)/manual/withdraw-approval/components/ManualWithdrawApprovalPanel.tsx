@@ -7,6 +7,7 @@ import weekday from "dayjs/plugin/weekday";
 import {
   CheckCircleOutlined,
   CloseCircleOutlined,
+  HistoryOutlined,
   ReloadOutlined,
   SearchOutlined,
   WalletOutlined,
@@ -21,8 +22,13 @@ import {
   cancelManualWithdraw,
   fetchManualWithdrawRecords,
   finishManualWithdraw,
+  formatPaymentType,
   type ManualWithdrawRecord,
 } from "../../api/withdraw.api";
+import {
+  UserPointsHistoryDrawer,
+  type UserPointsHistoryTarget,
+} from "../../user-management/components/UserPointsHistoryDrawer";
 
 const { Text, Title } = Typography;
 const { RangePicker } = DatePicker;
@@ -57,6 +63,7 @@ export function ManualWithdrawApprovalPanel() {
   const [submitting, setSubmitting] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [actionState, setActionState] = useState<ActionState | null>(null);
+  const [pointsHistoryUser, setPointsHistoryUser] = useState<UserPointsHistoryTarget | null>(null);
   const [filters, setFilters] = useState({
     username: "",
     channel: "",
@@ -201,11 +208,12 @@ export function ManualWithdrawApprovalPanel() {
     {
       title: "提现信息",
       key: "points",
-      width: 180,
+      width: 240,
       render: (_, record) => (
         <Space direction="vertical" size={2}>
           <Text>{`${Number(record.points || 0).toLocaleString("zh-CN")} 积分`}</Text>
           <Text type="secondary">{`记录ID: ${record.id || "-"}`}</Text>
+          <Text type="secondary">{`账户余额：${formatBalance(record)}`}</Text>
         </Space>
       ),
     },
@@ -246,7 +254,7 @@ export function ManualWithdrawApprovalPanel() {
       title: "操作",
       key: "actions",
       fixed: "right",
-      width: 220,
+      width: 230,
       render: (_, record) => (
         <Space size={4} wrap>
           <Button
@@ -276,6 +284,22 @@ export function ManualWithdrawApprovalPanel() {
             onClick={() => openActionModal("cancel", record)}
           >
             驳回
+          </Button>
+          <Button
+            type="text"
+            size="small"
+            icon={<HistoryOutlined />}
+            disabled={!record.userId}
+            onClick={() =>
+              setPointsHistoryUser({
+                id: record.userId,
+                username: record.username,
+                activePoints: record.activePoints,
+                blockPoints: record.blockPoints,
+              })
+            }
+          >
+            积分明细
           </Button>
         </Space>
       ),
@@ -419,6 +443,7 @@ export function ManualWithdrawApprovalPanel() {
           <Space direction="vertical" size={14} style={{ width: "100%" }}>
             <Text>{`用户：${actionState.record.username || "-"}`}</Text>
             <Text>{`积分：${Number(actionState.record.points || 0).toLocaleString("zh-CN")}`}</Text>
+            <Text>{`账户余额：${formatBalance(actionState.record)}`}</Text>
             <Text>{`当前状态：${resolveStatusText(actionState.record.status)}`}</Text>
             {actionState.mode === "cancel" ? (
               <Input.TextArea
@@ -433,6 +458,8 @@ export function ManualWithdrawApprovalPanel() {
           </Space>
         ) : null}
       </Modal>
+
+      <UserPointsHistoryDrawer showWithdraws user={pointsHistoryUser} onClose={() => setPointsHistoryUser(null)} />
     </div>
   );
 }
@@ -522,18 +549,6 @@ function resolveStatusColor(status?: string) {
   }
 }
 
-function formatPaymentType(value?: string) {
-  switch ((value || "").toUpperCase()) {
-    case "ALIPAY":
-      return "支付宝";
-    case "WECHAT":
-      return "微信";
-    case "WALLET":
-      return "钱包";
-    default:
-      return value || "-";
-  }
-}
 
 function canAccount(status?: string) {
   return status === "UN_APPROVE" || status === "APPROVING";
@@ -545,4 +560,13 @@ function canFinish(status?: string) {
 
 function canCancel(status?: string) {
   return status === "UN_APPROVE" || status === "APPROVING" || status === "ACCOUNTING";
+}
+
+function formatPoints(value?: number) {
+  return value == null ? "-" : Number(value).toLocaleString("zh-CN");
+}
+
+/** 用户当前账户余额（实时值）：可用 / 冻结 */
+function formatBalance(record: ManualWithdrawRecord) {
+  return `可用 ${formatPoints(record.activePoints)} / 冻结 ${formatPoints(record.blockPoints)}`;
 }

@@ -38,6 +38,58 @@ function PriceCell({ value }: { value: number }) {
   );
 }
 
+/** 浮点相减会留尾差，小于这个值当作没变 */
+const EPSILON = 1e-9;
+
+function signedPrice(value: number) {
+  return value > EPSILON ? `+${price(value)}` : price(Math.abs(value) < EPSILON ? 0 : value);
+}
+
+function signedPoints(value: number) {
+  const text = (value * 100).toFixed(2);
+  return value > 0 ? `+${text}` : text;
+}
+
+/** 变化量：按对利润的影响着色，正数（利润变多）绿、负数红 */
+function DeltaCell({ value }: { value: number }) {
+  if (Math.abs(value) < EPSILON) {
+    return <span className="recon-amount" style={{ color: "var(--manager-text-faint)" }}>0</span>;
+  }
+  return (
+    <span className={value > 0 ? "recon-amount recon-amount--profit" : "recon-amount recon-amount--negative"}>
+      {signedPrice(value)}
+    </span>
+  );
+}
+
+/** 价格输入框下方提示：手动改过价格时显示 原价 → 现价（变化） */
+function PriceChangeHint({ base, current }: { base: number | null; current: number | null }) {
+  if (base == null || current == null || Math.abs(current - base) < EPSILON) {
+    return null;
+  }
+  const delta = current - base;
+  return (
+    <div className="recon-subcard-caption" style={{ marginTop: 6 }}>
+      原价 {price(base)} → {price(current)}（{signedPrice(delta)}
+      {base ? `，${signedPoints(delta / base)}%` : ""}）
+    </div>
+  );
+}
+
+/**
+ * 金额一律 RMB；社区入账、人工出账各自选的 U / RMB 只决定用哪套代收 / 代付费率。
+ * 入账手续费基数 = 上游价格（不扣小费）；代出手续费基数 = 下游价格；上游赠送基数 = 上游价格。
+ */
+function computeProfit(up: number, tipValue: number, down: number, collectRate: number, payoutRate: number, giftRate: number) {
+  const upstreamNet = up - tipValue;
+  const collectFee = up * collectRate;
+  const collectNet = upstreamNet - collectFee;
+  const payoutFee = down * payoutRate;
+  const gift = up * giftRate;
+  const profit = collectNet - down - payoutFee - gift;
+  return { up, tipValue, upstreamNet, collectFee, collectNet, down, payoutFee, gift, profit };
+}
+
 async function fetchAllUpstreamCategories() {
   const rows: ShopCategoryRecord[] = [];
   for (let pageIndex = 1; ; pageIndex += 1) {
@@ -57,8 +109,10 @@ const feeCurrencyOptions: Array<{ label: string; value: SettleCurrency }> = [
 interface CalcRow {
   key: string;
   label: string;
-  /** 单件金额，按所选币种 */
+  /** 单件金额（现价），按所选币种 */
   unit: number;
+  /** 单件金额（原价：选商品时带出的价格） */
+  base: number;
   note?: string;
   /** 小计 / 利润行加粗 */
   total?: boolean;
@@ -88,6 +142,9 @@ export function ProfitCalcPanel() {
   const [quantity, setQuantity] = useState<number | null>(1);
   /** 上游赠送比例（%），充值赠送的部分没有真实入账，从利润里扣掉 */
   const [giftPercent, setGiftPercent] = useState<number | null>(10);
+  // 选商品时带出的原价，用来和手动改过的现价对比；没选商品时为 null。小费不对比，原价、现价都按最新填写的算
+  const [baseUpstreamPrice, setBaseUpstreamPrice] = useState<number | null>(null);
+  const [baseDownstreamPrice, setBaseDownstreamPrice] = useState<number | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -127,53 +184,62 @@ export function ProfitCalcPanel() {
   const handleCategoryChange = (id?: number) => {
     setCategoryId(id);
     const next = categories.find((item) => item.id === id);
-    setUpstreamPrice(next ? Number(next.price) || 0 : null);
+    const nextPrice = next ? Number(next.price) || 0 : null;
+    setUpstreamPrice(nextPrice);
     setTip(next ? Number(next.tipAmount) || 0 : null);
+    setBaseUpstreamPrice(nextPrice);
   };
 
   const handleProductChange = (id?: number) => {
     setProductId(id);
     const next = products.find((item) => item.id === id);
-    setDownstreamPrice(next ? (next.score || 0) / POINTS_PER_RMB : null);
+    const nextPrice = next ? (next.score || 0) / POINTS_PER_RMB : null;
+    setDownstreamPrice(nextPrice);
+    setBaseDownstreamPrice(nextPrice);
   };
 
   const giftRate = (giftPercent || 0) / 100;
   const ready = !!channel && upstreamPrice != null && downstreamPrice != null;
 
-  /**
-   * 金额一律 RMB；社区入账、人工出账各自选的 U / RMB 只决定用哪套代收 / 代付费率。
-   * 入账手续费基数 = 上游价格（不扣小费）；代出手续费基数 = 下游价格；上游赠送基数 = 上游价格。
-   */
+  /** 现价算一遍、原价算一遍；没选商品的一侧原价按现价算，变化只反映手动改价 */
   const calc = useMemo(() => {
     if (!ready) {
       return null;
     }
     const up = upstreamPrice ?? 0;
     const tipValue = tip ?? 0;
-    const upstreamNet = up - tipValue;
-    const collectFee = up * collectRate;
-    const collectNet = upstreamNet - collectFee;
     const down = downstreamPrice ?? 0;
-    const payoutFee = down * payoutRate;
-    const gift = up * giftRate;
-    const profit = collectNet - down - payoutFee - gift;
-    return { up, tipValue, upstreamNet, collectFee, collectNet, down, payoutFee, gift, profit };
-  }, [ready, upstreamPrice, tip, downstreamPrice, collectRate, payoutRate, giftRate]);
+    return {
+      current: computeProfit(up, tipValue, down, collectRate, payoutRate, giftRate),
+      base: computeProfit(
+        baseUpstreamPrice ?? up,
+        tipValue,
+        baseDownstreamPrice ?? down,
+        collectRate,
+        payoutRate,
+        giftRate,
+      ),
+    };
+  }, [ready, upstreamPrice, tip, downstreamPrice, baseUpstreamPrice, baseDownstreamPrice, collectRate, payoutRate, giftRate]);
+  const hasBase = baseUpstreamPrice != null || baseDownstreamPrice != null;
 
   const unitLabel = "RMB";
   const qty = quantity || 0;
 
   const rows: CalcRow[] = calc
-    ? [
-        { key: "up", label: "上游价格", unit: calc.up },
-        { key: "tip", label: "− 小费", unit: -calc.tipValue },
-        { key: "collect", label: "− 入账手续费", unit: -calc.collectFee, note: `上游价格 × ${percent(collectRate)}` },
-        { key: "collect-net", label: "实际入账", unit: calc.collectNet, total: true, note: "上游价格 − 小费 − 入账手续费" },
-        { key: "down", label: "− 下游价格", unit: -calc.down },
-        { key: "payout", label: "− 代出手续费", unit: -calc.payoutFee, note: `下游价格 × ${percent(payoutRate)}` },
-        { key: "gift", label: "− 上游赠送", unit: -calc.gift, note: `上游价格 × ${percent(giftRate)}` },
-        { key: "profit", label: "利润", unit: calc.profit, total: true },
-      ]
+    ? (() => {
+        const { current: c, base: b } = calc;
+        return [
+          { key: "up", label: "上游价格", unit: c.up, base: b.up },
+          { key: "tip", label: "− 小费", unit: -c.tipValue, base: -b.tipValue },
+          { key: "collect", label: "− 入账手续费", unit: -c.collectFee, base: -b.collectFee, note: `上游价格 × ${percent(collectRate)}` },
+          { key: "collect-net", label: "实际入账", unit: c.collectNet, base: b.collectNet, total: true, note: "上游价格 − 小费 − 入账手续费" },
+          { key: "down", label: "− 下游价格", unit: -c.down, base: -b.down },
+          { key: "payout", label: "− 代出手续费", unit: -c.payoutFee, base: -b.payoutFee, note: `下游价格 × ${percent(payoutRate)}` },
+          { key: "gift", label: "− 上游赠送", unit: -c.gift, base: -b.gift, note: `上游价格 × ${percent(giftRate)}` },
+          { key: "profit", label: "利润", unit: c.profit, base: b.profit, total: true },
+        ];
+      })()
     : [];
 
   const columns: ColumnsType<CalcRow> = [
@@ -189,22 +255,31 @@ export function ProfitCalcPanel() {
       ),
     },
     {
-      title: `单件 ${unitLabel}`,
-      dataIndex: "unit",
-      width: 140,
+      title: `原价 ${unitLabel}`,
+      dataIndex: "base",
+      width: 120,
       align: "right",
       render: (value: number) => <PriceCell value={value} />,
     },
     {
-      title: `× ${qty} 合计 ${unitLabel}`,
-      key: "sum",
-      width: 160,
+      title: `现价 ${unitLabel}`,
+      dataIndex: "unit",
+      width: 120,
       align: "right",
-      render: (_, row) => <PriceCell value={row.unit * qty} />,
+      render: (value: number) => <PriceCell value={value} />,
+    },
+    {
+      title: "变化",
+      key: "delta",
+      width: 120,
+      align: "right",
+      render: (_, row) => <DeltaCell value={row.unit - row.base} />,
     },
   ];
 
-  const profitRate = calc && calc.up ? calc.profit / calc.up : null;
+  const profitRate = calc && calc.current.up ? calc.current.profit / calc.current.up : null;
+  const baseProfitRate = calc && calc.base.up ? calc.base.profit / calc.base.up : null;
+  const profitDelta = calc ? calc.current.profit - calc.base.profit : 0;
 
   const formulas = [
     { label: "入账手续费", expression: "上游价格 × 代收手续费率" },
@@ -317,6 +392,7 @@ export function ProfitCalcPanel() {
                 </Descriptions.Item>
                 <Descriptions.Item label="上游价格">
                   <InputNumber style={{ width: "100%" }} min={0} addonAfter="RMB" value={upstreamPrice} onChange={setUpstreamPrice} />
+                  <PriceChangeHint base={baseUpstreamPrice} current={upstreamPrice} />
                 </Descriptions.Item>
                 <Descriptions.Item label="小费">
                   <InputNumber style={{ width: "100%" }} min={0} addonAfter="RMB" value={tip} onChange={setTip} />
@@ -355,6 +431,7 @@ export function ProfitCalcPanel() {
                     value={downstreamPrice}
                     onChange={setDownstreamPrice}
                   />
+                  <PriceChangeHint base={baseDownstreamPrice} current={downstreamPrice} />
                 </Descriptions.Item>
                 <Descriptions.Item label="数量">
                   <InputNumber style={{ width: "100%" }} min={0} precision={0} value={quantity} onChange={setQuantity} />
@@ -367,7 +444,9 @@ export function ProfitCalcPanel() {
             <div className="recon-subcard-head">
               <span className="recon-subcard-title">试算结果</span>
               <span className="recon-subcard-caption">
-                {channel ? `${channel.name} · 入账按 ${collectU ? "U" : "RMB"} · 出账按 ${payoutU ? "U" : "RMB"} · 金额 RMB` : "先选结算通道"}
+                {channel
+                  ? `${channel.name} · 入账按 ${collectU ? "U" : "RMB"} · 出账按 ${payoutU ? "U" : "RMB"} · 金额 RMB${hasBase ? " · 原价 = 所选商品价格" : " · 未选商品，原价同现价"}`
+                  : "先选结算通道"}
               </span>
             </div>
             {!ready ? (
@@ -392,27 +471,66 @@ export function ProfitCalcPanel() {
                   <div className="recon-calc-strip-title">单件利润</div>
                   <div className="recon-calc-grid">
                     <div className="recon-calc-item">
-                      <span className="recon-calc-label">实际入账（扣入账手续费后）</span>
+                      <span className="recon-calc-label">
+                        <span className="recon-calc-label-title">实际入账（扣入账手续费后）</span>
+                        <span className="recon-calc-label-sub">原价 {price(calc?.base.collectNet ?? 0)}</span>
+                      </span>
                       <span className="recon-calc-value">
-                        <PriceCell value={calc?.collectNet ?? 0} />
+                        <PriceCell value={calc?.current.collectNet ?? 0} />
                         <em className="recon-calc-unit">{unitLabel}</em>
                       </span>
                     </div>
                     <div className="recon-calc-item recon-calc-item--highlight">
-                      <span className="recon-calc-label">利润</span>
+                      <span className="recon-calc-label">
+                        <span className="recon-calc-label-title">利润</span>
+                        <span className="recon-calc-label-sub">
+                          原价 {price(calc?.base.profit ?? 0)} → 现价 {price(calc?.current.profit ?? 0)}，变化{" "}
+                          <DeltaCell value={profitDelta} />
+                        </span>
+                      </span>
                       <span className="recon-calc-value">
-                        <PriceCell value={calc?.profit ?? 0} />
+                        <PriceCell value={calc?.current.profit ?? 0} />
                         <em className="recon-calc-unit">{unitLabel}</em>
                       </span>
                     </div>
                     <div className="recon-calc-item">
-                      <span className="recon-calc-label">利润率（÷ 上游价格）</span>
+                      <span className="recon-calc-label">
+                        <span className="recon-calc-label-title">利润率（÷ 上游价格）</span>
+                        {profitRate != null && baseProfitRate != null ? (
+                          <span className="recon-calc-label-sub">
+                            原价 {(baseProfitRate * 100).toFixed(2)}% → 现价 {(profitRate * 100).toFixed(2)}%，变化{" "}
+                            <span
+                              className={
+                                Math.abs(profitRate - baseProfitRate) < EPSILON
+                                  ? "recon-amount"
+                                  : profitRate > baseProfitRate
+                                    ? "recon-amount recon-amount--profit"
+                                    : "recon-amount recon-amount--negative"
+                              }
+                            >
+                              {signedPoints(profitRate - baseProfitRate)} 个百分点
+                            </span>
+                          </span>
+                        ) : null}
+                      </span>
                       <span className="recon-calc-value">
                         {profitRate == null ? (
                           "-"
                         ) : (
                           <Tag color={profitRate < 0 ? "red" : "green"}>{`${(profitRate * 100).toFixed(2)}%`}</Tag>
                         )}
+                      </span>
+                    </div>
+                    <div className="recon-calc-item">
+                      <span className="recon-calc-label">
+                        <span className="recon-calc-label-title">合计利润（× {qty}）</span>
+                        <span className="recon-calc-label-sub">
+                          原价 {price((calc?.base.profit ?? 0) * qty)}，变化 <DeltaCell value={profitDelta * qty} />
+                        </span>
+                      </span>
+                      <span className="recon-calc-value">
+                        <PriceCell value={(calc?.current.profit ?? 0) * qty} />
+                        <em className="recon-calc-unit">{unitLabel}</em>
                       </span>
                     </div>
                   </div>

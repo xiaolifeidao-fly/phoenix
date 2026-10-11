@@ -1078,6 +1078,7 @@ type ChangeUserDetailPasswordDTO struct {
 
 type UserWithdrawRecordDTO struct {
 	BarryBaseDTO
+	UserID         int64  `json:"userId,omitempty"`
 	Channel        string `json:"channel,omitempty"`
 	Username       string `json:"username,omitempty"`
 	Points         int64  `json:"points,omitempty"`
@@ -1089,6 +1090,9 @@ type UserWithdrawRecordDTO struct {
 	PaymentType    string `json:"paymentType,omitempty"`
 	PaymentName    string `json:"paymentName,omitempty"`
 	PaymentAccount string `json:"paymentAccount,omitempty"`
+	// 用户当前账户余额(查询时实时值, 非申请时快照); 指针保留 0 与缺失的区别.
+	ActivePoints *int64 `json:"activePoints,omitempty"`
+	BlockPoints  *int64 `json:"blockPoints,omitempty"`
 }
 
 type UserWithdrawRecordQueryDTO struct {
@@ -1526,6 +1530,8 @@ type ReconLedgerDTO struct {
 	SettleChannelName string   `json:"settleChannelName,omitempty"`
 	UserID            *int64   `json:"userId,omitempty"`
 	Username          string   `json:"username,omitempty"`
+	// CollectFeeRmb 新增社区入账时人工微调的代收手续费(RMB), 为空按通道费率算; 上下 100 的范围由 barry 校验, 修改记录时忽略.
+	CollectFeeRmb *float64 `json:"collectFeeRmb,omitempty"`
 	// UpstreamUserID 上游社区(suffer user.id), 社区入账必填, 代收手续费随主记录带上.
 	UpstreamUserID string `json:"upstreamUserId,omitempty"`
 	// UpstreamUserName 上游社区名称, 由 BFF 按 suffer 用户表回填, 前端传的值不采用.

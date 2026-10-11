@@ -62,7 +62,12 @@ interface LedgerFormValues {
   remark?: string;
   /** 社区入账：保存后把代收手续费赠送到该上游社区余额 */
   giveFee?: boolean;
+  /** 新增社区入账勾了赠送时：微调后的代收手续费（RMB），入账手续费和赠送都按它 */
+  collectFeeRmb?: number | null;
 }
+
+/** 代收手续费可微调的幅度（RMB），服务端同样校验 */
+const MAX_FEE_ADJUST_RMB = 100;
 
 /** 上游社区：suffer「用户管理」列表，按名称 / 账号 / 邮箱 / 手机模糊搜索 */
 async function searchUpstreamUsers(keyword: string): Promise<RemoteOption<string>[]> {
@@ -118,6 +123,8 @@ export function LedgerCard({ ledger, range }: LedgerCardProps) {
   const formChannelId = Form.useWatch("settleChannelId", form);
   const formAmount = Form.useWatch("amount", form);
   const formRate = Form.useWatch("exchangeRate", form);
+  const formGiveFee = Form.useWatch("giveFee", form);
+  const formCollectFee = Form.useWatch("collectFeeRmb", form);
 
   const { summary } = ledger;
 
@@ -170,13 +177,40 @@ export function LedgerCard({ ledger, range }: LedgerCardProps) {
       : null;
   const selectedChannel = channels.find((item) => item.id === formChannelId);
 
-  /** 手续费预览，和 barry 的算法一致：社区入账 → 代收，人工出款 → 代付；U 先算 U 再折 RMB */
+  /** 新增社区入账：按费率算出的代收手续费（RMB）和可微调的范围；U 先算 U 再折 RMB，和 barry 一致 */
+  const collectFeeBase = useMemo(() => {
+    if (editing || formCategory !== "COMMUNITY_IN" || !selectedChannel || !formAmount) {
+      return null;
+    }
+    const byU = formCurrency === "USDT";
+    const rate = byU ? formRate || selectedChannel.exchangeRate : 1;
+    if (!rate) {
+      return null;
+    }
+    const base = round2(formAmount * ((byU ? selectedChannel.collectFeeRateU : selectedChannel.collectFeeRate) || 0) * rate);
+    // 往里收一分，避免两位小数的取整越过服务端的 ±100 / 入账金额上限
+    const min = Math.max(0.01, Math.ceil((base - MAX_FEE_ADJUST_RMB) * 100) / 100);
+    const max = Math.min(Math.floor((base + MAX_FEE_ADJUST_RMB) * 100) / 100, Math.floor(formAmount * rate * 100) / 100);
+    return { base, min, max };
+  }, [editing, formCategory, formCurrency, formAmount, formRate, selectedChannel]);
+
+  // 勾上赠送或算出的手续费变了（改金额 / 通道 / 汇率）：微调框回到按费率算的值
+  useEffect(() => {
+    if (formGiveFee && collectFeeBase) {
+      form.setFieldValue("collectFeeRmb", collectFeeBase.base);
+    }
+  }, [form, formGiveFee, collectFeeBase]);
+
+  /** 手续费预览，和 barry 的算法一致：社区入账 → 代收，人工出款 → 代付；U 先算 U 再折 RMB。编辑时手续费不重算，不预览 */
   const feePreview = useMemo(() => {
     const isCollect = formCategory === "COMMUNITY_IN";
-    if ((!isCollect && formCategory !== "MANUAL_SETTLE") || !selectedChannel || !formAmount) {
+    if (editing || (!isCollect && formCategory !== "MANUAL_SETTLE") || !selectedChannel || !formAmount) {
       return null;
     }
     const label = isCollect ? "代收手续费" : "代付手续费";
+    if (isCollect && formGiveFee && formCollectFee) {
+      return `${label} ${money(formCollectFee)} RMB`;
+    }
     if (formCurrency === "USDT") {
       const rate = formRate || selectedChannel.exchangeRate;
       const feeU = formAmount * ((isCollect ? selectedChannel.collectFeeRateU : selectedChannel.payoutFeeRateU) || 0);
@@ -184,7 +218,7 @@ export function LedgerCard({ ledger, range }: LedgerCardProps) {
     }
     const feeRmb = formAmount * ((isCollect ? selectedChannel.collectFeeRate : selectedChannel.payoutFeeRate) || 0);
     return `${label} ${money(feeRmb)} RMB`;
-  }, [formCategory, formCurrency, formAmount, formRate, selectedChannel]);
+  }, [editing, formCategory, formCurrency, formAmount, formRate, selectedChannel, formGiveFee, formCollectFee]);
 
   const openForm = (record: ReconLedgerRecord | null) => {
     setEditing(record);
@@ -199,6 +233,7 @@ export function LedgerCard({ ledger, range }: LedgerCardProps) {
       userId: record?.userId ?? null,
       remark: record?.remark ?? "",
       giveFee: false,
+      collectFeeRmb: null,
     });
     setFormOpen(true);
   };
@@ -231,7 +266,7 @@ export function LedgerCard({ ledger, range }: LedgerCardProps) {
             <p>
               保存后会把这条入账的{feePreview ?? "代收手续费"}加到 {target} 的余额（账户流水「入账赠送」）。
             </p>
-            <p>每条入账只赠送一次，已赠送过的不会重复加款；之后修改金额不会补差，删除入账也不会扣回。</p>
+            <p>每条入账只赠送一次，已赠送过的不会重复加款；删除入账也不会扣回。</p>
           </>
         ),
         okText: "确认保存并赠送",
@@ -246,15 +281,31 @@ export function LedgerCard({ ledger, range }: LedgerCardProps) {
     if (values.giveFee && values.category === "COMMUNITY_IN" && !(await confirmGiveFee(values))) {
       return;
     }
+    // 编辑时金额等字段锁定，原样带回录入时的值（汇率传空表示沿用，免得输入框精度取整后对不上）
+    const locked = editing
+      ? {
+          category: editing.category,
+          currency: editing.currency,
+          amount: Number(editing.currency === "USDT" ? editing.amountU : editing.amountRmb),
+          settleChannelId: editing.settleChannelId ?? null,
+          exchangeRate: null,
+        }
+      : {
+          category: values.category,
+          currency: values.currency,
+          amount: Number(values.amount),
+          settleChannelId: values.settleChannelId ?? null,
+          exchangeRate: values.currency === "USDT" ? values.exchangeRate ?? null : null,
+        };
     let saved;
     try {
       saved = await ledger.save(editing?.id ?? null, {
         recordDate: values.recordDate.format("YYYY-MM-DD"),
-        category: values.category,
-        currency: values.currency,
-        amount: Number(values.amount),
-        settleChannelId: values.settleChannelId ?? null,
-        exchangeRate: values.currency === "USDT" ? values.exchangeRate ?? null : null,
+        ...locked,
+        collectFeeRmb:
+          !editing && values.giveFee && values.category === "COMMUNITY_IN" && values.collectFeeRmb
+            ? Number(values.collectFeeRmb)
+            : undefined,
         upstreamUserId: values.category === "COMMUNITY_IN" ? values.upstreamUserId ?? undefined : undefined,
         userId: values.category === "MANUAL_SETTLE" ? values.userId ?? undefined : undefined,
         remark: values.remark?.trim() || undefined,
@@ -648,11 +699,12 @@ export function LedgerCard({ ledger, range }: LedgerCardProps) {
               <DatePicker style={{ width: "100%" }} allowClear={false} />
             </Form.Item>
             <Form.Item name="category" label="类目" rules={[{ required: true, message: "请选择类目" }]}>
-              <Select options={manualCategoryOptions} />
+              <Select options={manualCategoryOptions} disabled={!!editing} />
             </Form.Item>
             <Form.Item name="currency" label="币种" rules={[{ required: true }]}>
               <Segmented<LedgerCurrency>
                 block
+                disabled={!!editing}
                 options={[
                   { label: "RMB", value: "RMB" },
                   { label: "U", value: "USDT" },
@@ -664,8 +716,9 @@ export function LedgerCard({ ledger, range }: LedgerCardProps) {
               name="amount"
               label={formCurrency === "USDT" ? "金额（U）" : "金额（RMB）"}
               rules={[{ required: true, message: "请输入金额" }]}
+              extra={editing ? "类目、币种、金额、汇率和结算通道录入后不能修改，记错了请删除后重新录入" : undefined}
             >
-              <InputNumber<number> min={0.01} precision={2} style={{ width: "100%" }} controls={false} />
+              <InputNumber<number> min={0.01} precision={2} style={{ width: "100%" }} controls={false} disabled={!!editing} />
             </Form.Item>
             {formCategory === "COMMUNITY_IN" ? (
               <Form.Item
@@ -715,6 +768,7 @@ export function LedgerCard({ ledger, range }: LedgerCardProps) {
             >
               <Select<number>
                 allowClear
+                disabled={!!editing}
                 placeholder={formCategory === "COMMUNITY_IN" ? "请选择" : "可不选"}
                 options={channels
                   .filter((item) => item.enabled || item.id === editing?.settleChannelId)
@@ -732,7 +786,7 @@ export function LedgerCard({ ledger, range }: LedgerCardProps) {
                 rules={[{ required: true, message: "按 U 录入需填写汇率" }]}
                 extra={formAmount && formRate ? `折合 ${money(formAmount * formRate)} RMB` : undefined}
               >
-                <InputNumber<number> min={0.0001} precision={6} style={{ width: "100%" }} controls={false} />
+                <InputNumber<number> min={0.0001} precision={6} style={{ width: "100%" }} controls={false} disabled={!!editing} />
               </Form.Item>
             ) : null}
             {feePreview ? (
@@ -745,9 +799,27 @@ export function LedgerCard({ ledger, range }: LedgerCardProps) {
                 className="recon-form-wide"
                 name="giveFee"
                 valuePropName="checked"
-                extra="保存后把这条入账的代收手续费加到该上游社区的余额（账户流水「入账赠送」）；每条入账只赠送一次，之后改金额不会补差"
+                extra="保存后把这条入账的代收手续费加到该上游社区的余额（账户流水「入账赠送」）；每条入账只赠送一次"
               >
                 <Checkbox>代收手续费赠送给该社区</Checkbox>
+              </Form.Item>
+            ) : null}
+            {formCategory === "COMMUNITY_IN" && formGiveFee && collectFeeBase ? (
+              <Form.Item
+                name="collectFeeRmb"
+                label="入账手续费（RMB）"
+                extra={`按费率算出 ${money(collectFeeBase.base)} RMB，可上下浮动 ${MAX_FEE_ADJUST_RMB}（${money(collectFeeBase.min)} ~ ${money(collectFeeBase.max)}）；入账手续费和赠送金额都按这个值`}
+                rules={[
+                  { required: true, message: "请输入入账手续费" },
+                  {
+                    validator: (_, value: number | null) =>
+                      value == null || (value >= collectFeeBase.min && value <= collectFeeBase.max)
+                        ? Promise.resolve()
+                        : Promise.reject(new Error(`需在 ${money(collectFeeBase.min)} ~ ${money(collectFeeBase.max)} 之间`)),
+                  },
+                ]}
+              >
+                <InputNumber<number> min={collectFeeBase.min} max={collectFeeBase.max} precision={2} style={{ width: "100%" }} controls={false} />
               </Form.Item>
             ) : null}
             <Form.Item className="recon-form-wide" name="remark" label="备注" rules={[{ max: 255, message: "备注不能超过 255 个字符" }]}>
@@ -758,6 +830,10 @@ export function LedgerCard({ ledger, range }: LedgerCardProps) {
       </Modal>
     </section>
   );
+}
+
+function round2(value: number) {
+  return Math.round(value * 100) / 100;
 }
 
 /** 表格列 → 服务端排序字段 */

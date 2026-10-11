@@ -5,6 +5,8 @@ import { getDataList, instance, unwrapApiResponse, type ApiResponse } from "@/ut
 export class ManualWithdrawRecord {
   id = 0;
 
+  userId = 0;
+
   channel = "";
 
   username = "";
@@ -27,9 +29,29 @@ export class ManualWithdrawRecord {
 
   paymentAccount = "";
 
+  /** 用户当前可用积分（查询时实时值，非申请时快照） */
+  activePoints?: number;
+
+  /** 用户当前冻结积分（审核中 / 结算中的提现积分在这里） */
+  blockPoints?: number;
+
   createdTime?: string;
 
   updatedTime?: string;
+}
+
+/** 支付方式展示名 */
+export function formatPaymentType(value?: string) {
+  switch ((value || "").toUpperCase()) {
+    case "ALIPAY":
+      return "支付宝";
+    case "WECHAT":
+      return "微信";
+    case "WALLET":
+      return "钱包";
+    default:
+      return value || "-";
+  }
 }
 
 export interface ManualWithdrawQuery {

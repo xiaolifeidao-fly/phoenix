@@ -246,6 +246,12 @@ func validateReconLedger(req *barryDTO.ReconLedgerDTO) string {
 	if req.ExchangeRate != nil && *req.ExchangeRate <= 0 {
 		return "汇率需大于0"
 	}
+	// 手续费微调只属于社区入账
+	if req.Category != "COMMUNITY_IN" {
+		req.CollectFeeRmb = nil
+	} else if req.CollectFeeRmb != nil && *req.CollectFeeRmb <= 0 {
+		return "代收手续费需大于0"
+	}
 	return ""
 }
 

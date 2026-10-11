@@ -23,9 +23,9 @@ interface DimensionAccountingCardProps {
 interface ManualDimensionRow {
   key: string;
   name: string;
-  /** 提交总量（order_sum_record.total_num） */
+  /** 总数量（order_sum_record.total_num） */
   taskNum: number;
-  /** 总数量 = 审核通过 + 待审核 + 审核失败 + 私密 + 删除 */
+  /** 提交数量 = 审核通过 + 待审核 + 审核失败 + 私密 + 删除 */
   statusTotalNum: number;
   checkedNum: number;
   unCheckNum: number;
@@ -43,10 +43,11 @@ const statusTotal = (counts: StatusCounts) =>
 
 const manualColumns: ColumnsType<ManualDimensionRow> = [
   { title: "类目", dataIndex: "name", width: 140, fixed: "left", render: (value: string) => <span className="recon-row-name">{value}</span> },
+  moneyColumn<ManualDimensionRow>("总数量", "taskNum", 110),
   {
     title: (
       <Tooltip title="审核通过 + 待审核 + 审核失败 + 私密 + 删除">
-        <span>总数量</span>
+        <span>提交数量</span>
       </Tooltip>
     ),
     dataIndex: "statusTotalNum",
@@ -54,7 +55,6 @@ const manualColumns: ColumnsType<ManualDimensionRow> = [
     align: "right",
     render: (value: number) => <MoneyCell value={value} />,
   },
-  moneyColumn<ManualDimensionRow>("提交总量", "taskNum", 110),
   moneyColumn<ManualDimensionRow>("审核成功量", "checkedNum", 110),
   {
     title: "待审核量",
