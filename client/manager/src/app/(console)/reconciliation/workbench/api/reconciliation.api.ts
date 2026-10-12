@@ -101,6 +101,28 @@ export function fetchUpstreamDimension(startDate: string, endDate: string) {
   return getData(UpstreamDimension, "/reconciliation/upstream-dimension", { startDate, endDate });
 }
 
+/** 上游维度按天：区间内每天一行（没有流水的天为 0），startDate = endDate = 当天 */
+export function fetchUpstreamDimensionDaily(startDate: string, endDate: string) {
+  return getDataList(UpstreamDimension, "/reconciliation/upstream-dimension/daily", { startDate, endDate });
+}
+
+/** 人工维度按天：全部有效人工商品按做单日期汇总，积分取审核通过订单的积分（和商品行同口径） */
+export class ManualDimensionDaily {
+  date = "";
+
+  points = 0;
+
+  totalNum = 0;
+
+  checkedNum = 0;
+
+  unCheckNum = 0;
+}
+
+export function fetchManualDimensionDaily(startDate: string, endDate: string) {
+  return getDataList(ManualDimensionDaily, "/barry/reconciliation/manual-dimension/daily", { startDate, endDate });
+}
+
 /** 人工录入欠款（初始欠款）：和上游社区一对一；金额是欠款日期那天结束时的欠款，从次日开始累计 */
 export interface OpeningDebtRecord {
   id: number;
@@ -329,6 +351,8 @@ export interface ReconLedgerQuery {
   recordType?: LedgerRecordType;
   /** 多选用逗号分隔 */
   category?: string;
+  /** 上下游用户：模糊匹配下游用户名或上游社区名称 */
+  userKeyword?: string;
   sortField?: LedgerSortField;
   sortOrder?: "asc" | "desc";
   page?: number;

@@ -1,6 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { Tag, Tooltip } from "antd";
+import { LEDGER_SOURCE_LABEL, type ReconLedgerRecord } from "../api/reconciliation.api";
 
 const numberFormat = new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 2 });
 
@@ -92,6 +94,37 @@ export function UpstreamUserCell({ name, username, remark }: { name?: string; us
     <span>
       <span className="recon-row-name">{title}</span>
       {caption ? <div className="recon-subcard-caption">{caption}</div> : null}
+    </span>
+  );
+}
+
+/** 出入账来源标签：人工录入 / 系统生成 */
+export function LedgerSourceTag({ record }: { record: ReconLedgerRecord }) {
+  const manual = record.source === "MANUAL";
+  return (
+    <Tooltip title={LEDGER_SOURCE_LABEL[record.source] ?? record.source}>
+      <Tag color={manual ? "orange" : "blue"} style={{ marginInlineStart: 6 }}>
+        {manual ? "人工" : "系统"}
+      </Tag>
+    </Tooltip>
+  );
+}
+
+/** 出入账金额：按 U 记账显示 U，下面带折算的 RMB */
+export function LedgerAmount({ record }: { record: ReconLedgerRecord }) {
+  if (record.currency === "USDT" && record.amountU != null) {
+    return (
+      <span>
+        <MoneyCell value={record.amountU} /> U
+        <div className="recon-subcard-caption">
+          ≈ <MoneyCell value={record.amountRmb} /> RMB
+        </div>
+      </span>
+    );
+  }
+  return (
+    <span>
+      <MoneyCell value={record.amountRmb} /> RMB
     </span>
   );
 }

@@ -405,3 +405,64 @@ func (r *DashboardRepository) SumRefundRebateTip(start, end time.Time) (Category
 		  AND rr.updated_time >= ? AND rr.updated_time < ?`, start, end).Scan(&row).Error
 	return row, err
 }
+
+// DailyTypeAmountRow 账户流水按天 + 类型汇总, day 为 yyyy-MM-dd.
+type DailyTypeAmountRow struct {
+	Day    string  `gorm:"column:day"`
+	Type   string  `gorm:"column:type"`
+	Amount float64 `gorm:"column:amount"`
+}
+
+// SumAccountDetailByTypeDaily 同 SumAccountDetailByType, 按流水日期分组.
+func (r *DashboardRepository) SumAccountDetailByTypeDaily(types []string, start, end time.Time) ([]DailyTypeAmountRow, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	rows := make([]DailyTypeAmountRow, 0)
+	err := r.Db.Raw(`SELECT DATE_FORMAT(created_time, '%Y-%m-%d') AS day, type, COALESCE(SUM(ABS(IFNULL(amount, 0))), 0) AS amount
+		FROM account_detail
+		WHERE type IN ? AND created_time >= ? AND created_time < ?
+		GROUP BY day, type`, types, start, end).Scan(&rows).Error
+	return rows, err
+}
+
+// DailyRebateTipRow 按天的返点 / 小费, 字段同 CategoryRebateTipRow.
+type DailyRebateTipRow struct {
+	Day string `gorm:"column:day"`
+	CategoryRebateTipRow
+}
+
+// SumOrderRebateTipDaily 同 SumOrderRebateTip, 按下单日期分组.
+func (r *DashboardRepository) SumOrderRebateTipDaily(start, end time.Time) ([]DailyRebateTipRow, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	rows := make([]DailyRebateTipRow, 0)
+	err := r.Db.Raw(`SELECT DATE_FORMAT(o.created_time, '%Y-%m-%d') AS day,
+		COALESCE(SUM(o.order_num), 0) AS num,
+		COALESCE(SUM(o.order_num * COALESCE(t.rebate_amount, 0)), 0) AS rebate_amount,
+		COALESCE(SUM(o.order_num * COALESCE(t.tip_amount, 0)), 0) AS tip_amount
+		FROM order_record o
+		LEFT JOIN order_rebate_tip t ON t.order_record_id = o.id AND t.active = 1
+		WHERE o.active = 1 AND o.created_time >= ? AND o.created_time < ?
+		GROUP BY day`, start, end).Scan(&rows).Error
+	return rows, err
+}
+
+// SumRefundRebateTipDaily 同 SumRefundRebateTip, 按退单完成日期(updated_time)分组.
+func (r *DashboardRepository) SumRefundRebateTipDaily(start, end time.Time) ([]DailyRebateTipRow, error) {
+	if r.Db == nil {
+		return nil, fmt.Errorf("database is not initialized")
+	}
+	rows := make([]DailyRebateTipRow, 0)
+	err := r.Db.Raw(`SELECT DATE_FORMAT(rr.updated_time, '%Y-%m-%d') AS day,
+		COALESCE(SUM(rr.refund_num), 0) AS num,
+		COALESCE(SUM(rr.refund_num * COALESCE(t.rebate_amount, 0)), 0) AS rebate_amount,
+		COALESCE(SUM(rr.refund_num * COALESCE(t.tip_amount, 0)), 0) AS tip_amount
+		FROM order_refund_record rr
+		LEFT JOIN order_rebate_tip t ON t.order_record_id = rr.order_id AND t.active = 1
+		WHERE rr.active = 1 AND rr.order_refund_status = 'REFUND'
+		  AND rr.updated_time >= ? AND rr.updated_time < ?
+		GROUP BY day`, start, end).Scan(&rows).Error
+	return rows, err
+}

@@ -166,7 +166,7 @@ export function ReconciliationWorkbenchPanel() {
       </div>
 
       {/* 和「对账 - 人工记账」页面是同一个组件，日期跟随工作台顶部的区间 */}
-      <ManualBookCard book={manualBookState} />
+      <ManualBookCard book={manualBookState} debtCompare={debtCompare} />
 
       <DebtCompareCard compare={debtCompare} />
     </div>

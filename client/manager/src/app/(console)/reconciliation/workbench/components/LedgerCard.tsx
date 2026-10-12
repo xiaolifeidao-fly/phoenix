@@ -28,7 +28,6 @@ import { fetchManualUsers } from "@/app/(console)/manual/api/user.api";
 import { fetchUsers } from "@/app/(console)/user/api/user.api";
 import {
   LEDGER_CATEGORIES,
-  LEDGER_SOURCE_LABEL,
   LEDGER_TYPE_LABEL,
   giveLedgerFee,
   type LedgerCurrency,
@@ -40,7 +39,7 @@ import {
 import type { LedgerState } from "../hooks/useLedger";
 import { LedgerSnapshotModal } from "./LedgerSnapshotModal";
 import { RemoteSearchSelect, type RemoteOption } from "./RemoteSearchSelect";
-import { MoneyCell, SectionHead, money, moneyColumn } from "./shared";
+import { LedgerAmount, LedgerSourceTag, MoneyCell, SectionHead, money, moneyColumn } from "./shared";
 
 interface LedgerCardProps {
   ledger: LedgerState;
@@ -419,7 +418,7 @@ export function LedgerCard({ ledger, range }: LedgerCardProps) {
             {LEDGER_TYPE_LABEL[record.recordType]}
           </Tag>
           {value}
-          <SourceTag record={record} />
+          <LedgerSourceTag record={record} />
           {record.modifyCount ? (
             <Tooltip title="人工修改过，点击查看每一版快照">
               <Tag color="purple" style={{ cursor: "pointer" }} onClick={() => setSnapshotRecord(record)}>
@@ -844,35 +843,8 @@ function sortFieldOfColumn(key: unknown): LedgerSortField | undefined {
 }
 
 /** 标注记录是系统生成还是人工录入 */
-function SourceTag({ record }: { record: ReconLedgerRecord }) {
-  const manual = record.source === "MANUAL";
-  return (
-    <Tooltip title={LEDGER_SOURCE_LABEL[record.source] ?? record.source}>
-      <Tag color={manual ? "orange" : "blue"} style={{ marginInlineStart: 6 }}>
-        {manual ? "人工" : "系统"}
-      </Tag>
-    </Tooltip>
-  );
-}
 
 /** 按 RMB 记账只显示 RMB；按 U 记账显示 U，并在下面带折算的 RMB */
-function LedgerAmount({ record }: { record: ReconLedgerRecord }) {
-  if (record.currency === "USDT" && record.amountU != null) {
-    return (
-      <span>
-        <MoneyCell value={record.amountU} /> U
-        <div className="recon-subcard-caption">
-          ≈ <MoneyCell value={record.amountRmb} /> RMB
-        </div>
-      </span>
-    );
-  }
-  return (
-    <span>
-      <MoneyCell value={record.amountRmb} /> RMB
-    </span>
-  );
-}
 
 function typeTone(value: string) {
   if (value === "入账") return "income";

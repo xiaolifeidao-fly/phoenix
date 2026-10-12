@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo, type ReactNode } from "react";
-import { Alert, Button, InputNumber, Select, Table, Tag, Tooltip } from "antd";
+import { Alert, Button, Table, Tag, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { settleCurrencyOptions } from "@/app/(console)/manual/api/settle.api";
 import type { ReconManualDimension, UpstreamDimension } from "../api/reconciliation.api";
 import { estimateFee, useFeeChannel } from "../hooks/useFeeChannel";
+import { FeeChannelPicker, feeRateText } from "./FeeChannelPicker";
 import { FormulaGrid, MoneyCell, SectionHead, money, moneyColumn, type AmountTone } from "./shared";
 
 interface DimensionAccountingCardProps {
@@ -17,6 +17,15 @@ interface DimensionAccountingCardProps {
   upstreamLoading: boolean;
   upstreamError: string | null;
   onUpstreamRetry: () => void;
+}
+
+type FeeChannelState = ReturnType<typeof useFeeChannel>;
+
+interface DimensionAccountingViewProps extends DimensionAccountingCardProps {
+  collectChannel: FeeChannelState;
+  payoutChannel: FeeChannelState;
+  /** 通道由外面统一选（如人工记账），这里只改币种和费率 */
+  sharedChannel?: boolean;
 }
 
 /** 人工维度一行：商品行积分取审核通过订单积分，合计行为各商品之和 */
@@ -150,66 +159,23 @@ const formulas = [
 /** 10000 积分 = 1 元 */
 const POINTS_PER_RMB = 10000;
 
-/** 费率（小数）↔ 输入框里的百分比，百分比最多 4 位小数 */
-function rateToPercent(rate: number) {
-  return Number((rate * 100).toFixed(4));
-}
-
-function percentToRate(percent: number) {
-  return Number((percent / 100).toFixed(6));
-}
-
-/** 手续费估算用的通道 / 币种 / 费率选择，存 localStorage；费率默认取通道配置，可在本页改 */
-function FeeChannelPicker({ label, state }: { label: string; state: ReturnType<typeof useFeeChannel> }) {
+export function DimensionAccountingCard(props: DimensionAccountingCardProps) {
+  const collectChannel = useFeeChannel("recon.workbench.upstreamCollectFee", "USDT", "collect");
+  const payoutChannel = useFeeChannel("recon.workbench.manualPayoutFee", "RMB", "payout");
   return (
-    <span className="recon-fee-picker">
-      <span className="recon-subcard-caption">{label}</span>
-      <Select
-        size="small"
-        style={{ width: 140 }}
-        placeholder="无可用通道"
-        value={state.channel?.id}
-        onChange={state.setChannelId}
-        options={state.channels.map((item) => ({
-          value: item.id,
-          label: `${item.name}${item.defaultChannel ? "（默认）" : ""}`,
-        }))}
+    <section className="manager-data-card recon-card">
+      <SectionHead
+        title="维度核算"
+        caption="人工维度与上游维度合并展示，做单维度利润在两个维度下方统一呈现"
+        extra={<Tag className="recon-readonly-tag">只读</Tag>}
       />
-      <Select
-        size="small"
-        style={{ width: 110 }}
-        value={state.currency}
-        onChange={state.setCurrency}
-        options={settleCurrencyOptions}
-      />
-      <Tooltip title={state.channel ? `通道配置费率 ${feeRateText(state.channelRate)}，改动只影响本页估算` : undefined}>
-        <InputNumber<number>
-          size="small"
-          style={{ width: 100 }}
-          min={0}
-          max={100}
-          precision={4}
-          controls={false}
-          suffix="%"
-          disabled={!state.channel}
-          value={rateToPercent(state.rate)}
-          onChange={(value) => state.setRate(value === null ? null : percentToRate(value))}
-        />
-      </Tooltip>
-      {state.rateOverridden ? (
-        <Button size="small" type="link" style={{ padding: 0 }} onClick={() => state.setRate(null)}>
-          恢复通道费率
-        </Button>
-      ) : null}
-    </span>
+      <DimensionAccountingView {...props} collectChannel={collectChannel} payoutChannel={payoutChannel} />
+    </section>
   );
 }
 
-function feeRateText(rate: number) {
-  return `${money(rate * 100)}%`;
-}
-
-export function DimensionAccountingCard({
+/** 人工维度 + 上游维度 + 做单维度利润；手续费通道由调用方提供（工作台、人工记账各存各的选择） */
+export function DimensionAccountingView({
   manualDimension,
   manualLoading,
   manualError,
@@ -218,9 +184,10 @@ export function DimensionAccountingCard({
   upstreamLoading,
   upstreamError,
   onUpstreamRetry,
-}: DimensionAccountingCardProps) {
-  const collectChannel = useFeeChannel("recon.workbench.upstreamCollectFee", "USDT", "collect");
-  const payoutChannel = useFeeChannel("recon.workbench.manualPayoutFee", "RMB", "payout");
+  collectChannel,
+  payoutChannel,
+  sharedChannel,
+}: DimensionAccountingViewProps) {
   const payoutRate = payoutChannel.rate;
 
   // 合计行积分取各商品之和，和积分日汇总（user_points_daily）分开对照
@@ -367,18 +334,12 @@ export function DimensionAccountingCard({
   ];
 
   return (
-    <section className="manager-data-card recon-card">
-      <SectionHead
-        title="维度核算"
-        caption="人工维度与上游维度合并展示，做单维度利润在两个维度下方统一呈现"
-        extra={<Tag className="recon-readonly-tag">只读</Tag>}
-      />
-
+    <>
       <div className="recon-dimension-grid">
         <div className="recon-subcard">
           <div className="recon-subcard-head">
             <span className="recon-subcard-title">人工维度</span>
-            <FeeChannelPicker label="代付通道" state={payoutChannel} />
+            <FeeChannelPicker label="代付通道" state={payoutChannel} hideChannel={sharedChannel} />
           </div>
           {manualError ? (
             <Alert
@@ -432,7 +393,7 @@ export function DimensionAccountingCard({
         <div className="recon-subcard">
           <div className="recon-subcard-head">
             <span className="recon-subcard-title">上游维度</span>
-            <FeeChannelPicker label="代收通道" state={collectChannel} />
+            <FeeChannelPicker label="代收通道" state={collectChannel} hideChannel={sharedChannel} />
           </div>
           {upstreamError ? (
             <Alert
@@ -488,6 +449,6 @@ export function DimensionAccountingCard({
       </div>
 
       <FormulaGrid items={formulas} />
-    </section>
+    </>
   );
 }

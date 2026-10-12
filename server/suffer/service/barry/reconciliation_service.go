@@ -40,6 +40,25 @@ func (s *ReconciliationService) ManualDimension(ctx context.Context, query barry
 	return response.Data, nil
 }
 
+// ManualDimensionDaily 人工维度按天, 区间内每天一行(barry 补 0), 日期升序; 区间最长 93 天.
+func (s *ReconciliationService) ManualDimensionDaily(ctx context.Context, query barryDTO.ReconManualDimensionQueryDTO) ([]barryDTO.ReconManualDailyDTO, error) {
+	response := &barryDTO.ListResponseDTO[barryDTO.ReconManualDailyDTO]{}
+	err := s.client.GetAbsolute(ctx, innerServicePath(barryInnerReconManualDimensionDailyPath), buildValues(
+		"startDate", query.StartDate,
+		"endDate", query.EndDate,
+	), response)
+	if err := unwrapReconResponse(response.Success, true, response.Message, err, "manual dimension daily"); err != nil {
+		return nil, err
+	}
+	result := make([]barryDTO.ReconManualDailyDTO, 0, len(response.Data))
+	for _, item := range response.Data {
+		if item != nil {
+			result = append(result, *item)
+		}
+	}
+	return result, nil
+}
+
 func (s *ReconciliationService) ListLedger(ctx context.Context, query barryDTO.ReconLedgerQueryDTO) (*barryDTO.ReconLedgerPageDTO, error) {
 	response := &barryDTO.DetailResponseDTO[barryDTO.ReconLedgerPageDTO]{}
 	err := s.client.GetAbsolute(ctx, innerServicePath(barryInnerReconLedgerListPath), buildValues(
@@ -47,6 +66,7 @@ func (s *ReconciliationService) ListLedger(ctx context.Context, query barryDTO.R
 		"endDate", query.EndDate,
 		"recordType", query.RecordType,
 		"category", query.Category,
+		"userKeyword", query.UserKeyword,
 		"sortField", query.SortField,
 		"sortOrder", query.SortOrder,
 		"page", query.Page,

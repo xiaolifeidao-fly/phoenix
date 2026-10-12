@@ -4133,6 +4133,54 @@ select {
   color: var(--manager-text-faint);
 }
 
+.recon-link-amount {
+  cursor: pointer;
+}
+
+.recon-dimension-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.recon-dimension-cell.recon-link-amount:hover {
+  text-decoration: none;
+  outline: 1px dashed var(--manager-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.recon-dimension-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.recon-balance-debt {
+  margin-inline-start: 2px;
+  font-size: 12px;
+  color: var(--manager-text-faint);
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+
+.recon-balance-debt--alert {
+  color: var(--manager-danger);
+  font-weight: 600;
+}
+
+.recon-dimension-line--total {
+  border-top: 1px dashed var(--manager-border, #e5e7eb);
+  padding-top: 2px;
+  font-weight: 600;
+}
+
+.recon-link-amount:hover {
+  color: var(--manager-primary);
+  text-decoration: underline;
+}
+
 /* 维度核算：手续费估算用的通道 / 币种选择 */
 .recon-fee-picker {
   display: inline-flex;

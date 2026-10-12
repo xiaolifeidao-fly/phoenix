@@ -16,12 +16,14 @@ interface PairCellProps {
   delta?: boolean;
   /** 人工那行金额后面的补充，比如 U 原币 */
   manualExtra?: ReactNode;
+  /** 系统那行金额后面的补充 */
+  systemExtra?: ReactNode;
   manualTip?: ReactNode;
   systemTip?: ReactNode;
 }
 
 /** 一个指标两行：上面人工、下面系统；两行都有值且对不上时整格标红 */
-export function PairCell({ manual, system, delta, manualExtra, manualTip, systemTip }: PairCellProps) {
+export function PairCell({ manual, system, delta, manualExtra, systemExtra, manualTip, systemTip }: PairCellProps) {
   const differs = manual !== null && system !== null && Math.abs(manual - system) > 0.01;
   const line = (kind: "manual" | "system", value: number | null, tip?: ReactNode, extra?: ReactNode) => {
     const content = (
@@ -42,7 +44,7 @@ export function PairCell({ manual, system, delta, manualExtra, manualTip, system
   return (
     <div className={differs ? "recon-pair recon-pair--diff" : "recon-pair"}>
       {line("manual", manual, manualTip, manualExtra)}
-      {line("system", system, systemTip)}
+      {line("system", system, systemTip, systemExtra)}
     </div>
   );
 }

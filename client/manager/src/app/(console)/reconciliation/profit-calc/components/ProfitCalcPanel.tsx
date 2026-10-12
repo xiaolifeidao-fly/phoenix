@@ -17,6 +17,8 @@ const { Text } = Typography;
 
 /** 10000 积分 = 1 元，下游价格按人工商品积分折算 */
 const POINTS_PER_RMB = 10000;
+/** 默认小费（RMB）；上游类目配了小费就用类目的 */
+const DEFAULT_TIP = 0.0005;
 /** 上游商品类目接口单页最多 200 条 */
 const CATEGORY_PAGE_SIZE = 200;
 
@@ -137,7 +139,7 @@ export function ProfitCalcPanel() {
   const [productId, setProductId] = useState<number>();
   // 下面几个金额一律 RMB，选商品时带出，可手动改
   const [upstreamPrice, setUpstreamPrice] = useState<number | null>(null);
-  const [tip, setTip] = useState<number | null>(null);
+  const [tip, setTip] = useState<number | null>(DEFAULT_TIP);
   const [downstreamPrice, setDownstreamPrice] = useState<number | null>(null);
   const [quantity, setQuantity] = useState<number | null>(1);
   /** 上游赠送比例（%），充值赠送的部分没有真实入账，从利润里扣掉 */
@@ -186,7 +188,7 @@ export function ProfitCalcPanel() {
     const next = categories.find((item) => item.id === id);
     const nextPrice = next ? Number(next.price) || 0 : null;
     setUpstreamPrice(nextPrice);
-    setTip(next ? Number(next.tipAmount) || 0 : null);
+    setTip(Number(next?.tipAmount) || DEFAULT_TIP);
     setBaseUpstreamPrice(nextPrice);
   };
 

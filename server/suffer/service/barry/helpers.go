@@ -67,6 +67,7 @@ const (
 	barryInnerReconLedgerDeletePath                           = "barry.url.inner.reconciliation.ledger.delete.suffix"
 	barryInnerReconLedgerSyncWithdrawPath                     = "barry.url.inner.reconciliation.ledger.sync.withdraw.suffix"
 	barryInnerReconLedgerUpstreamSumsPath                     = "barry.url.inner.reconciliation.ledger.upstream.sums.suffix"
+	barryInnerReconManualDimensionDailyPath                   = "barry.url.inner.reconciliation.manual.dimension.daily.suffix"
 	barryInnerReconLedgerDailyPath                            = "barry.url.inner.reconciliation.ledger.daily.suffix"
 	barryInnerReconLedgerSnapshotsPath                        = "barry.url.inner.reconciliation.ledger.snapshots.suffix"
 	barryInnerSettleChannelListPath                           = "barry.url.inner.settle.channel.list.suffix"

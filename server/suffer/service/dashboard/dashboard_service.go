@@ -297,6 +297,67 @@ func (s *DashboardService) UpstreamDimension(startDate, endDate string) (*dashbo
 	}, nil
 }
 
+// UpstreamDimensionDaily 上游维度按天: 区间内每天一行(没有流水的天为 0), 口径同 UpstreamDimension, 日期升序.
+func (s *DashboardService) UpstreamDimensionDaily(startDate, endDate string) ([]*dashboardDTO.UpstreamDimensionDTO, error) {
+	start, end, err := parseUpstreamRange(startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+	amounts, err := s.repository.SumAccountDetailByTypeDaily([]string{"PAY", "GIVEN", "CONSUMER", "REFUND", "BK"}, start, end)
+	if err != nil {
+		return nil, err
+	}
+	ordered, err := s.repository.SumOrderRebateTipDaily(start, end)
+	if err != nil {
+		return nil, err
+	}
+	refunded, err := s.repository.SumRefundRebateTipDaily(start, end)
+	if err != nil {
+		return nil, err
+	}
+	byDay := make(map[string]*dashboardDTO.UpstreamDimensionDTO)
+	result := make([]*dashboardDTO.UpstreamDimensionDTO, 0)
+	for day := start; day.Before(end); day = day.AddDate(0, 0, 1) {
+		date := day.Format("2006-01-02")
+		item := &dashboardDTO.UpstreamDimensionDTO{StartDate: date, EndDate: date}
+		byDay[date] = item
+		result = append(result, item)
+	}
+	for _, row := range amounts {
+		item := byDay[row.Day]
+		if item == nil {
+			continue
+		}
+		switch row.Type {
+		case "PAY":
+			item.RechargeAmount = row.Amount
+		case "GIVEN":
+			item.GivenAmount = row.Amount
+		case "CONSUMER":
+			item.ConsumeAmount = row.Amount
+		case "REFUND":
+			item.RefundAmount = row.Amount
+		case "BK":
+			item.BkAmount = row.Amount
+		}
+	}
+	for _, row := range ordered {
+		if item := byDay[row.Day]; item != nil {
+			item.OrderNum, item.OrderRebate, item.OrderTip = row.Num, row.RebateAmount, row.TipAmount
+		}
+	}
+	for _, row := range refunded {
+		if item := byDay[row.Day]; item != nil {
+			item.RefundNum, item.RefundRebate, item.RefundTip = row.Num, row.RebateAmount, row.TipAmount
+		}
+	}
+	for _, item := range result {
+		item.RebateAmount = item.OrderRebate - item.RefundRebate
+		item.TipAmount = item.OrderTip - item.RefundTip
+	}
+	return result, nil
+}
+
 // parseUpstreamRange 返回 [开始日 00:00, 结束日次日 00:00), 按本地时区.
 func parseUpstreamRange(startDate, endDate string) (time.Time, time.Time, error) {
 	start, err := time.ParseInLocation("2006-01-02", strings.TrimSpace(startDate), time.Local)

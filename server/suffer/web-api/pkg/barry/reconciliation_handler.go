@@ -34,6 +34,7 @@ var errUpstreamUserNotFound = errors.New("上游社区不存在")
 // 新管理端 - 对账 - 对账工作台.
 func (h *BarryHandler) registerReconciliationRoutes(engine *gin.RouterGroup) {
 	engine.GET("/barry/reconciliation/manual-dimension", h.getReconManualDimension)
+	engine.GET("/barry/reconciliation/manual-dimension/daily", h.getReconManualDimensionDaily)
 	engine.GET("/barry/reconciliation/ledgers", h.listReconLedgers)
 	engine.GET("/barry/reconciliation/ledgers/summary", h.getReconLedgerSummary)
 	engine.POST("/barry/reconciliation/ledgers", h.saveReconLedger)
@@ -51,6 +52,20 @@ func (h *BarryHandler) getReconManualDimension(c *gin.Context) {
 		return
 	}
 	response, err := h.barryService.Reconciliation.ManualDimension(c.Request.Context(), q)
+	if err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	commonRouter.ToJson(c, response, nil)
+}
+
+func (h *BarryHandler) getReconManualDimensionDaily(c *gin.Context) {
+	var q barryDTO.ReconManualDimensionQueryDTO
+	if c.ShouldBindQuery(&q) != nil {
+		commonRouter.ToError(c, "请选择开始和结束日期")
+		return
+	}
+	response, err := h.barryService.Reconciliation.ManualDimensionDaily(c.Request.Context(), q)
 	if err != nil {
 		commonRouter.ToJson(c, nil, err)
 		return

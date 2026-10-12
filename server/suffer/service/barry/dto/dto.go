@@ -1462,6 +1462,15 @@ type ReconManualDimensionQueryDTO struct {
 	EndDate   string `json:"endDate" form:"endDate" binding:"required"`
 }
 
+// ReconManualDailyDTO 人工维度按天: 全部有效人工商品按 sum_date 汇总, 积分取 order_score(和商品行同口径).
+type ReconManualDailyDTO struct {
+	Date       string `json:"date"`
+	Points     int64  `json:"points"`
+	TotalNum   int64  `json:"totalNum"`
+	CheckedNum int64  `json:"checkedNum"`
+	UnCheckNum int64  `json:"unCheckNum"`
+}
+
 // ReconManualDimensionDTO 对账工作台人工维度: 任务数来自 order_sum_record(按人工商品),
 // 合计积分来自 user_points_daily(按做单日期, 不分商品); 商品行积分取 order_sum_record.order_score, 口径不同.
 type ReconManualDimensionDTO struct {
@@ -1501,6 +1510,8 @@ type ReconLedgerQueryDTO struct {
 	RecordType string `json:"recordType,omitempty" form:"recordType"`
 	// Category 类目编码, 多选用逗号分隔.
 	Category string `json:"category,omitempty" form:"category"`
+	// UserKeyword 上下游用户, 模糊匹配下游用户名或上游社区名称.
+	UserKeyword string `json:"userKeyword,omitempty" form:"userKeyword"`
 	// SortField date(默认) / user / category; SortOrder asc / desc(默认). 白名单在 barry 校验.
 	SortField string `json:"sortField,omitempty" form:"sortField"`
 	SortOrder string `json:"sortOrder,omitempty" form:"sortOrder"`

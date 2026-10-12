@@ -30,10 +30,16 @@ func (h *DashboardHandler) RegisterHandler(engine *gin.RouterGroup) {
 	engine.GET("/dashboard/actual-completed", h.actualCompleted)
 	// 对账工作台 - 上游维度(充值 / 赠送 / 消费 / 返点 / 小费), 读的同是 surfer 的账户流水和订单
 	engine.GET("/reconciliation/upstream-dimension", h.upstreamDimension)
+	engine.GET("/reconciliation/upstream-dimension/daily", h.upstreamDimensionDaily)
 }
 
 func (h *DashboardHandler) upstreamDimension(c *gin.Context) {
 	result, err := h.dashboardService.UpstreamDimension(c.Query("startDate"), c.Query("endDate"))
+	commonRouter.ToJson(c, result, err)
+}
+
+func (h *DashboardHandler) upstreamDimensionDaily(c *gin.Context) {
+	result, err := h.dashboardService.UpstreamDimensionDaily(c.Query("startDate"), c.Query("endDate"))
 	commonRouter.ToJson(c, result, err)
 }
 
