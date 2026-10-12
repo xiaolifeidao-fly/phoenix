@@ -325,8 +325,6 @@ export class ManualUserPointsDailyRecord {
   otherPoints = 0;
 
   netPoints = 0;
-
-  count = 0;
 }
 
 export class ManualUserPointsRecord {

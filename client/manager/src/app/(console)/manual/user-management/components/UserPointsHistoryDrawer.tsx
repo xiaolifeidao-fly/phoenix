@@ -74,6 +74,22 @@ function PointsCell({ value, muted }: { value: number; muted?: boolean }) {
   );
 }
 
+/** 积分 + 下方小字约合金额；0 不显示金额 */
+function PointsYuanCell({ value }: { value: number }) {
+  return (
+    <span>
+      <PointsCell value={value} />
+      {value ? (
+        <div>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            ≈ {yuan(value)} 元
+          </Text>
+        </div>
+      ) : null}
+    </span>
+  );
+}
+
 /** 抽屉顶部的余额卡片：大号数字 + 约合金额 */
 function BalanceCard({ label, points, color }: { label: string; points: number; color: string }) {
   return (
@@ -199,9 +215,8 @@ export function UserPointsHistoryDrawer({ user, onClose, showWithdraws = false }
           withdrawPoints: sum.withdrawPoints + day.withdrawPoints,
           otherPoints: sum.otherPoints + day.otherPoints,
           netPoints: sum.netPoints + day.netPoints,
-          count: sum.count + day.count,
         }),
-        { taskPoints: 0, childrenPoints: 0, adjustPoints: 0, withdrawPoints: 0, otherPoints: 0, netPoints: 0, count: 0 },
+        { taskPoints: 0, childrenPoints: 0, adjustPoints: 0, withdrawPoints: 0, otherPoints: 0, netPoints: 0 },
       ),
     [daily],
   );
@@ -229,30 +244,20 @@ export function UserPointsHistoryDrawer({ user, onClose, showWithdraws = false }
         </Tooltip>
       ),
     },
-    { title: "任务入账", dataIndex: "taskPoints", width: 110, align: "right", render: (value: number) => <PointsCell value={value} /> },
-    { title: "徒弟奖励", dataIndex: "childrenPoints", width: 110, align: "right", render: (value: number) => <PointsCell value={value} /> },
-    { title: "人工调整", dataIndex: "adjustPoints", width: 110, align: "right", render: (value: number) => <PointsCell value={value} /> },
-    { title: "提现", dataIndex: "withdrawPoints", width: 110, align: "right", render: (value: number) => <PointsCell value={value} /> },
+    { title: "任务入账", dataIndex: "taskPoints", width: 110, align: "right", render: (value: number) => <PointsYuanCell value={value} /> },
+    { title: "徒弟奖励", dataIndex: "childrenPoints", width: 110, align: "right", render: (value: number) => <PointsYuanCell value={value} /> },
+    { title: "人工调整", dataIndex: "adjustPoints", width: 110, align: "right", render: (value: number) => <PointsYuanCell value={value} /> },
+    { title: "提现", dataIndex: "withdrawPoints", width: 110, align: "right", render: (value: number) => <PointsYuanCell value={value} /> },
     ...(hasOther
-      ? [{ title: "其他", dataIndex: "otherPoints", width: 100, align: "right" as const, render: (value: number) => <PointsCell value={value} /> }]
+      ? [{ title: "其他", dataIndex: "otherPoints", width: 100, align: "right" as const, render: (value: number) => <PointsYuanCell value={value} /> }]
       : []),
     {
       title: "净变动",
       dataIndex: "netPoints",
       width: 130,
       align: "right",
-      render: (value: number) => (
-        <span>
-          <PointsCell value={value} />
-          <div>
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              ≈ {yuan(value)} 元
-            </Text>
-          </div>
-        </span>
-      ),
+      render: (value: number) => <PointsYuanCell value={value} />,
     },
-    { title: "笔数", dataIndex: "count", width: 70, align: "right" },
   ];
 
   const withdrawTotal = useMemo(
@@ -418,7 +423,7 @@ export function UserPointsHistoryDrawer({ user, onClose, showWithdraws = false }
             {tab === "withdraw"
               ? `按申请时间筛选，不含待审核、审核中、结算中的提现，最长 ${MANUAL_POINTS_HISTORY_MAX_DAYS} 天`
               : tab === "summary"
-                ? `任务入账、徒弟奖励取积分日汇总表；人工调整、提现、笔数取流水（按流水时间归日，流水被清理的日期为 0），最长 ${MANUAL_POINTS_HISTORY_MAX_DAYS} 天`
+                ? `任务入账、徒弟奖励取积分日汇总表；人工调整、提现取流水（按流水时间归日，流水被清理的日期为 0），最长 ${MANUAL_POINTS_HISTORY_MAX_DAYS} 天`
                 : `按做单日期统计（人工调整、提现等无做单日期的按流水时间），最长 ${MANUAL_POINTS_HISTORY_MAX_DAYS} 天；提现在提现成功时扣除`}
           </Text>
         </Space>
@@ -451,7 +456,7 @@ export function UserPointsHistoryDrawer({ user, onClose, showWithdraws = false }
                   columns={dailyColumns}
                   dataSource={daily}
                   pagination={false}
-                  scroll={{ x: 860, y: "calc(100vh - 360px)" }}
+                  scroll={{ x: 790, y: "calc(100vh - 360px)" }}
                   locale={{ emptyText: <Empty description="所选日期内没有积分变动" /> }}
                   summary={() =>
                     daily.length ? (
@@ -459,32 +464,24 @@ export function UserPointsHistoryDrawer({ user, onClose, showWithdraws = false }
                         <Table.Summary.Row style={{ fontWeight: 600 }}>
                           <Table.Summary.Cell index={0}>合计（{daily.length} 天）</Table.Summary.Cell>
                           <Table.Summary.Cell index={1} align="right">
-                            <PointsCell value={totals.taskPoints} />
+                            <PointsYuanCell value={totals.taskPoints} />
                           </Table.Summary.Cell>
                           <Table.Summary.Cell index={2} align="right">
-                            <PointsCell value={totals.childrenPoints} />
+                            <PointsYuanCell value={totals.childrenPoints} />
                           </Table.Summary.Cell>
                           <Table.Summary.Cell index={3} align="right">
-                            <PointsCell value={totals.adjustPoints} />
+                            <PointsYuanCell value={totals.adjustPoints} />
                           </Table.Summary.Cell>
                           <Table.Summary.Cell index={4} align="right">
-                            <PointsCell value={totals.withdrawPoints} />
+                            <PointsYuanCell value={totals.withdrawPoints} />
                           </Table.Summary.Cell>
                           {hasOther ? (
                             <Table.Summary.Cell index={5} align="right">
-                              <PointsCell value={totals.otherPoints} />
+                              <PointsYuanCell value={totals.otherPoints} />
                             </Table.Summary.Cell>
                           ) : null}
                           <Table.Summary.Cell index={hasOther ? 6 : 5} align="right">
-                            <PointsCell value={totals.netPoints} />
-                            <div>
-                              <Text type="secondary" style={{ fontSize: 12 }}>
-                                ≈ {yuan(totals.netPoints)} 元
-                              </Text>
-                            </div>
-                          </Table.Summary.Cell>
-                          <Table.Summary.Cell index={hasOther ? 7 : 6} align="right">
-                            {totals.count}
+                            <PointsYuanCell value={totals.netPoints} />
                           </Table.Summary.Cell>
                         </Table.Summary.Row>
                       </Table.Summary>

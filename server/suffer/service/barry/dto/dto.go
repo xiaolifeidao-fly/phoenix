@@ -1020,7 +1020,6 @@ type UserPointsDailyStatDTO struct {
 	WithdrawPoints int64  `json:"withdrawPoints"`
 	OtherPoints    int64  `json:"otherPoints"`
 	NetPoints      int64  `json:"netPoints"`
-	Count          int64  `json:"count"`
 }
 
 // UserPointsRecordDTO 做单用户积分明细一行.
