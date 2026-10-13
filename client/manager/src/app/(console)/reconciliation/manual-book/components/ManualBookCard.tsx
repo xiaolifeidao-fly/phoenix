@@ -58,6 +58,7 @@ import {
   type DimensionDetailTarget,
 } from "./DimensionDetailDrawer";
 import {
+  DISPLAY_ONLY_CATEGORY,
   LedgerDetailDrawer,
   type LedgerDetailTarget,
 } from "./LedgerDetailDrawer";
@@ -391,7 +392,7 @@ export function ManualBookCard({
     [debtCompare?.data],
   );
 
-  /** 系统欠款 = 初始欠款 + 欠款日期次日到当天的（充值 − 入账 − 代收手续费），口径同欠款核对；悬浮看各社区人工 / 系统对照 */
+  /** 系统欠款 = 初始欠款 + 欠款日期次日到当天的（充值 − 入账），代收手续费不参与，口径同欠款核对；悬浮看各社区人工 / 系统对照 */
   const renderSystemDebt = (row: CompareRow) => {
     const day = debtDays.get(row.date);
     if (!day) return null;
@@ -405,8 +406,8 @@ export function ManualBookCard({
         content={
           <div style={{ maxWidth: 560 }}>
             <div className="recon-subcard-caption" style={{ marginBottom: 6 }}>
-              系统 = 初始欠款 + 欠款日期次日到当天的（充值 − 入账 −
-              代收手续费）。合计只算两边都有值的社区：人工{" "}
+              系统 = 初始欠款 + 欠款日期次日到当天的（充值 −
+              入账），代收手续费不参与。合计只算两边都有值的社区：人工{" "}
               {money(day.manualDebt)}，系统 {money(day.systemDebt)}，差值{" "}
               {signed(day.diff)}
               {day.issueCount
@@ -563,7 +564,7 @@ export function ManualBookCard({
     },
     {
       title: (
-        <Tooltip title="余额：上面是人工记的截至当天余额，下面是系统应有余额 = 初始余额 + 之后入账 − 出账，两行对不上的格子标红。括号里是截至当天各社区欠款合计：人工 = 人工记账的欠款，系统 = 初始欠款 + 之后充值 − 入账 − 代收手续费（同欠款核对），对不上标红；悬浮看各社区">
+        <Tooltip title="余额：上面是人工记的截至当天余额，下面是系统应有余额 = 初始余额 + 之后入账 − 出账（代收手续费不扣），两行对不上的格子标红。括号里是截至当天各社区欠款合计：人工 = 人工记账的欠款，系统 = 初始欠款 + 之后充值 − 入账（代收手续费不参与，同欠款核对），对不上标红；悬浮看各社区">
           <span>余额（欠款）RMB</span>
         </Tooltip>
       ),
@@ -629,7 +630,7 @@ export function ManualBookCard({
     },
     {
       title: (
-        <Tooltip title="上面是人工利润 = 当天余额 − 上一份余额（没有上一份时是初始余额）；下面是出入账利润 = 入账 − 出账（出账含手续费）">
+        <Tooltip title="上面是人工利润 = 当天余额 − 上一份余额（没有上一份时是初始余额）；下面是出入账利润 = 入账 − 出账（出账含代付手续费，不含代收手续费）">
           <span>{"当天利润 RMB"}</span>
         </Tooltip>
       ),
@@ -650,7 +651,7 @@ export function ManualBookCard({
             systemTip={
               row.ledgerInOpening
                 ? "当天出入账已含在初始余额里，不算利润"
-                : `入账 ${money(row.ledgerIn)} − 出账 ${money(row.ledgerOut)}`
+                : `入账 ${money(row.ledgerIn)} − 出账 ${money(row.ledgerOut)}（代收手续费只展示，不扣）`
             }
           />
           {row.dayFxEffect !== null && Math.abs(row.dayFxEffect) > 0.01 ? (
@@ -681,7 +682,7 @@ export function ManualBookCard({
     },
     {
       title: (
-        <Tooltip title="含人工出款、代付手续费、代收手续费、服务器出款、其他出账">
+        <Tooltip title="含人工出款、代付手续费、服务器出款、其他出账；代收手续费只做展示，不计入出账合计，也不从余额扣除">
           <span>出账（含手续费）</span>
         </Tooltip>
       ),
@@ -1613,16 +1614,33 @@ function LedgerBreakdown({
           <div className="recon-subcard-caption">已含在初始余额</div>
         </Tooltip>
       ) : null}
-      {items.map((item) => (
-        <div
-          className="recon-subcard-caption recon-link-amount"
-          key={item.category}
-          onClick={() => open(item.category)}
-        >
-          {item.categoryName} {money(item.amountRmb)}
-          {item.count > 1 ? `（${item.count} 笔）` : ""}
-        </div>
-      ))}
+      {items.map((item) => {
+        const line = (
+          <div
+            className="recon-subcard-caption recon-link-amount"
+            key={item.category}
+            onClick={() => open(item.category)}
+          >
+            {item.categoryName} {money(item.amountRmb)}
+            {item.count > 1 ? `（${item.count} 笔）` : ""}
+            {item.category === DISPLAY_ONLY_CATEGORY ? (
+              <Tag style={{ marginInlineStart: 4, marginInlineEnd: 0 }}>
+                仅展示
+              </Tag>
+            ) : null}
+          </div>
+        );
+        return item.category === DISPLAY_ONLY_CATEGORY ? (
+          <Tooltip
+            key={item.category}
+            title="代收手续费只做展示，不计入出账合计，也不从余额扣除"
+          >
+            {line}
+          </Tooltip>
+        ) : (
+          line
+        );
+      })}
     </span>
   );
 }

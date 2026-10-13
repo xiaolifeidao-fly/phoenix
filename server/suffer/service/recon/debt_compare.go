@@ -22,13 +22,13 @@ const (
 	upstreamSumBatch = 500
 )
 
-// flowSum 一段日期内的充值 / 入账 / 代收手续费.
+// flowSum 一段日期内的充值 / 入账 / 代收手续费(手续费只展示, 不参与欠款计算).
 type flowSum struct {
 	recharge, income, collectFee float64
 }
 
-// change 这段时间系统算出来的欠款变化 = 充值 − 入账 − 代收手续费.
-func (f flowSum) change() float64 { return f.recharge - f.income - f.collectFee }
+// change 这段时间系统算出来的欠款变化 = 充值 − 入账.
+func (f flowSum) change() float64 { return f.recharge - f.income }
 
 // debtCompareInput 一个社区在一个记账日核对需要的数据.
 type debtCompareInput struct {
@@ -64,7 +64,7 @@ type debtCommunity struct {
 }
 
 // DebtCompare 欠款核对: 所选区间内每一份人工记账, 按社区比人工和系统.
-// 系统欠款(截至记账日) = 初始欠款 + 欠款日期次日到记账日的(充值 − 入账 − 代收手续费);
+// 系统欠款(截至记账日) = 初始欠款 + 欠款日期次日到记账日的(充值 − 入账), 代收手续费只展示;
 // 人工欠款 = 当天人工记账里的欠款. 明细里的充值 / 入账 / 手续费 / 增量只算当天(上一份次日 ~ 记账日).
 // 日期 yyyy-MM-dd, 区间最长 93 天.
 func (s *ReconService) DebtCompare(ctx context.Context, startDate, endDate string) (*reconDTO.DebtCompareDTO, error) {
@@ -395,7 +395,7 @@ func buildDebtCompareRow(input *debtCompareInput) reconDTO.DebtCompareRowDTO {
 	row.DebtChange = input.day.change()
 	row.SystemDebt = row.OpeningDebt + input.total.change()
 	row.PrevSystemDebt = row.SystemDebt - row.DebtChange
-	// 系统应收 = 当天充值(= 系统增量 + 入账 + 手续费)
+	// 系统应收 = 当天充值(= 系统增量 + 入账)
 	row.SystemReceivable = row.Recharge
 	if input.prevManual != nil {
 		row.PrevManualDebt = input.prevManual.AmountRmb
@@ -408,12 +408,12 @@ func buildDebtCompareRow(input *debtCompareInput) reconDTO.DebtCompareRowDTO {
 		return row
 	}
 	row.ManualDebtChange = floatPtr(*row.ManualDebt - row.PrevManualDebt)
-	// 人工应收 = 人工增量 + 入账 + 手续费; 和系统应收的差 = 当天新增差值
-	row.ManualReceivable = floatPtr(*row.ManualDebtChange + row.Income + row.CollectFee)
+	// 人工应收 = 人工增量 + 入账; 和系统应收的差 = 当天新增差值
+	row.ManualReceivable = floatPtr(*row.ManualDebtChange + row.Income)
 	row.Diff = floatPtr(*row.ManualDebt - row.SystemDebt)
 	row.DayDiff = floatPtr(*row.ManualDebtChange - row.DebtChange)
-	// 比例按截至当天的规模算(系统欠款 + 当天入账 + 手续费), 当天充值可能为 0
-	if scale := row.SystemDebt + row.Income + row.CollectFee; scale != 0 {
+	// 比例按截至当天的规模算(系统欠款 + 当天入账), 当天充值可能为 0
+	if scale := row.SystemDebt + row.Income; scale != 0 {
 		row.DiffRatio = floatPtr(*row.Diff / math.Abs(scale))
 	}
 	switch {
@@ -447,18 +447,16 @@ func debtDiffHints(row *reconDTO.DebtCompareRowDTO, input *debtCompareInput) []s
 			hints = append(hints, fmt.Sprintf("当天没有新增差异，%s 之前就已经差了；往前看是哪天开始出现的", shortKey(input.prevDate)))
 		}
 	} else {
-		hints = append(hints, fmt.Sprintf("%s 新增差异 %s：人工增量 %s，系统增量 %s（充值 %s − 入账 %s − 手续费 %s）",
+		hints = append(hints, fmt.Sprintf("%s 新增差异 %s：人工增量 %s，系统增量 %s（充值 %s − 入账 %s）",
 			dayRangeText(row.DayStart, input.checkDate), rmb(dayDiff), rmb(*row.ManualDebtChange), rmb(row.DebtChange),
-			rmb(row.Recharge), rmb(row.Income), rmb(row.CollectFee)))
+			rmb(row.Recharge), rmb(row.Income)))
 		matches := func(value float64) bool { return value != 0 && math.Abs(dayDiff-value) <= debtCompareTolerance }
 		switch {
-		case matches(row.CollectFee):
-			hints = append(hints, "新增差异正好等于当天代收手续费：人工欠款可能只按到账金额冲减，没扣代收手续费")
 		case matches(-row.CollectFee):
-			hints = append(hints, "新增差异正好等于负的当天代收手续费：人工欠款可能多扣了一次手续费")
-		case matches(row.Income) || matches(row.Income+row.CollectFee):
+			hints = append(hints, "新增差异正好等于负的当天代收手续费：代收手续费不冲减欠款，人工欠款可能把手续费也扣了")
+		case matches(row.Income):
 			hints = append(hints, "新增差异正好等于当天入账：人工欠款可能没扣这笔入账，或入账在出入账里重复记了")
-		case matches(-row.Income) || matches(-row.Income-row.CollectFee):
+		case matches(-row.Income):
 			hints = append(hints, "新增差异正好等于负的当天入账：可能有入账人工已扣、但出入账里漏记，或记错了日期")
 		case matches(-row.Recharge):
 			hints = append(hints, "新增差异正好等于负的当天充值：人工欠款可能没把当天的充值加进去")

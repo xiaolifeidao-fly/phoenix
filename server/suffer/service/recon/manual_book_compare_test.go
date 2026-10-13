@@ -258,3 +258,25 @@ func issueText(item reconDTO.ManualBookCompareItemDTO) string {
 	}
 	return strings.Join(texts, ";")
 }
+
+// 代收手续费只展示: 类目照常列出, 但不计入出账、系统余额和利润, 也不拿来匹配差值来源.
+func TestManualBookCompareCollectFeeDisplayOnly(t *testing.T) {
+	category := func(recordType, code, name string, amount float64) barryDTO.ReconLedgerDailyCategoryDTO {
+		return barryDTO.ReconLedgerDailyCategoryDTO{RecordType: recordType, Category: code, CategoryName: name, Count: 1, AmountRmb: amount}
+	}
+	books := []reconDTO.ManualBookDTO{book(1, "2026-10-02", "RMB", 1390, 1390)}
+	ledger := toLedgerDays([]barryDTO.ReconLedgerDailyDTO{
+		{Date: "2026-10-02", InRmb: 500, OutRmb: 210, CategoryList: []barryDTO.ReconLedgerDailyCategoryDTO{
+			category("IN", "COMMUNITY_IN", "社区入账", 500), category("OUT", "MANUAL_SETTLE", "人工出款", 100), category("OUT", "COLLECT_FEE", "代收手续费", 110),
+		}},
+	})
+	result := buildManualBookCompare(books, opening("2026-10-01", "RMB", 1000, 1000, nil), ledger, day("2026-10-02"), day("2026-10-02"))
+	item := result.Days[0]
+	if item.LedgerOut != 100 || item.LedgerProfit != 400 || !near(item.SystemBalanceRmb, 1400) || len(item.LedgerCategories) != 3 {
+		t.Fatalf("item = %+v", item)
+	}
+	// 人工 1390 比系统 1400 少 10, 不会被说成「代收手续费」
+	if !near(item.Diff, -10) || strings.Contains(issueText(item), "代收手续费") {
+		t.Fatalf("issues = %+v", item.Issues)
+	}
+}

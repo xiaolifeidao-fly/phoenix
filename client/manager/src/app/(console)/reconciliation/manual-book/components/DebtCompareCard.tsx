@@ -43,7 +43,7 @@ const formulas = [
   {
     label: "当天",
     expression:
-      "充值、入账、手续费、增量只算选中的那天；上一份记账隔了几天时，从上一份的次日算起",
+      "充值、入账、手续费、增量只算选中的那天；上一份记账隔了几天时，从上一份的次日算起。代收手续费只做展示，不参与欠款计算",
   },
   {
     label: "上一份欠款",
@@ -52,8 +52,7 @@ const formulas = [
   },
   {
     label: "当天增量",
-    expression:
-      "人工 = 当天欠款 − 上一份欠款；系统 = 当天充值 − 入账 − 入账代收手续费",
+    expression: "人工 = 当天欠款 − 上一份欠款；系统 = 当天充值 − 入账",
   },
   {
     label: "当天欠款",
@@ -63,7 +62,7 @@ const formulas = [
   {
     label: "应收",
     expression:
-      "人工 = 人工当天增量 + 当天入账 + 当天手续费；系统 = 当天充值。两行的差 = 当天新增差异",
+      "人工 = 人工当天增量 + 当天入账；系统 = 当天充值。两行的差 = 当天新增差异",
   },
   {
     label: "差值",
@@ -120,12 +119,10 @@ function DiffCell({
 const systemValue = (row: DebtCompareRow, value: number) =>
   row.status === "BEFORE_START" ? null : value;
 
-const flowTip = (item: {
-  recharge: number;
-  income: number;
-  collectFee: number;
-}) =>
-  `充值 ${money(item.recharge)} − 入账 ${money(item.income)} − 代收手续费 ${money(item.collectFee)}`;
+const flowTip = (item: { recharge: number; income: number }) =>
+  `充值 ${money(item.recharge)} − 入账 ${money(item.income)}`;
+
+const COLLECT_FEE_TIP = "代收手续费只做展示，不参与欠款计算";
 
 /** 当天窗口：一天写 MM-DD，跨几天写 MM-DD ~ MM-DD */
 const dayRange = (from: string | undefined, to: string) =>
@@ -181,22 +178,22 @@ export function DebtCompareCard({ compare }: DebtCompareCardProps) {
       ),
     },
     {
-      title: "当天入账 + 手续费",
-      key: "incomeTotal",
+      title: "当天入账",
+      key: "income",
       width: 170,
       align: "right",
-      render: (_, day) => {
-        const total = day.income + day.collectFee;
-        const tip = `入账 ${money(day.income)} + 代收手续费 ${money(day.collectFee)}`;
-        return (
-          <PairCell
-            manual={total}
-            system={total}
-            manualTip={tip}
-            systemTip={tip}
-          />
-        );
-      },
+      render: (_, day) => (
+        <div>
+          <PairCell manual={day.income} system={day.income} />
+          {Math.abs(day.collectFee) > 0.001 ? (
+            <Tooltip title={COLLECT_FEE_TIP}>
+              <div className="recon-subcard-caption">
+                代收手续费 {money(day.collectFee)}（仅展示）
+              </div>
+            </Tooltip>
+          ) : null}
+        </div>
+      ),
     },
     {
       title: "应收",
@@ -207,7 +204,7 @@ export function DebtCompareCard({ compare }: DebtCompareCardProps) {
         <PairCell
           manual={day.manualReceivable}
           system={day.systemReceivable}
-          manualTip={`人工增量 ${money(day.manualDebtChange)} + 入账 ${money(day.income)} + 手续费 ${money(day.collectFee)}`}
+          manualTip={`人工增量 ${money(day.manualDebtChange)} + 入账 ${money(day.income)}`}
           systemTip={`当天充值 ${money(day.recharge)}`}
         />
       ),
@@ -434,7 +431,11 @@ export function DebtCompareDayDrawer({
       ),
     },
     {
-      title: "当天手续费",
+      title: (
+        <Tooltip title={COLLECT_FEE_TIP}>
+          <span>当天手续费（仅展示）</span>
+        </Tooltip>
+      ),
       dataIndex: "collectFee",
       width: 140,
       align: "right",
@@ -457,7 +458,7 @@ export function DebtCompareDayDrawer({
           manualTip={
             row.manualDebtChange === null
               ? undefined
-              : `人工增量 ${signed(row.manualDebtChange)} + 入账 ${money(row.income)} + 手续费 ${money(row.collectFee)}`
+              : `人工增量 ${signed(row.manualDebtChange)} + 入账 ${money(row.income)}`
           }
           systemTip={`当天充值 ${money(row.recharge)}`}
         />
@@ -551,9 +552,9 @@ export function DebtCompareDayDrawer({
                   system: selected.systemDebt,
                 },
                 {
-                  label: "当天入账 + 手续费",
-                  manual: selected.income + selected.collectFee,
-                  system: selected.income + selected.collectFee,
+                  label: "当天入账",
+                  manual: selected.income,
+                  system: selected.income,
                 },
                 {
                   label: "应收",

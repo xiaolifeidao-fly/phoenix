@@ -147,7 +147,7 @@ export interface ManualBookCompareItem {
   balanceChange: number | null;
   manualProfit: number | null;
   ledgerIn: number;
-  /** 出账，含各类手续费 */
+  /** 出账，含代付手续费；代收手续费只展示，不计入 */
   ledgerOut: number;
   ledgerProfit: number;
   /** 窗口内出入账按类目拆开 */
@@ -283,9 +283,9 @@ export type DebtCompareStatus = "OK" | "MINOR" | "DIFF" | "NO_MANUAL" | "BEFORE_
  * 某个上游社区在某个记账日的核对（RMB），每个指标人工、系统各一个值。
  * 当天窗口 = [dayStart, 记账日]，dayStart = 上一份欠款日期的次日；充值 / 入账 / 手续费只算当天窗口。
  * 上一份欠款：人工 = 上一份人工记账（没有时为初始欠款），系统 = 截至上一份日期的系统欠款。
- * 当天增量：人工 = 当天人工欠款 − 上一份人工欠款，系统 = 充值 − 入账 − 代收手续费。
+ * 当天增量：人工 = 当天人工欠款 − 上一份人工欠款，系统 = 充值 − 入账（代收手续费只展示，不参与）。
  * 当天欠款：人工 = 当天人工记账，系统 = 初始欠款 + 欠款日期次日到当天的累计增量。
- * 应收：人工 = 人工增量 + 入账 + 代收手续费，系统 = 当天充值；两者之差 = 当天新增差值。
+ * 应收：人工 = 人工增量 + 入账，系统 = 当天充值；两者之差 = 当天新增差值。
  * 差值 = 人工欠款 − 系统欠款（累计）；当天新增差值 = 人工增量 − 系统增量。
  */
 export interface DebtCompareRow {

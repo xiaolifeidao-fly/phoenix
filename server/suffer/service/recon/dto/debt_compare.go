@@ -16,9 +16,9 @@ const (
 // 充值 / 入账 / 手续费只算当天窗口.
 //
 // 上一份欠款: 人工 = 上一份人工记账里的欠款(没有时为初始欠款); 系统 = 截至 PrevDate 的系统欠款.
-// 当天增量: 人工 = 当天人工欠款 − 上一份人工欠款; 系统 = 充值 − 入账 − 代收手续费.
+// 当天增量: 人工 = 当天人工欠款 − 上一份人工欠款; 系统 = 充值 − 入账(代收手续费只展示, 不参与).
 // 当天欠款: 人工 = 当天人工记账里的欠款; 系统 = 初始欠款 + 欠款日期次日到记账日的累计增量.
-// 应收: 人工 = 人工增量 + 入账 + 代收手续费; 系统 = 当天充值. 两者之差 = 当天新增差值.
+// 应收: 人工 = 人工增量 + 入账; 系统 = 当天充值. 两者之差 = 当天新增差值.
 // 差值 = 人工欠款 − 系统欠款(截至当天的累计); 当天新增差值 = 人工增量 − 系统增量.
 type DebtCompareRowDTO struct {
 	UserID    uint64 `json:"userId"`
@@ -37,7 +37,7 @@ type DebtCompareRowDTO struct {
 	PrevIsOpening bool   `json:"prevIsOpening"`
 	DayStart      string `json:"dayStart,omitempty"`
 
-	// 当天窗口的充值 / 入账(社区入账) / 入账代收手续费
+	// 当天窗口的充值 / 入账(社区入账) / 入账代收手续费(只展示)
 	Recharge   float64 `json:"recharge"`
 	Income     float64 `json:"income"`
 	CollectFee float64 `json:"collectFee"`
@@ -59,7 +59,7 @@ type DebtCompareRowDTO struct {
 	SystemReceivable float64  `json:"systemReceivable"`
 
 	// Diff 累计差值 = 人工欠款 − 系统欠款; DayDiff 当天新增差值 = 人工增量 − 系统增量;
-	// DiffRatio = Diff ÷ |系统欠款 + 当天入账 + 手续费|
+	// DiffRatio = Diff ÷ |系统欠款 + 当天入账|
 	Diff      *float64 `json:"diff"`
 	DayDiff   *float64 `json:"dayDiff"`
 	DiffRatio *float64 `json:"diffRatio"`

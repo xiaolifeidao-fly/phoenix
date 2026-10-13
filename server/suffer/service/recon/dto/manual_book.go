@@ -117,9 +117,10 @@ type ManualBookCompareItemDTO struct {
 
 	ManualProfit *float64 `json:"manualProfit"`
 	LedgerIn     float64  `json:"ledgerIn"`
-	LedgerOut    float64  `json:"ledgerOut"`
-	LedgerProfit float64  `json:"ledgerProfit"`
-	// LedgerCategories 窗口内出入账按类目拆开(按类目枚举顺序), 出账含各类手续费.
+	// LedgerOut 窗口内出账, 不含代收手续费(只展示, 不从余额扣).
+	LedgerOut    float64 `json:"ledgerOut"`
+	LedgerProfit float64 `json:"ledgerProfit"`
+	// LedgerCategories 窗口内出入账按类目拆开(按类目枚举顺序), 代收手续费只展示, 不计入 LedgerOut.
 	LedgerCategories []ManualBookLedgerCategoryDTO `json:"ledgerCategories"`
 	// LedgerInOpening 记账日就是初始余额日期(窗口为空): LedgerIn / LedgerOut / LedgerCategories 是当天的出入账, 只做展示,
 	// 已含在初始余额(日终余额)里, 不参与利润和差值; 此时 LedgerProfit 为 0.

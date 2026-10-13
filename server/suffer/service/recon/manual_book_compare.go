@@ -24,12 +24,20 @@ type ledgerDay struct {
 	categories []barryDTO.ReconLedgerDailyCategoryDTO
 }
 
+// displayOnlyCategory 只展示、不计入余额和利润的出账类目: 代收手续费(上游入账时扣的, 不从我们余额里出).
+const displayOnlyCategory = "COLLECT_FEE"
+
 func toLedgerDays(rows []barryDTO.ReconLedgerDailyDTO) map[string]ledgerDay {
 	result := make(map[string]ledgerDay, len(rows))
 	for _, row := range rows {
 		current := result[row.Date]
 		current.in += row.InRmb
 		current.out += row.OutRmb
+		for _, category := range row.CategoryList {
+			if category.Category == displayOnlyCategory && category.RecordType == "OUT" {
+				current.out -= category.AmountRmb
+			}
+		}
 		current.categories = append(current.categories, row.CategoryList...)
 		result[row.Date] = current
 	}
@@ -372,7 +380,7 @@ func manualBookDiffHints(item *reconDTO.ManualBookCompareItemDTO, before, after 
 	}
 	for _, category := range categories {
 		amount := category.AmountRmb
-		if math.Abs(amount) <= manualBookTolerance {
+		if category.Category == displayOnlyCategory || math.Abs(amount) <= manualBookTolerance {
 			continue
 		}
 		name := "「" + category.CategoryName + "」"

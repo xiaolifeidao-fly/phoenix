@@ -43,6 +43,9 @@ export interface LedgerDetailTarget {
 const PAGE_SIZE = 20;
 const ALL = "ALL";
 
+/** 只展示、不计入出账合计和余额的类目：代收手续费 */
+export const DISPLAY_ONLY_CATEGORY = "COLLECT_FEE";
+
 /** 上下游用户名点一下即按它筛选 */
 function buildColumns(
   onPickUser: (name: string) => void,
@@ -228,6 +231,7 @@ export function LedgerDetailDrawer({
     ),
   ];
   const selected = category === ALL ? null : byCategory.get(category);
+  const displayOnly = byCategory.get(DISPLAY_ONLY_CATEGORY);
   const expectedAmount =
     category === ALL ? target.total : (selected?.amountRmb ?? 0);
   const expectedCount = category === ALL ? undefined : (selected?.count ?? 0);
@@ -285,6 +289,14 @@ export function LedgerDetailDrawer({
           ) : null}
           ；对比表里合计 {money(expectedAmount)} RMB（U 记录按折算值
           {userKeyword ? "，不随用户筛选变化" : ""}）
+          {category === ALL &&
+          displayOnly &&
+          Math.abs(displayOnly.amountRmb) > 0.001
+            ? `；下面的明细含代收手续费 ${money(displayOnly.amountRmb)}，它只做展示，不计入合计`
+            : null}
+          {category === DISPLAY_ONLY_CATEGORY
+            ? "；代收手续费只做展示，不从余额扣除，不计入出账合计"
+            : null}
         </div>
         {target.inOpening ? (
           <Alert
