@@ -258,6 +258,11 @@ func (c *manualBookComparer) compare(book *reconDTO.ManualBookDTO, from balanceA
 		item.GapDays++
 	}
 	item.LedgerProfit = item.LedgerIn - item.LedgerOut
+	if item.GapDays == 0 {
+		// 记账日就是初始余额日期: 当天出入账已含在初始余额里, 只带出来展示, 不进利润
+		addLedgerDay(&item, c.ledger[book.BookDate])
+		item.LedgerInOpening = true
+	}
 	fillBook(&item, book, c.debtBaseline(book.BookDate))
 
 	item.OpeningDate = c.opening.BalanceDate
@@ -360,7 +365,12 @@ func manualBookDiffHints(item *reconDTO.ManualBookCompareItemDTO, before, after 
 			fmt.Sprintf("新增里汇率变化带来 %s，扣掉后还差 %s", rmb(*item.DayFxEffect), rmb(residual))))
 	}
 
-	for _, category := range item.LedgerCategories {
+	// 初始余额日那天的出入账只是展示(已含在初始余额里), 不拿来匹配差值来源
+	categories := item.LedgerCategories
+	if item.LedgerInOpening {
+		categories = nil
+	}
+	for _, category := range categories {
 		amount := category.AmountRmb
 		if math.Abs(amount) <= manualBookTolerance {
 			continue
@@ -382,6 +392,7 @@ func manualBookDiffHints(item *reconDTO.ManualBookCompareItemDTO, before, after 
 		}
 	}
 	switch {
+	case item.LedgerInOpening:
 	case near(residual, item.LedgerOut) && item.LedgerOut != 0:
 		return append(hints, issue(reconDTO.IssueColumnOut, reconDTO.IssueKindLedger, "= 全部出账",
 			fmt.Sprintf("新增的正好等于 %s 全部出账 %s：余额里可能一笔出账都还没扣", window, rmb(item.LedgerOut))))

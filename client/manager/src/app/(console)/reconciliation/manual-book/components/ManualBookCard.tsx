@@ -647,7 +647,11 @@ export function ManualBookCard({
                 ? `${shortDate(row.date)} 余额 − ${shortDate(row.baselineDate)} 余额${row.balanceChange !== null && row.currency === "USDT" ? `（${signed(row.balanceChange)} U）` : ""}`
                 : undefined
             }
-            systemTip={`入账 ${money(row.ledgerIn)} − 出账 ${money(row.ledgerOut)}`}
+            systemTip={
+              row.ledgerInOpening
+                ? "当天出入账已含在初始余额里，不算利润"
+                : `入账 ${money(row.ledgerIn)} − 出账 ${money(row.ledgerOut)}`
+            }
           />
           {row.dayFxEffect !== null && Math.abs(row.dayFxEffect) > 0.01 ? (
             <div className="recon-subcard-caption">
@@ -1560,11 +1564,13 @@ function IssueTags({
 /** 当天窗口：上一份次日 ~ 当天；没有上一份时按 gapDays 往前推 */
 function ledgerWindow(row: ManualBookCompareItem) {
   const end = dayjs(row.date);
-  const start = row.baselineDate
-    ? dayjs(row.baselineDate).add(1, "day")
-    : end.subtract(Math.max(row.gapDays, 1) - 1, "day");
+  // 初始余额当天的记账窗口为空，明细就看当天
+  const start =
+    row.baselineDate && !row.ledgerInOpening
+      ? dayjs(row.baselineDate).add(1, "day")
+      : end.subtract(Math.max(row.gapDays, 1) - 1, "day");
   return {
-    startDate: start.format("YYYY-MM-DD"),
+    startDate: (start.isAfter(end) ? end : start).format("YYYY-MM-DD"),
     endDate: end.format("YYYY-MM-DD"),
   };
 }
@@ -1587,7 +1593,14 @@ function LedgerBreakdown({
       item.recordType === recordType && Math.abs(item.amountRmb) > 0.001,
   );
   const open = (category?: string) =>
-    onOpen({ ...ledgerWindow(row), recordType, category, total, categories });
+    onOpen({
+      ...ledgerWindow(row),
+      recordType,
+      category,
+      total,
+      categories,
+      inOpening: row.ledgerInOpening,
+    });
   return (
     <span>
       <Tooltip title="查看明细">
@@ -1595,6 +1608,11 @@ function LedgerBreakdown({
           <MoneyCell value={total} />
         </span>
       </Tooltip>
+      {row.ledgerInOpening && Math.abs(total) > 0.001 ? (
+        <Tooltip title="初始余额是这天的日终余额，当天出入账已含在里面，不参与对比">
+          <div className="recon-subcard-caption">已含在初始余额</div>
+        </Tooltip>
+      ) : null}
       {items.map((item) => (
         <div
           className="recon-subcard-caption recon-link-amount"

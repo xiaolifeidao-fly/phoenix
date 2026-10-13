@@ -23,7 +23,7 @@ func opening(date, currency string, balance, balanceRmb float64, rate *float64) 
 
 func TestManualBookCompareAgainstOpeningBalance(t *testing.T) {
 	books := []reconDTO.ManualBookDTO{
-		book(9, "2026-09-29", "RMB", 1, 1),         // 早于初始余额日期, 不对比
+		book(9, "2026-09-29", "RMB", 1, 1),        // 早于初始余额日期, 不对比
 		book(1, "2026-09-30", "USDT", 1000, 7100), // 和初始余额(7000)差 100, 但不作为系统余额的起点
 		book(2, "2026-10-01", "USDT", 1100, 7700), // 系统 7000 + 700 = 7700 → 一致
 		book(3, "2026-10-02", "USDT", 1150, 8050), // 系统 7700 + 300 = 8000 → 差 50, 当天新增 50
@@ -32,6 +32,7 @@ func TestManualBookCompareAgainstOpeningBalance(t *testing.T) {
 	}
 	ledger := map[string]ledgerDay{
 		"2026-09-29": {in: 5},
+		"2026-09-30": {in: 40, out: 100}, // 初始余额当天: 已含在初始余额里, 只展示
 		"2026-10-01": {in: 1000, out: 300},
 		"2026-10-02": {in: 400, out: 100},
 		"2026-10-03": {in: 100},
@@ -48,6 +49,18 @@ func TestManualBookCompareAgainstOpeningBalance(t *testing.T) {
 	// 初始余额当天: 系统 = 初始余额, 人工 7100 → 差 100
 	if same := result.Days[1]; !near(same.SystemBalanceRmb, 7000) || !near(same.Diff, 100) || !same.BaselineIsOpening || same.GapDays != 0 {
 		t.Fatalf("09-30 = %+v", same)
+	}
+	// 初始余额当天的出入账带出来展示, 但不进利润, 也不拿来匹配差值来源(出账 100 正好等于差值)
+	if same := result.Days[1]; !same.LedgerInOpening || same.LedgerIn != 40 || same.LedgerOut != 100 || same.LedgerProfit != 0 || !near(same.DayDiff, 100) {
+		t.Fatalf("09-30 出入账 = %+v", same)
+	}
+	for _, issue := range result.Days[1].Issues {
+		if issue.Kind == reconDTO.IssueKindLedger {
+			t.Fatalf("09-30 issues = %v", result.Days[1].Issues)
+		}
+	}
+	if result.Days[2].LedgerInOpening {
+		t.Fatalf("10-01 = %+v", result.Days[2])
 	}
 	first := result.Days[2]
 	if first.Status != reconDTO.CompareStatusOK || !near(first.SystemBalanceRmb, 7700) || !near(first.Diff, 0) ||

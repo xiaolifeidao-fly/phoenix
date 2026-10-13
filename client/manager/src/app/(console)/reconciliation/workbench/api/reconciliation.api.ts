@@ -270,6 +270,10 @@ export interface ReconLedgerRecord {
   points?: number;
   remark?: string;
   createdBy?: string;
+  /** 最后操作人（最后修改人，没有时取创建人）；系统生成的为 system */
+  operator?: string;
+  /** 最后操作时间 yyyy-MM-dd HH:mm:ss */
+  operateTime?: string;
   /** 被人工修改的次数，大于 0 时可查看快照 */
   modifyCount?: number;
 }

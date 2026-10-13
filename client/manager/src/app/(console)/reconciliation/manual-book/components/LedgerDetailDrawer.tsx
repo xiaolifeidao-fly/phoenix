@@ -36,6 +36,8 @@ export interface LedgerDetailTarget {
   /** 对比表里这一格的数字，用来核对 */
   total: number;
   categories?: ManualBookLedgerCategory[];
+  /** 初始余额当天：这些出入账已含在初始余额里，只做展示 */
+  inOpening?: boolean;
 }
 
 const PAGE_SIZE = 20;
@@ -284,6 +286,13 @@ export function LedgerDetailDrawer({
           ；对比表里合计 {money(expectedAmount)} RMB（U 记录按折算值
           {userKeyword ? "，不随用户筛选变化" : ""}）
         </div>
+        {target.inOpening ? (
+          <Alert
+            type="info"
+            showIcon
+            message="初始余额是这天的日终余额，这些出入账已含在里面，不参与利润和差值对比"
+          />
+        ) : null}
         {error ? (
           <Alert
             type="error"

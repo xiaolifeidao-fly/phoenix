@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarOutlined, ReloadOutlined } from "@ant-design/icons";
+import { CalendarOutlined, ReloadOutlined, SyncOutlined } from "@ant-design/icons";
 import { Button, DatePicker, Space, Tabs, Tooltip } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 import { message } from "@/utils/notify";
@@ -68,6 +68,14 @@ export function ManualBookPanel() {
     message.success("已重置为当天");
   };
 
+  /** 区间不变，重新加载出入账、人工记账和欠款核对 */
+  const refreshing = ledger.loading || book.loading || debtCompare.loading;
+  const handleRefresh = () => {
+    void ledger.refresh();
+    void book.refresh();
+    void debtCompare.refresh();
+  };
+
   const filters = (
     <Space size={8} wrap>
       <RangePicker
@@ -89,6 +97,15 @@ export function ManualBookPanel() {
             : undefined
         }
       />
+      <Tooltip title="按当前日期区间重新加载数据">
+        <Button
+          icon={<SyncOutlined />}
+          loading={refreshing}
+          onClick={handleRefresh}
+        >
+          刷新
+        </Button>
+      </Tooltip>
       <Tooltip title="日期重置为当天并重新加载">
         <Button icon={<ReloadOutlined />} onClick={handleReset}>
           重置

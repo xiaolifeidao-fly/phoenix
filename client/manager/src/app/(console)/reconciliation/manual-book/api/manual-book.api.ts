@@ -152,6 +152,11 @@ export interface ManualBookCompareItem {
   ledgerProfit: number;
   /** 窗口内出入账按类目拆开 */
   ledgerCategories?: ManualBookLedgerCategory[];
+  /**
+   * 记账日就是初始余额日期（窗口为空）：ledgerIn / ledgerOut / ledgerCategories 是当天的出入账，只做展示，
+   * 已含在初始余额（日终余额）里，不参与利润和差值，此时 ledgerProfit 为 0
+   */
+  ledgerInOpening?: boolean;
   /** 用到的初始余额日期 / 金额（RMB），以及之后到当天的累计入账、出账 */
   openingDate?: string;
   openingBalanceRmb: number | null;

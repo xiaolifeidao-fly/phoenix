@@ -475,6 +475,18 @@ export function LedgerCard({ ledger, range }: LedgerCardProps) {
       render: (value?: string) => value || "-",
     },
     {
+      title: "操作人",
+      dataIndex: "operator",
+      width: 100,
+      render: (value?: string) => (value === "system" ? "系统" : value || "-"),
+    },
+    {
+      title: "操作时间",
+      dataIndex: "operateTime",
+      width: 160,
+      render: (value?: string) => value || "-",
+    },
+    {
       title: "操作",
       key: "actions",
       width: 112,
@@ -651,7 +663,7 @@ export function LedgerCard({ ledger, range }: LedgerCardProps) {
             loading={ledger.loading}
             columns={detailColumns}
             dataSource={ledger.rows}
-            scroll={{ x: 1132 }}
+            scroll={{ x: 1392 }}
             pagination={{
               current: ledger.filters.page,
               pageSize: ledger.filters.pageSize,
