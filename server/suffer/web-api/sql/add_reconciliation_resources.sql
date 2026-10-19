@@ -9,6 +9,7 @@ SELECT 1, NOW(), NOW(), t.name, t.code, 0, 'RESOURCE', t.url, '', '', '', '', ''
 FROM (
   SELECT '对账工作台人工维度查询' AS name, 'barryReconManualDimension' AS code, '/barry/reconciliation/manual-dimension' AS url
   UNION ALL SELECT '对账人工维度按天查询', 'barryReconManualDimensionDaily', '/barry/reconciliation/manual-dimension/daily'
+  UNION ALL SELECT '对账人工记账待审核估算', 'barryReconManualPendingEstimate', '/barry/reconciliation/manual-pending-estimate'
   UNION ALL SELECT '对账上游维度按天查询', 'reconUpstreamDimensionDaily', '/reconciliation/upstream-dimension/daily'
   UNION ALL SELECT '对账出入账列表与新增', 'barryReconLedgers', '/barry/reconciliation/ledgers'
   UNION ALL SELECT '对账出入账汇总', 'barryReconLedgerSummary', '/barry/reconciliation/ledgers/summary'
@@ -37,6 +38,7 @@ FROM resource_new r
 WHERE r.resource_url IN (
   '/barry/reconciliation/manual-dimension',
   '/barry/reconciliation/manual-dimension/daily',
+  '/barry/reconciliation/manual-pending-estimate',
   '/reconciliation/upstream-dimension/daily',
   '/barry/reconciliation/ledgers',
   '/barry/reconciliation/ledgers/summary',

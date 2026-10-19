@@ -32,6 +32,13 @@ export interface DimensionProfit {
   profit: number;
   /** 利润 ÷ 上游净额，上游净额 ≤ 0 时为空 */
   profitRate: number | null;
+  /** 待审核积分估算（按全部审核通过算） */
+  pendingPoints: number;
+  /** 估算 = 已审核 + 待审核：结算、代付手续费、利润、利润率 */
+  estimateSettle: number;
+  estimatePayoutFee: number;
+  estimateProfit: number;
+  estimateProfitRate: number | null;
 }
 
 /** 按天算：返点为 0 且有充值时按「消费 × 赠送 ÷ 充值」估算；代收按实际消费（消费 − 退款 − 补款）× 代收费率，代付按结算金额 × 代付费率 */
@@ -47,8 +54,9 @@ function dayProfit(manual: ManualDimensionDaily | undefined, upstream: UpstreamD
   const rebate = rebateEstimated ? (consume * upstream.givenAmount) / upstream.rechargeAmount : (upstream?.rebateAmount ?? 0);
   const collectFee = (consume - refund - bk) * collectRate;
   const upstreamNet = consume - tip - rebate - refund - bk - collectFee;
-  return withProfit({
+  return withProfit(payoutRate, {
     points,
+    pendingPoints: manual?.pendingPoints ?? 0,
     unCheckNum: manual?.unCheckNum ?? 0,
     settle,
     payoutFee,
@@ -63,16 +71,31 @@ function dayProfit(manual: ManualDimensionDaily | undefined, upstream: UpstreamD
   });
 }
 
-function withProfit(item: Omit<DimensionProfit, "profit" | "profitRate">): DimensionProfit {
+type ProfitBase = Omit<DimensionProfit, "profit" | "profitRate" | "estimateSettle" | "estimatePayoutFee" | "estimateProfit" | "estimateProfitRate">;
+
+function withProfit(payoutRate: number, item: ProfitBase): DimensionProfit {
   const profit = item.upstreamNet - item.settle - item.payoutFee;
-  return { ...item, profit, profitRate: item.upstreamNet > 0 ? profit / item.upstreamNet : null };
+  const estimateSettle = (item.points + item.pendingPoints) / POINTS_PER_RMB;
+  const estimatePayoutFee = estimateSettle * payoutRate;
+  const estimateProfit = item.upstreamNet - estimateSettle - estimatePayoutFee;
+  const rate = (value: number) => (item.upstreamNet > 0 ? value / item.upstreamNet : null);
+  return {
+    ...item,
+    profit,
+    profitRate: rate(profit),
+    estimateSettle,
+    estimatePayoutFee,
+    estimateProfit,
+    estimateProfitRate: rate(estimateProfit),
+  };
 }
 
 /** 合计 = 各天之和（返点估算也按天各自估再相加） */
-function sumProfits(items: DimensionProfit[]): DimensionProfit {
+function sumProfits(items: DimensionProfit[], payoutRate: number): DimensionProfit {
   const sum = (pick: (item: DimensionProfit) => number) => items.reduce((total, item) => total + pick(item), 0);
-  return withProfit({
+  return withProfit(payoutRate, {
     points: sum((item) => item.points),
+    pendingPoints: sum((item) => item.pendingPoints),
     unCheckNum: sum((item) => item.unCheckNum),
     settle: sum((item) => item.settle),
     payoutFee: sum((item) => item.payoutFee),
@@ -140,7 +163,7 @@ export function useDimensionDaily(startDate: string | undefined, endDate: string
       result.set(date, item);
       return item;
     });
-    return { byDate: result, total: items.length ? sumProfits(items) : null };
+    return { byDate: result, total: items.length ? sumProfits(items, payoutRate) : null };
   }, [manual, upstream, collectRate, payoutRate]);
 
   return { byDate, total, loading, error, refresh };

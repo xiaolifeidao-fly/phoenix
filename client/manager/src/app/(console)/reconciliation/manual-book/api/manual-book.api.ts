@@ -374,3 +374,44 @@ export class DebtCompare {
 export function fetchDebtCompare(startDate: string, endDate: string) {
   return getData(DebtCompare, "/reconciliation/debt-compare", { startDate, endDate });
 }
+
+export class ManualPendingEstimateShopCategory {
+  shopCategoryId = 0;
+
+  shopCategoryName = "";
+
+  unCheckNum = 0;
+
+  /** 按同一用户同一天的审核成功单价换算的单数 */
+  pricedNum = 0;
+
+  /** 当天没有审核成功单、按当前积分算的单数 */
+  unpricedNum = 0;
+
+  /** 当前积分 */
+  currentScore: number | null = null;
+
+  /** 平均积分 = estimatePoints ÷ unCheckNum */
+  avgScore: number | null = null;
+
+  /** 全部待审核积分（未乘审核成功率） */
+  estimatePoints = 0;
+}
+
+/** 起始日期 ~ 结束日期（不传为今天）各人工商品的待审核积分（order_sum_record 按行单价换算），审核成功率由页面乘 */
+export class ManualPendingEstimate {
+  startDate = "";
+
+  endDate = "";
+
+  unCheckNum = 0;
+
+  estimatePoints = 0;
+
+  shopCategoryList: ManualPendingEstimateShopCategory[] = [];
+}
+
+/** 日期 yyyy-MM-dd；不传结束日期为到今天（真实结余），区间最长 93 天 */
+export function fetchManualPendingEstimate(startDate: string, endDate?: string) {
+  return getData(ManualPendingEstimate, "/barry/reconciliation/manual-pending-estimate", endDate ? { startDate, endDate } : { startDate });
+}

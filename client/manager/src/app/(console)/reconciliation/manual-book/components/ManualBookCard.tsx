@@ -77,6 +77,7 @@ import {
   upstreamUserLabel,
 } from "../../workbench/components/shared";
 import { PairCell, signed } from "./PairCell";
+import { TrueBalanceStrip } from "./TrueBalanceStrip";
 
 interface ManualBookCardProps {
   book: ManualBookState;
@@ -218,6 +219,14 @@ export function ManualBookCard({
   const dimension = useDimensionDaily(
     data?.startDate,
     data?.endDate,
+    collectChannel.channel ? collectChannel.rate : 0,
+    payoutChannel.channel ? payoutChannel.rate : 0,
+  );
+  // 做单利润之和按余额利润那段日期取：起点记账次日 ~ 区间最后一份记账日，和人工 / 系统利润同一段天
+  const profitWindow = balanceProfitWindow(data?.total ?? null);
+  const windowDimension = useDimensionDaily(
+    profitWindow?.tooLong ? undefined : profitWindow?.start,
+    profitWindow?.tooLong ? undefined : profitWindow?.end,
     collectChannel.channel ? collectChannel.rate : 0,
     payoutChannel.channel ? payoutChannel.rate : 0,
   );
@@ -703,7 +712,7 @@ export function ManualBookCard({
     },
     {
       title: (
-        <Tooltip title="按日历日：做单金额 = 做单积分 ÷ 10000 + 代付手续费；应收净额 = 消费 − 小费 − 返点 − 退款 − 补款 − 代收手续费；做单利润 = 应收净额 − 做单金额。点击看人工维度和上游维度明细">
+        <Tooltip title="按日历日：做单金额 = 做单积分 ÷ 10000 + 代付手续费；应收净额 = 消费 − 小费 − 返点 − 退款 − 补款 − 代收手续费；做单利润 = 应收净额 − 做单金额（只算已审核）；估算利润把待审核积分也算上（按全部审核通过）。点击看人工维度和上游维度明细">
           <span>做单利润</span>
         </Tooltip>
       ),
@@ -753,6 +762,21 @@ export function ManualBookCard({
                 ) : null}
               </span>
             </div>
+            <Tooltip
+              title={`估算 = 已审核 + 待审核（按全部审核通过算）：积分 ${money(item.points)} + ${money(item.pendingPoints)} = ${money(item.points + item.pendingPoints)}，÷ 10000 = ${money(item.estimateSettle)}，代付手续费 ${money(item.estimatePayoutFee)}；估算利润 = 应收净额 − 估算做单金额`}
+            >
+              <div className="recon-dimension-line">
+                <span className="recon-subcard-caption">估算利润</span>
+                <span>
+                  <MoneyCell value={item.estimateProfit} tone="profit" />
+                  {item.estimateProfitRate !== null ? (
+                    <span className="recon-subcard-caption">
+                      （{ratioText(item.estimateProfitRate)}）
+                    </span>
+                  ) : null}
+                </span>
+              </div>
+            </Tooltip>
           </div>
         )),
     },
@@ -1029,23 +1053,23 @@ export function ManualBookCard({
             </div>
             <div className="recon-calc-item">
               <span className="recon-calc-label">区间做单利润</span>
-              <span className="recon-calc-value">
-                {dimension.total ? (
-                  <MoneyCell value={dimension.total.profit} tone="profit" />
-                ) : (
-                  <span className="recon-subcard-caption">—</span>
-                )}
-                <em className="recon-calc-unit">RMB</em>
-                {dimension.total ? (
-                  <div className="recon-subcard-caption">
-                    应收净额 {money(dimension.total.upstreamNet)} − 做单金额{" "}
-                    {money(dimension.total.settle + dimension.total.payoutFee)}
-                  </div>
-                ) : null}
-              </span>
+              <ProfitCompareCell
+                total={total}
+                span={profitWindow}
+                windowProfit={windowDimension.total}
+                windowLoading={windowDimension.loading}
+                windowError={windowDimension.error}
+                rangeProfit={dimension.total}
+                tolerance={data?.tolerance ?? 0.01}
+              />
             </div>
           </div>
         </div>
+
+        <TrueBalanceStrip
+          manualBalance={total?.balanceRmb ?? null}
+          manualBalanceDate={total?.date}
+        />
 
         <div className="recon-fee-picker">
           <span className="recon-subcard-caption">做单利润手续费 · 通道</span>
@@ -1516,6 +1540,160 @@ function UpstreamBalanceCell({ debt }: { debt: ManualBookDebtCompare }) {
           <span className="recon-subcard-caption"> 实时</span>
         ) : null}
       </span>
+    </Tooltip>
+  );
+}
+
+/** 按天接口最长 93 天 */
+const MAX_DIMENSION_DAYS = 93;
+
+interface ProfitWindow {
+  start: string;
+  end: string;
+  days: number;
+  tooLong: boolean;
+}
+
+/** 余额利润的日期段：起点（上一份记账或初始余额）次日 ~ 最后一份记账日；没有起点或段为空时为 null */
+function balanceProfitWindow(total: ManualBookCompareItem | null): ProfitWindow | null {
+  if (!total?.baselineDate || total.manualProfit == null || total.gapDays <= 0) return null;
+  const end = dayjs(total.date);
+  const start = dayjs(total.baselineDate).add(1, "day");
+  const days = end.diff(start, "day") + 1;
+  return {
+    start: start.format("YYYY-MM-DD"),
+    end: end.format("YYYY-MM-DD"),
+    days,
+    tooLong: days > MAX_DIMENSION_DAYS,
+  };
+}
+
+/**
+ * 区间做单利润：主数字是余额利润那段日期的做单利润之和，
+ * 下面带出人工利润（期末 − 起点人工余额）、系统利润（期末 − 起点系统余额）和它的差。
+ */
+function ProfitCompareCell({
+  total,
+  span,
+  windowProfit,
+  windowLoading,
+  windowError,
+  rangeProfit,
+  tolerance,
+}: {
+  total: ManualBookCompareItem | null;
+  span: ProfitWindow | null;
+  windowProfit: DimensionProfit | null;
+  windowLoading: boolean;
+  windowError: string | null;
+  rangeProfit: DimensionProfit | null;
+  tolerance: number;
+}) {
+  const rangeLine = rangeProfit ? (
+    <div>
+      按筛选日期的做单利润 {money(rangeProfit.profit)}（应收净额 {money(rangeProfit.upstreamNet)} − 做单金额{" "}
+      {money(rangeProfit.settle + rangeProfit.payoutFee)}）
+    </div>
+  ) : null;
+  if (!total || !span) {
+    return (
+      <Tooltip title={<div>没有可对比的余额区间{rangeLine}</div>}>
+        <div className="recon-calc-stack">
+          <span className="recon-calc-value">
+            <span className="recon-subcard-caption">—</span>
+            <em className="recon-calc-unit">RMB</em>
+          </span>
+          <div className="recon-subcard-caption recon-calc-brief">没有可对比的余额区间</div>
+        </div>
+      </Tooltip>
+    );
+  }
+  if (span.tooLong) {
+    return (
+      <Tooltip
+        title={
+          <div>
+            {span.start} ~ {span.end} 共 {span.days} 天，超过按天接口最长 {MAX_DIMENSION_DAYS} 天，无法对比
+            {rangeLine}
+          </div>
+        }
+      >
+        <div className="recon-calc-stack">
+          <span className="recon-calc-value">
+            <span className="recon-subcard-caption">—</span>
+            <em className="recon-calc-unit">RMB</em>
+          </span>
+          <div className="recon-subcard-caption recon-calc-brief">区间过长，无法对比</div>
+        </div>
+      </Tooltip>
+    );
+  }
+  const manualProfit = total.manualProfit;
+  const systemProfit =
+    total.systemBalanceRmb != null && total.baselineSystemBalanceRmb != null
+      ? total.systemBalanceRmb - total.baselineSystemBalanceRmb
+      : total.ledgerProfit;
+  const orderProfit = windowProfit?.profit ?? null;
+  const diffOf = (value: number | null) =>
+    value != null && orderProfit != null ? value - orderProfit : null;
+  const diffText = (value: number | null) => {
+    const diff = diffOf(value);
+    if (diff == null) return "—";
+    return (
+      <span className={Math.abs(diff) > tolerance ? "recon-diff--alert" : undefined}>
+        {signed(diff)}
+      </span>
+    );
+  };
+  const profitLine = (label: string, value: number | null) => (
+    <div>
+      {label} {value == null ? "—" : money(value)} · 差 {diffText(value)}
+    </div>
+  );
+  const baselineLabel = total.baselineIsOpening ? "初始余额" : "起点记账";
+  return (
+    <Tooltip
+      overlayStyle={{ maxWidth: 520 }}
+      title={
+        <div>
+          <div>
+            {span.start} ~ {span.end}（共 {span.days} 天）做单利润之和{" "}
+            {orderProfit == null ? "—" : money(orderProfit)}
+          </div>
+          {profitLine("人工利润", manualProfit)}
+          {profitLine("系统利润", systemProfit)}
+          <div>差 = 余额利润 − 做单利润之和</div>
+          <div>
+            人工：{shortDate(total.date)} 余额 {money(total.balanceRmb)} − {baselineLabel} {shortDate(total.baselineDate)} 余额{" "}
+            {money(total.baselineBalanceRmb)}
+          </div>
+          <div>
+            系统：{shortDate(total.date)} 应有余额 {money(total.systemBalanceRmb)} − {shortDate(total.baselineDate)} 应有余额{" "}
+            {money(total.baselineSystemBalanceRmb)}
+          </div>
+          {windowProfit ? (
+            <div>
+              做单利润 = 应收净额 {money(windowProfit.upstreamNet)} − 做单金额{" "}
+              {money(windowProfit.settle + windowProfit.payoutFee)}
+            </div>
+          ) : null}
+          {rangeLine}
+        </div>
+      }
+    >
+      <div className="recon-calc-stack">
+        <span className="recon-calc-value">
+          {orderProfit != null ? (
+            <MoneyCell value={orderProfit} tone="profit" />
+          ) : (
+            <span className="recon-subcard-caption">{windowLoading ? "加载中" : windowError ? "加载失败" : "—"}</span>
+          )}
+          <em className="recon-calc-unit">RMB</em>
+        </span>
+        <div className="recon-subcard-caption recon-calc-brief">
+          人工差 {diffText(manualProfit)} · 系统差 {diffText(systemProfit)}
+        </div>
+      </div>
     </Tooltip>
   );
 }

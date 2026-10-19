@@ -17,9 +17,9 @@ const { RangePicker } = DatePicker;
 
 type PanelTab = "ledger" | "manual-book";
 
-/** 默认最近 5 天（含今天） */
+/** 默认最近 7 天（含今天） */
 const buildDefaultRange = (): [Dayjs, Dayjs] => [
-  dayjs().subtract(4, "day").startOf("day"),
+  dayjs().subtract(6, "day").startOf("day"),
   dayjs().startOf("day"),
 ];
 

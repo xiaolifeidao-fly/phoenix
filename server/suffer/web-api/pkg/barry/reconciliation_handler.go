@@ -35,6 +35,7 @@ var errUpstreamUserNotFound = errors.New("上游社区不存在")
 func (h *BarryHandler) registerReconciliationRoutes(engine *gin.RouterGroup) {
 	engine.GET("/barry/reconciliation/manual-dimension", h.getReconManualDimension)
 	engine.GET("/barry/reconciliation/manual-dimension/daily", h.getReconManualDimensionDaily)
+	engine.GET("/barry/reconciliation/manual-pending-estimate", h.getReconManualPendingEstimate)
 	engine.GET("/barry/reconciliation/ledgers", h.listReconLedgers)
 	engine.GET("/barry/reconciliation/ledgers/summary", h.getReconLedgerSummary)
 	engine.POST("/barry/reconciliation/ledgers", h.saveReconLedger)
@@ -66,6 +67,20 @@ func (h *BarryHandler) getReconManualDimensionDaily(c *gin.Context) {
 		return
 	}
 	response, err := h.barryService.Reconciliation.ManualDimensionDaily(c.Request.Context(), q)
+	if err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	commonRouter.ToJson(c, response, nil)
+}
+
+func (h *BarryHandler) getReconManualPendingEstimate(c *gin.Context) {
+	var q barryDTO.ReconManualPendingEstimateQueryDTO
+	if c.ShouldBindQuery(&q) != nil {
+		commonRouter.ToError(c, "请选择起始日期")
+		return
+	}
+	response, err := h.barryService.Reconciliation.ManualPendingEstimate(c.Request.Context(), q)
 	if err != nil {
 		commonRouter.ToJson(c, nil, err)
 		return

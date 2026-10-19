@@ -140,6 +140,8 @@ export function ReconciliationWorkbenchPanel() {
         manualDimension={manualDimension.data}
         manualLoading={manualDimension.loading}
         manualError={manualDimension.error}
+        pendingEstimate={manualDimension.pendingEstimate}
+        pendingError={manualDimension.pendingError}
         onManualRetry={() => void manualDimension.refresh()}
         upstream={upstream.data}
         upstreamLoading={upstream.loading}

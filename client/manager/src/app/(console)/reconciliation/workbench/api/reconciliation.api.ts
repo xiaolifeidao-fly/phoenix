@@ -117,6 +117,9 @@ export class ManualDimensionDaily {
   checkedNum = 0;
 
   unCheckNum = 0;
+
+  /** 待审核积分估算（按全部审核通过算），points + pendingPoints 为估算做单积分 */
+  pendingPoints = 0;
 }
 
 export function fetchManualDimensionDaily(startDate: string, endDate: string) {

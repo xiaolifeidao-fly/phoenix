@@ -40,6 +40,29 @@ func (s *ReconciliationService) ManualDimension(ctx context.Context, query barry
 	return response.Data, nil
 }
 
+// ManualPendingEstimate 起始日期 ~ 结束日期(不传为今天)各人工商品的待审核积分(按 order_sum_record 行单价换算).
+func (s *ReconciliationService) ManualPendingEstimate(ctx context.Context, query barryDTO.ReconManualPendingEstimateQueryDTO) (*barryDTO.ReconManualPendingEstimateDTO, error) {
+	response := &barryDTO.DetailResponseDTO[barryDTO.ReconManualPendingEstimateDTO]{}
+	err := s.client.GetAbsolute(ctx, innerServicePath(barryInnerReconManualPendingEstimatePath), buildValues(
+		"startDate", query.StartDate,
+		"endDate", query.EndDate,
+	), response)
+	if err != nil {
+		return nil, err
+	}
+	if !response.Success || response.Data == nil {
+		message := strings.TrimSpace(response.Message)
+		if message == "" {
+			message = "barry reconciliation manual pending estimate response is empty"
+		}
+		return nil, fmt.Errorf("%s", message)
+	}
+	if response.Data.ShopCategories == nil {
+		response.Data.ShopCategories = []barryDTO.ReconManualPendingEstimateShopCategoryDTO{}
+	}
+	return response.Data, nil
+}
+
 // ManualDimensionDaily 人工维度按天, 区间内每天一行(barry 补 0), 日期升序; 区间最长 93 天.
 func (s *ReconciliationService) ManualDimensionDaily(ctx context.Context, query barryDTO.ReconManualDimensionQueryDTO) ([]barryDTO.ReconManualDailyDTO, error) {
 	response := &barryDTO.ListResponseDTO[barryDTO.ReconManualDailyDTO]{}

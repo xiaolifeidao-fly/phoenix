@@ -4,6 +4,7 @@ import { useMemo, type ReactNode } from "react";
 import { Alert, Button, Table, Tag, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { ReconManualDimension, UpstreamDimension } from "../api/reconciliation.api";
+import type { ManualPendingEstimate } from "../../manual-book/api/manual-book.api";
 import { estimateFee, useFeeChannel } from "../hooks/useFeeChannel";
 import { FeeChannelPicker, feeRateText } from "./FeeChannelPicker";
 import { FormulaGrid, MoneyCell, SectionHead, money, moneyColumn, type AmountTone } from "./shared";
@@ -13,6 +14,9 @@ interface DimensionAccountingCardProps {
   manualLoading: boolean;
   manualError: string | null;
   onManualRetry: () => void;
+  /** 同区间待审核积分估算（order_sum_record 按行单价换算），加上已审核积分得到估算值 */
+  pendingEstimate?: ManualPendingEstimate | null;
+  pendingError?: string | null;
   upstream: UpstreamDimension | null;
   upstreamLoading: boolean;
   upstreamError: string | null;
@@ -148,11 +152,12 @@ const upstreamColumns: ColumnsType<UpstreamRow> = [
 const formulas = [
   { label: "返点 / 小费", expression: "下单数量 × 类目单位金额 − 退单数量 × 类目单位金额" },
   { label: "返点为 0 时", expression: "返点 = 消费 × 赠送 ÷ 充值（充值为 0 时仍按 0）" },
-  { label: "人工预计结算金额", expression: "预计结算积分 ÷ 10000（预计结算积分 = 各商品积分之和，不含徒弟奖励；待审核任务审核后可能还会增加）" },
+  { label: "人工结算金额（真实）", expression: "已审核积分 ÷ 10000（已审核积分 = 各商品审核通过订单积分之和，不含徒弟奖励）" },
+  { label: "人工结算金额（估算）", expression: "（已审核积分 + 待审核积分）÷ 10000；待审核积分按同一用户同一天的审核成功单价换算，当天没有审核成功单的按商品当前积分补，按全部审核通过估算" },
   { label: "积分对照差异", expression: "各商品积分之和 − 积分日汇总的做单积分（徒弟奖励不分商品，不参与对照）" },
   { label: "代收手续费（预计）", expression: "实际消费（消费 − 退款 − 补款）× 代收费率（默认取所选通道的配置，按 U 取 U 费率，按 RMB 取 RMB 费率；可在本页改，只影响本页）" },
   { label: "代付手续费（预计）", expression: "积分 ÷ 10000 × 代付费率（默认取所选通道的配置，按 U 取 U 费率，按 RMB 取 RMB 费率；可在本页改，只影响本页）" },
-  { label: "利润", expression: "上游净额 − 人工预计结算金额 − 代付手续费；上游净额 = 消费 − 小费 − 返点 − 退款 − 补款 − 代收手续费" },
+  { label: "利润", expression: "上游净额 − 人工结算金额 − 代付手续费，真实 / 估算各算一份；上游净额 = 消费 − 小费 − 返点 − 退款 − 补款 − 代收手续费" },
   { label: "利润率", expression: "利润 ÷ 上游净额（上游净额 ≤ 0 时显示 —）" },
 ];
 
@@ -180,6 +185,8 @@ export function DimensionAccountingView({
   manualLoading,
   manualError,
   onManualRetry,
+  pendingEstimate,
+  pendingError,
   upstream,
   upstreamLoading,
   upstreamError,
@@ -278,7 +285,7 @@ export function DimensionAccountingView({
     ];
   }, [upstream, rebateEstimated, effectiveRebate, actualConsume, collectFee.feeRmb, collectRate, collectFee.feeU, collectChannel.channel, collectChannel.currency, collectChannel.rateOverridden]);
 
-  // 利润 = 上游净额 − 人工预计结算金额 − 代付手续费，统一按 RMB；返点取上面的 effectiveRebate
+  // 利润 = 上游净额 − 人工结算金额 − 代付手续费，统一按 RMB；返点取上面的 effectiveRebate
   const upstreamNet =
     (upstream?.consumeAmount ?? 0) -
     (upstream?.tipAmount ?? 0) -
@@ -293,25 +300,46 @@ export function DimensionAccountingView({
   const unCheckNum = manualDimension?.unCheckNum ?? 0;
   const totalProfit = upstreamNet - manualSettleRmb - payoutFeeRmb;
   // 利润率 = 利润 ÷ 上游净额；上游净额 ≤ 0 时无意义，不展示
-  const profitRate = upstreamNet > 0 ? totalProfit / upstreamNet : null;
+  const rateText = (profit: number) => (upstreamNet > 0 ? `${((profit / upstreamNet) * 100).toFixed(2)}%` : "—");
+  // 估算 = 已审核 + 待审核（按全部审核通过算），没审核完也能看到当天大概的利润
+  const pendingPoints = pendingEstimate?.estimatePoints ?? 0;
+  const estimatePoints = manualPoints + pendingPoints;
+  const estimateSettleRmb = estimatePoints / POINTS_PER_RMB;
+  const estimatePayoutFeeRmb = estimateSettleRmb * payoutRate;
+  const estimateProfit = upstreamNet - estimateSettleRmb - estimatePayoutFeeRmb;
+  const estimateNode: ReactNode = pendingError ? (
+    <span>{`估算：待审核积分加载失败（${pendingError}）`}</span>
+  ) : pendingEstimate ? null : (
+    <span>估算：加载中…</span>
+  );
   const systemCalc: {
     label: string;
     value: number;
     unit: string;
     tone: AmountTone;
     sub?: ReactNode;
+    /** 估算值（含待审核），显示在真实值下面 */
+    estimate?: ReactNode;
     note?: string;
     highlight?: boolean;
   }[] = [
     {
-      label: "人工预计结算金额",
+      label: "人工结算金额（真实）",
       value: manualSettleRmb,
       unit: "RMB",
       tone: "settle",
       sub: (
         <>
-          {`预计结算积分 ${money(manualPoints)} · 代付手续费 `}
+          {`已审核积分 ${money(manualPoints)} · 代付手续费 `}
           <MoneyCell value={payoutFeeRmb} tone="fee" />
+        </>
+      ),
+      estimate: estimateNode ?? (
+        <>
+          {"估算 "}
+          <MoneyCell value={estimateSettleRmb} tone="settle" />
+          {` RMB（已审核 ${money(manualPoints)} + 待审核 ${money(pendingPoints)} 积分）· 代付手续费 `}
+          <MoneyCell value={estimatePayoutFeeRmb} tone="fee" />
         </>
       ),
       note: unCheckNum > 0 ? `还有 ${money(unCheckNum)} 个任务未审核` : undefined,
@@ -324,11 +352,18 @@ export function DimensionAccountingView({
       sub: "消费 − 小费 − 返点 − 退款 − 补款 − 代收手续费",
     },
     {
-      label: "总计利润",
+      label: "总计利润（真实）",
       value: totalProfit,
       unit: "RMB",
       tone: "profit",
-      sub: `利润率 ${profitRate === null ? "—" : `${(profitRate * 100).toFixed(2)}%`}（利润 ÷ 上游净额）`,
+      sub: `利润率 ${rateText(totalProfit)}（利润 ÷ 上游净额）`,
+      estimate: estimateNode ?? (
+        <>
+          {"估算 "}
+          <MoneyCell value={estimateProfit} tone="profit" />
+          {` RMB · 利润率 ${rateText(estimateProfit)}（含待审核）`}
+        </>
+      ),
       highlight: true,
     },
   ];
@@ -438,6 +473,7 @@ export function DimensionAccountingView({
                   ) : null}
                 </span>
                 {item.sub ? <span className="recon-subcard-caption recon-calc-label-sub">{item.sub}</span> : null}
+                {item.estimate ? <span className="recon-subcard-caption recon-calc-label-sub">{item.estimate}</span> : null}
               </span>
               <span className="recon-calc-value">
                 <MoneyCell value={item.value} tone={item.tone} />

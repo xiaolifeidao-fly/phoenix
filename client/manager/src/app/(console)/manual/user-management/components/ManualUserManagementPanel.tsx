@@ -58,25 +58,29 @@ import {
   type SettleCurrency,
 } from "../../api/settle.api";
 import { UserPointsHistoryDrawer } from "./UserPointsHistoryDrawer";
+import { readExcludedUsers, writeExcludedUsers, type ExcludedPointsUser } from "../excluded-points-users";
 
 const { Text } = Typography;
 
 /** barry 的积分是整数，10000 积分 = 1 元（见 ScoreController：100 元 = 1000000 积分）。 */
 const POINTS_PER_YUAN = 10000;
 
-/** 「查看所有账号余额」的排除用户偏好，只存在当前浏览器。 */
-const EXCLUDED_POINTS_USERS_STORAGE_KEY = "phoenix_manager_manual_user_excluded_points_users_v1";
-
 const SUMMARY_TIME_FORMAT = "YYYY-MM-DD HH:mm:ss";
-
-interface ExcludedPointsUser {
-  userId: number;
-  username: string;
-}
 
 interface AdjustPointsFormValues {
   points: number;
   description: string;
+}
+
+// 与 barry UserRole 保持一致；角色为空的老账号在 App 登录时按普通用户处理
+const USER_ROLE_OPTIONS = [
+  { value: "user", label: "普通用户" },
+  { value: "admin", label: "管理员" },
+];
+
+function formatUserRole(role?: string) {
+  if (!role) return "普通用户";
+  return USER_ROLE_OPTIONS.find((item) => item.value === role)?.label ?? role;
 }
 
 interface UserFormValues {
@@ -250,7 +254,7 @@ export function ManualUserManagementPanel() {
       inventCode: "",
       alipayName: "",
       alipayAccount: "",
-      role: "",
+      role: "user",
     });
     setModalOpen(true);
   };
@@ -558,7 +562,7 @@ export function ManualUserManagementPanel() {
       render: (value: string, record) => (
         <Space direction="vertical" size={2}>
           <Text style={{ color: "var(--manager-text)", fontWeight: 600 }}>{value || "-"}</Text>
-          <Text type="secondary">{record.role || "未设置角色"}</Text>
+          <Text type="secondary">{formatUserRole(record.role)}</Text>
         </Space>
       ),
     },
@@ -765,7 +769,7 @@ export function ManualUserManagementPanel() {
         width={600}
         onSubmit={handleSubmit}
       >
-        <Form className="manager-form-skin" form={form} layout="vertical" initialValues={{ role: "" }} preserve={false}>
+        <Form className="manager-form-skin" form={form} layout="vertical" initialValues={{ role: "user" }} preserve={false}>
           <Form.Item name="username" label="用户名" rules={[{ required: true, message: "请输入用户名" }]}>
             <Input placeholder="请输入 Barry 用户名" disabled={Boolean(editingUser)} />
           </Form.Item>
@@ -797,8 +801,13 @@ export function ManualUserManagementPanel() {
           <Form.Item name="alipayAccount" label="支付宝账号">
             <Input placeholder="请输入支付宝账号" />
           </Form.Item>
-          <Form.Item name="role" label="角色">
-            <Input placeholder="请输入角色标识" />
+          <Form.Item
+            name="role"
+            label="角色"
+            rules={[{ required: true, message: "请选择角色" }]}
+            extra="管理员可在 App 内为自己开下级账号。"
+          >
+            <Select options={USER_ROLE_OPTIONS} placeholder="请选择角色" />
           </Form.Item>
         </Form>
       </WorkspaceDrawer>
@@ -1099,7 +1108,7 @@ function toFormValues(record: ManualUserRecord): UserFormValues {
     inventCode: record.inventCode || "",
     alipayName: record.alipayName || "",
     alipayAccount: record.alipayAccount || "",
-    role: record.role || "",
+    role: record.role || "user",
   };
 }
 
@@ -1150,41 +1159,6 @@ function buildExcludeOptions(selected: ExcludedPointsUser[], candidates: Exclude
     label: `${username}（${userId}）`,
     value: userId,
   }));
-}
-
-function readExcludedUsers(): ExcludedPointsUser[] {
-  if (typeof window === "undefined") {
-    return [];
-  }
-  try {
-    const rawValue = window.localStorage.getItem(EXCLUDED_POINTS_USERS_STORAGE_KEY);
-    if (!rawValue) {
-      return [];
-    }
-    const parsed: unknown = JSON.parse(rawValue);
-    if (!Array.isArray(parsed)) {
-      window.localStorage.removeItem(EXCLUDED_POINTS_USERS_STORAGE_KEY);
-      return [];
-    }
-    return parsed
-      .map((item) => item as Partial<ExcludedPointsUser>)
-      .filter((item): item is ExcludedPointsUser => Number.isSafeInteger(item?.userId) && Number(item?.userId) > 0)
-      .map((item) => ({ userId: item.userId, username: String(item.username ?? item.userId) }));
-  } catch {
-    // 隐私模式、或存量数据格式变了：直接当作没有偏好
-    return [];
-  }
-}
-
-function writeExcludedUsers(users: ExcludedPointsUser[]) {
-  if (typeof window === "undefined") {
-    return;
-  }
-  try {
-    window.localStorage.setItem(EXCLUDED_POINTS_USERS_STORAGE_KEY, JSON.stringify(users));
-  } catch {
-    // 忽略隐私模式下的写入失败
-  }
 }
 
 function resolveChannelLabel(channel: string | undefined, channelNameMap: Map<string, string>) {

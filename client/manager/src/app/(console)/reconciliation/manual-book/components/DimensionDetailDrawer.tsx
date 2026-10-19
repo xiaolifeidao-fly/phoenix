@@ -67,6 +67,8 @@ function DimensionDetailBody({
         manualDimension={manual.data}
         manualLoading={manual.loading}
         manualError={manual.error}
+        pendingEstimate={manual.pendingEstimate}
+        pendingError={manual.pendingError}
         onManualRetry={() => void manual.refresh()}
         upstream={upstream.data}
         upstreamLoading={upstream.loading}

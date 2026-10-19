@@ -1461,6 +1461,34 @@ type ReconManualDimensionQueryDTO struct {
 	EndDate   string `json:"endDate" form:"endDate" binding:"required"`
 }
 
+// ReconManualPendingEstimateQueryDTO 人工记账真实结余: 起始日期 yyyy-MM-dd 到今天.
+type ReconManualPendingEstimateQueryDTO struct {
+	StartDate string `json:"startDate" form:"startDate" binding:"required"`
+	// EndDate 可选, 不传由 barry 取今天(人工记账真实结余); 对账工作台按所选区间传
+	EndDate string `json:"endDate" form:"endDate"`
+}
+
+// ReconManualPendingEstimateDTO 起始日期 ~ 结束日期(默认今天, order_sum_record.sum_date)的待审核积分: 有审核成功单的行按
+// un_check_num × order_score ÷ checked_num 换算, 没有的按商品当前积分补; 审核成功率由管理端乘.
+type ReconManualPendingEstimateDTO struct {
+	StartDate      string                                      `json:"startDate"`
+	EndDate        string                                      `json:"endDate"`
+	UnCheckNum     int64                                       `json:"unCheckNum"`
+	EstimatePoints int64                                       `json:"estimatePoints"`
+	ShopCategories []ReconManualPendingEstimateShopCategoryDTO `json:"shopCategoryList"`
+}
+
+type ReconManualPendingEstimateShopCategoryDTO struct {
+	ShopCategoryID   int64    `json:"shopCategoryId"`
+	ShopCategoryName string   `json:"shopCategoryName"`
+	UnCheckNum       int64    `json:"unCheckNum"`
+	PricedNum        int64    `json:"pricedNum"`
+	UnpricedNum      int64    `json:"unpricedNum"`
+	CurrentScore     *int64   `json:"currentScore"`
+	AvgScore         *float64 `json:"avgScore"`
+	EstimatePoints   int64    `json:"estimatePoints"`
+}
+
 // ReconManualDailyDTO 人工维度按天: 全部有效人工商品按 sum_date 汇总, 积分取 order_score(和商品行同口径).
 type ReconManualDailyDTO struct {
 	Date       string `json:"date"`
@@ -1468,6 +1496,8 @@ type ReconManualDailyDTO struct {
 	TotalNum   int64  `json:"totalNum"`
 	CheckedNum int64  `json:"checkedNum"`
 	UnCheckNum int64  `json:"unCheckNum"`
+	// PendingPoints 待审核积分估算(按全部审核通过算), 加上 Points 就是估算做单积分
+	PendingPoints int64 `json:"pendingPoints"`
 }
 
 // ReconManualDimensionDTO 对账工作台人工维度: 任务数来自 order_sum_record(按人工商品),
