@@ -106,6 +106,21 @@ func (s *WorkbenchDashboardStatisticsService) DelayAssignmentCount(ctx context.C
 	return response.Data, nil
 }
 
+// InletSpeed returns how many Barry shops the selected categories created in the last minute.
+func (s *WorkbenchDashboardStatisticsService) InletSpeed(ctx context.Context, query barryDTO.WorkbenchDashboardMetricQueryDTO) (*barryDTO.WorkbenchDashboardInletSpeedDTO, error) {
+	response := &barryDTO.DetailResponseDTO[barryDTO.WorkbenchDashboardInletSpeedDTO]{}
+	err := s.client.GetAbsolute(ctx, innerServicePath(barryInnerWorkbenchDashboardInletSpeedPath), buildValues(
+		"shopCategoryIds", query.ShopCategoryIDs,
+	), response)
+	if err != nil {
+		return nil, err
+	}
+	if !response.Success || response.Data == nil {
+		return nil, responseError(response.Message, "barry workbench inlet speed response is empty")
+	}
+	return response.Data, nil
+}
+
 // ManualSubmittedComparison delegates the selected categories to Barry. Barry reads
 // today's order summary and yesterday's same-time data from order_minute_sum_record.
 func (s *WorkbenchDashboardStatisticsService) ManualSubmittedComparison(ctx context.Context, query barryDTO.WorkbenchDashboardMetricQueryDTO) (*barryDTO.WorkbenchDashboardManualSubmittedComparisonDTO, error) {

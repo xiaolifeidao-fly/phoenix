@@ -246,6 +246,11 @@ export interface FetchAssignmentMonitorSummary {
   }>;
 }
 
+export interface InletSpeedSummary {
+  count: number;
+  windowSeconds: number;
+}
+
 export interface DelayAssignmentCountSummary {
   total: number;
   consumedCount: number;
@@ -433,6 +438,15 @@ export async function fetchFetchAssignmentMonitor(
 export async function fetchDelayAssignmentCount(query?: Pick<WorkbenchDashboardStatisticsQuery, "shopCategoryIds">) {
   const response = await instance.get<ApiResponse<DelayAssignmentCountSummary>>(
     "/barry/workbench-dashboard/delay-assignment-count",
+    { params: query },
+  );
+  return unwrapApiResponse(response.data);
+}
+
+// Barry shops created in the last minute for the selected manual products (当前进单速度).
+export async function fetchInletSpeed(query?: Pick<WorkbenchDashboardStatisticsQuery, "shopCategoryIds">) {
+  const response = await instance.get<ApiResponse<InletSpeedSummary>>(
+    "/barry/workbench-dashboard/inlet-speed",
     { params: query },
   );
   return unwrapApiResponse(response.data);

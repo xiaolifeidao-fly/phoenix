@@ -26,6 +26,7 @@ func (h *BarryHandler) registerTransactionRoutes(engine *gin.RouterGroup) {
 	engine.GET("/barry/workbench-dashboard/pending-detection-count", h.getWorkbenchPendingDetectionCount)
 	engine.GET("/barry/workbench-dashboard/fetch-assignment-monitor", h.getWorkbenchFetchAssignmentMonitor)
 	engine.GET("/barry/workbench-dashboard/delay-assignment-count", h.getWorkbenchDelayAssignmentCount)
+	engine.GET("/barry/workbench-dashboard/inlet-speed", h.getWorkbenchInletSpeed)
 	engine.GET("/barry/workbench-dashboard/manual-submitted-comparison", h.getWorkbenchManualSubmittedComparison)
 	engine.GET("/barry/workbench-dashboard/actual-completed", h.getWorkbenchActualCompleted)
 	engine.GET("/barry/workbench-dashboard/bridge-daily-statistics", h.getWorkbenchBridgeDailyStatistics)
@@ -220,6 +221,16 @@ func (h *BarryHandler) getWorkbenchDelayAssignmentCount(c *gin.Context) {
 		return
 	}
 	response, err := h.barryService.WorkbenchDashboardStats.DelayAssignmentCount(c.Request.Context(), q)
+	commonRouter.ToJson(c, response, err)
+}
+
+func (h *BarryHandler) getWorkbenchInletSpeed(c *gin.Context) {
+	var q barryDTO.WorkbenchDashboardMetricQueryDTO
+	if c.ShouldBindQuery(&q) != nil {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := h.barryService.WorkbenchDashboardStats.InletSpeed(c.Request.Context(), q)
 	commonRouter.ToJson(c, response, err)
 }
 

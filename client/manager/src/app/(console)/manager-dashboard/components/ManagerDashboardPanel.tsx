@@ -42,6 +42,7 @@ import {
   fetchWorkbenchBridgeDailyStatistics,
   fetchActualCompleted,
   fetchDelayAssignmentCount,
+  fetchInletSpeed,
   fetchFetchAssignmentMonitor,
   fetchManualSpeed,
   fetchPendingDetectionCount,
@@ -56,6 +57,7 @@ import {
   type BridgeDailyStatisticSummary,
   type DashboardStatistics,
   type DelayAssignmentCountSummary,
+  type InletSpeedSummary,
   type FetchTaskTimeRange,
   type FetchAssignmentMonitorSummary,
   type ManualSpeedSummary,
@@ -379,6 +381,8 @@ export function ManagerDashboardPanel() {
   const [lowPriceFetchTaskRefreshSummary, setLowPriceFetchTaskRefreshSummary] = useState<FetchTaskRefreshSummary | null>(null);
   const [realDelayAssignmentCount, setRealDelayAssignmentCount] = useState<DelayAssignmentCountSummary | null>(null);
   const [lowPriceDelayAssignmentCount, setLowPriceDelayAssignmentCount] = useState<DelayAssignmentCountSummary | null>(null);
+  const [realInletSpeed, setRealInletSpeed] = useState<InletSpeedSummary | null>(null);
+  const [lowPriceInletSpeed, setLowPriceInletSpeed] = useState<InletSpeedSummary | null>(null);
   const [manualSpeed, setManualSpeed] = useState<ManualSpeedSummary | null>(null);
   const [realManualSpeed, setRealManualSpeed] = useState<ManualSpeedSummary | null>(null);
   const [actualSpeedPerSecond, setActualSpeedPerSecond] = useState(0);
@@ -776,6 +780,9 @@ export function ManagerDashboardPanel() {
       void fetchDelayAssignmentCount(
         realManualCategoryIdsKey ? { shopCategoryIds: realManualCategoryIdsKey } : undefined,
       ).then(setRealDelayAssignmentCount).catch(() => setRealDelayAssignmentCount(null));
+      void fetchInletSpeed(
+        realManualCategoryIdsKey ? { shopCategoryIds: realManualCategoryIdsKey } : undefined,
+      ).then(setRealInletSpeed).catch(() => setRealInletSpeed(null));
       void fetchFetchAssignmentMonitor(
         realManualCategoryIdsKey
           ? { shopCategoryIds: realManualCategoryIdsKey, fetchTimeRange: realFetchTaskTimeRange }
@@ -921,6 +928,9 @@ export function ManagerDashboardPanel() {
       void fetchDelayAssignmentCount(
         lowPriceManualProductIdsKey ? { shopCategoryIds: lowPriceManualProductIdsKey } : undefined,
       ).then(setLowPriceDelayAssignmentCount).catch(() => setLowPriceDelayAssignmentCount(null));
+      void fetchInletSpeed(
+        lowPriceManualProductIdsKey ? { shopCategoryIds: lowPriceManualProductIdsKey } : undefined,
+      ).then(setLowPriceInletSpeed).catch(() => setLowPriceInletSpeed(null));
       void fetchFetchAssignmentMonitor(
         lowPriceManualProductIdsKey
           ? { shopCategoryIds: lowPriceManualProductIdsKey, fetchTimeRange: lowPriceFetchTaskTimeRange }
@@ -1192,6 +1202,8 @@ export function ManagerDashboardPanel() {
             lowPriceFetchTaskRefreshSummary,
             realDelayAssignmentCount,
             lowPriceDelayAssignmentCount,
+            realInletSpeed,
+            lowPriceInletSpeed,
             cardId === "realActualCompleted"
               ? realFetchTaskTimeRange
               : cardId === "lowPriceActualCompleted"
@@ -1217,7 +1229,7 @@ export function ManagerDashboardPanel() {
           return [cardId, view];
         }),
       ) as Record<DashboardCardId, DashboardCardView>,
-    [categories.length, categoryDetailsWithSpeed, configMap, currentFetchTaskTimeRange, dashboardMetricLoading, dashboardStatistics, derivedManualProductDetails, lowPriceActualCompleted, lowPriceDelayAssignmentCount, lowPriceFetchAssignmentMonitor, lowPriceFetchTaskTimeRange, lowPriceFetchTaskRefreshSummary, lowPriceManualProductDetails, lowPriceManualSubmittedStatistics, manualProducts.length, onlineUserMonitorByUserId, pendingDetectionCount, products, realDelayAssignmentCount, realFetchAssignmentMonitor, realFetchTaskRefreshSummary, realFetchTaskTimeRange, realManualSubmittedStatistics, users, userStats, workbenchStatistics, workbenchUserOverview],
+    [categories.length, categoryDetailsWithSpeed, configMap, currentFetchTaskTimeRange, dashboardMetricLoading, dashboardStatistics, derivedManualProductDetails, lowPriceActualCompleted, lowPriceDelayAssignmentCount, lowPriceFetchAssignmentMonitor, lowPriceInletSpeed, lowPriceFetchTaskTimeRange, lowPriceFetchTaskRefreshSummary, lowPriceManualProductDetails, lowPriceManualSubmittedStatistics, manualProducts.length, onlineUserMonitorByUserId, pendingDetectionCount, products, realDelayAssignmentCount, realFetchAssignmentMonitor, realInletSpeed, realFetchTaskRefreshSummary, realFetchTaskTimeRange, realManualSubmittedStatistics, users, userStats, workbenchStatistics, workbenchUserOverview],
   );
 
   const hiddenCardIds = useMemo(
@@ -2413,6 +2425,19 @@ function renderTotalPendingMetricValue(totalPendingCount: number, yesterdayPendi
   );
 }
 
+function renderRemainingWithInletSpeedValue(remainingCount: number, inletSpeed: InletSpeedSummary | null): ReactNode {
+  return (
+    <span>
+      {formatCount(remainingCount)}
+      <Tooltip title="括号内为当前进单速度：最近 1 分钟内所选人工商品新建的 Barry 商品数">
+        <span className="manager-dashboard-card__metric-note">
+          （进单 {inletSpeed ? formatCount(inletSpeed.count) : "-"} 条/分）
+        </span>
+      </Tooltip>
+    </span>
+  );
+}
+
 function renderUninitiatedOrderMetricValue(totalCount: number, recentCount: number): ReactNode {
   return (
     <span className="manager-dashboard-card__metric-value--pending">
@@ -2691,6 +2716,8 @@ function buildDashboardCardView(
   lowPriceFetchTaskRefreshSummary: FetchTaskRefreshSummary | null,
   realDelayAssignmentCount: DelayAssignmentCountSummary | null,
   lowPriceDelayAssignmentCount: DelayAssignmentCountSummary | null,
+  realInletSpeed: InletSpeedSummary | null,
+  lowPriceInletSpeed: InletSpeedSummary | null,
   fetchTaskTimeRange: FetchTaskTimeRange,
   scopeLabel: string,
 ): DashboardCardView {
@@ -2967,7 +2994,10 @@ function buildDashboardCardView(
               realActualCompleted?.recentUninitiatedOrderCount ?? 0,
             ),
           },
-          { label: "剩余总量", value: formatCount(realActualCompleted?.remainingOrderCount ?? 0) },
+          {
+            label: "剩余总量",
+            value: renderRemainingWithInletSpeedValue(realActualCompleted?.remainingOrderCount ?? 0, realInletSpeed),
+          },
           {
             label: "总剩余量",
             value: renderTotalPendingMetricValue(
@@ -3061,7 +3091,10 @@ function buildDashboardCardView(
               lowPriceActualCompleted?.recentUninitiatedOrderCount ?? 0,
             ),
           },
-          { label: "剩余总量", value: formatCount(lowPriceActualCompleted?.remainingOrderCount ?? 0) },
+          {
+            label: "剩余总量",
+            value: renderRemainingWithInletSpeedValue(lowPriceActualCompleted?.remainingOrderCount ?? 0, lowPriceInletSpeed),
+          },
           {
             label: "总剩余量",
             value: renderTotalPendingMetricValue(

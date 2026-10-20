@@ -1901,6 +1901,12 @@ type WorkbenchDashboardDelayAssignmentCountDTO struct {
 	CategoryList                     []*WorkbenchDashboardDelayAssignmentCountCategoryDTO `json:"categoryList"`
 }
 
+// WorkbenchDashboardInletSpeedDTO is Barry's shop count created within the last windowSeconds.
+type WorkbenchDashboardInletSpeedDTO struct {
+	Count         int64 `json:"count"`
+	WindowSeconds int   `json:"windowSeconds"`
+}
+
 type OrderStatusStatisticDTO struct {
 	OrderStatus string `json:"order_status"`
 	Count       int64  `json:"count"`
