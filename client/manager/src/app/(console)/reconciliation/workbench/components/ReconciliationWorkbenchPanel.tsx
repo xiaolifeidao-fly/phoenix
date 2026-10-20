@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarOutlined, ReloadOutlined } from "@ant-design/icons";
+import { CalendarOutlined, ReloadOutlined, UndoOutlined } from "@ant-design/icons";
 import { Button, DatePicker, Space, Tooltip, Typography } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 import { message } from "@/utils/notify";
@@ -79,15 +79,26 @@ export function ReconciliationWorkbenchPanel() {
     [ledger.overallSummary, baselines],
   );
 
-  const handleReset = () => {
-    setRange(buildDefaultRange());
-    // 区间没变时 hook 不会自己重查，这里显式刷新一次
+  const refreshAll = () => {
     void manualDimension.refresh();
     void ledger.refresh();
     void upstream.refresh();
     void accountStatus.refresh();
     void manualBook.refresh();
     void debtCompare.refresh();
+  };
+  const refreshing =
+    manualDimension.loading ||
+    ledger.loading ||
+    upstream.loading ||
+    accountStatus.loading ||
+    manualBook.loading ||
+    debtCompare.loading;
+
+  const handleReset = () => {
+    setRange(buildDefaultRange());
+    // 区间没变时 hook 不会自己重查，这里显式刷新一次
+    refreshAll();
     message.success("已重置为当天");
   };
 
@@ -116,8 +127,13 @@ export function ReconciliationWorkbenchPanel() {
                 }
               />
               <Tooltip title="日期重置为当天并重新加载">
-                <Button icon={<ReloadOutlined />} onClick={handleReset}>
+                <Button icon={<UndoOutlined />} onClick={handleReset}>
                   重置
+                </Button>
+              </Tooltip>
+              <Tooltip title="保持当前日期，重新加载全部数据">
+                <Button icon={<ReloadOutlined />} loading={refreshing} onClick={refreshAll}>
+                  刷新
                 </Button>
               </Tooltip>
             </Space>
