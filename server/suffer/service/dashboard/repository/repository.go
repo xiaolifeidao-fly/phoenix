@@ -388,8 +388,8 @@ func (r *DashboardRepository) SumOrderRebateTip(start, end time.Time) (CategoryR
 	return row, err
 }
 
-// SumRefundRebateTip 对账上游维度: [start, end) 内退单完成(order_refund_record 状态 REFUND,
-// 按 updated_time)的退单数量 × 返点 / 小费单位金额, 用来冲减. 单位金额取原订单的快照,
+// SumRefundRebateTip 对账上游维度: [start, end) 内申请的退单(order_refund_record 状态 REFUND,
+// 按 created_time; updated_time 会被后续更新改写, 导致历史日期数据漂移)的退单数量 × 返点 / 小费单位金额, 用来冲减. 单位金额取原订单的快照,
 // 和下单口径一致; 没有快照按 0 计.
 func (r *DashboardRepository) SumRefundRebateTip(start, end time.Time) (CategoryRebateTipRow, error) {
 	var row CategoryRebateTipRow
@@ -402,7 +402,7 @@ func (r *DashboardRepository) SumRefundRebateTip(start, end time.Time) (Category
 		FROM order_refund_record rr
 		LEFT JOIN order_rebate_tip t ON t.order_record_id = rr.order_id AND t.active = 1
 		WHERE rr.active = 1 AND rr.order_refund_status = 'REFUND'
-		  AND rr.updated_time >= ? AND rr.updated_time < ?`, start, end).Scan(&row).Error
+		  AND rr.created_time >= ? AND rr.created_time < ?`, start, end).Scan(&row).Error
 	return row, err
 }
 
@@ -449,20 +449,20 @@ func (r *DashboardRepository) SumOrderRebateTipDaily(start, end time.Time) ([]Da
 	return rows, err
 }
 
-// SumRefundRebateTipDaily 同 SumRefundRebateTip, 按退单完成日期(updated_time)分组.
+// SumRefundRebateTipDaily 同 SumRefundRebateTip, 按退单申请日期(created_time)分组.
 func (r *DashboardRepository) SumRefundRebateTipDaily(start, end time.Time) ([]DailyRebateTipRow, error) {
 	if r.Db == nil {
 		return nil, fmt.Errorf("database is not initialized")
 	}
 	rows := make([]DailyRebateTipRow, 0)
-	err := r.Db.Raw(`SELECT DATE_FORMAT(rr.updated_time, '%Y-%m-%d') AS day,
+	err := r.Db.Raw(`SELECT DATE_FORMAT(rr.created_time, '%Y-%m-%d') AS day,
 		COALESCE(SUM(rr.refund_num), 0) AS num,
 		COALESCE(SUM(rr.refund_num * COALESCE(t.rebate_amount, 0)), 0) AS rebate_amount,
 		COALESCE(SUM(rr.refund_num * COALESCE(t.tip_amount, 0)), 0) AS tip_amount
 		FROM order_refund_record rr
 		LEFT JOIN order_rebate_tip t ON t.order_record_id = rr.order_id AND t.active = 1
 		WHERE rr.active = 1 AND rr.order_refund_status = 'REFUND'
-		  AND rr.updated_time >= ? AND rr.updated_time < ?
+		  AND rr.created_time >= ? AND rr.created_time < ?
 		GROUP BY day`, start, end).Scan(&rows).Error
 	return rows, err
 }
