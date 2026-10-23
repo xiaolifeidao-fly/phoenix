@@ -7,12 +7,14 @@ import {
   ArrowUpOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
+  CloudUploadOutlined,
   DeleteOutlined,
   EditOutlined,
   EyeOutlined,
   FundOutlined,
   PayCircleOutlined,
   PlusOutlined,
+  SendOutlined,
   ShopOutlined,
   StopOutlined,
   TeamOutlined,
@@ -23,7 +25,6 @@ import { App, Button, Drawer, Empty, Form, InputNumber, Select, Space, Spin, Swi
 import type { ColumnsType } from "antd/es/table";
 import type { ReactNode } from "react";
 import { AnimatedNumber } from "./AnimatedNumber";
-import { SpeedTrendChart, type SpeedOverviewMetrics, type SpeedSeriesPoint } from "./SpeedTrendChart";
 import {
   fetchProductCategories,
   fetchProducts,
@@ -82,6 +83,8 @@ type DashboardCardId =
   | "realActualCompleted"
   | "lowPriceManualSubmitted"
   | "lowPriceActualCompleted"
+  | "tkManualSubmitted"
+  | "tkActualCompleted"
   | "averageSpeed";
 
 // The dashboard cards backed by their own independent API endpoint.
@@ -99,10 +102,29 @@ const DASHBOARD_METRIC_FETCHERS: {
 
 const DASHBOARD_METRIC_IDS = Object.keys(DASHBOARD_METRIC_FETCHERS) as DashboardMetricId[];
 
+type WorkloadScope = "real" | "lowPrice" | "tk";
+
+/** 工单大卡头部展示的三项速度，单位均为 条/秒。 */
+interface WorkloadSpeed {
+  distributedPerSecond: number;
+  submittedPerSecond: number;
+  actualCompletedPerSecond: number;
+}
+
+/** 低价 / TK 工单卡共用的一组统计数据。 */
+interface WorkloadStatistics {
+  manualSubmittedStatistics: WorkbenchDashboardStatistics | null;
+  actualCompleted: ActualCompletedSummary | null;
+  fetchAssignmentMonitor: FetchAssignmentMonitorSummary | null;
+  fetchTaskRefreshSummary: FetchTaskRefreshSummary | null;
+  delayAssignmentCount: DelayAssignmentCountSummary | null;
+  inletSpeed: InletSpeedSummary | null;
+}
+
 interface DashboardCardConfig {
   visible: boolean;
   categoryIds: number[];
-  /** 仅真人 / 低价工单卡使用；CURRENT 会随当前时间段自动滚动。 */
+  /** 仅真人 / 低价 / TK 工单卡使用；CURRENT 会随当前时间段自动滚动。 */
   fetchTimeRange?: FetchTaskTimeRangeSelection;
   /** 仅用于升级旧版 localStorage 配置；新配置使用 bridgeStatisticScopes。 */
   shopGroupIds?: number[];
@@ -231,7 +253,6 @@ const DASHBOARD_SPEED_STORAGE_KEY = "phoenix_manager_dashboard_speed_history_v1"
 const DASHBOARD_DATA_CACHE_KEY = "phoenix_manager_dashboard_data_cache_v1";
 const DASHBOARD_SPEED_WINDOW_MS = 48 * 60 * 60 * 1000;
 // 速度概览 chart keeps the most recent day of samples, one point per minute.
-const DASHBOARD_SPEED_CHART_WINDOW_MS = 24 * 60 * 60 * 1000;
 const DASHBOARD_SPEED_REPLACE_THRESHOLD_MS = 60 * 1000;
 const DASHBOARD_REFRESH_INTERVAL_MS = 10 * 1000;
 const DASHBOARD_BRIDGE_STATISTIC_REFRESH_INTERVAL_MS = 60 * 1000;
@@ -284,9 +305,19 @@ const DASHBOARD_LAYOUT: DashboardCardId[][] = [
   ["productCount", "bridgeDailyStatistic", "todayConsume", "todayRecharge", "systemBalance"],
   ["actualCompleted", "manualSubmitted", "taskRemaining", "pendingDetection"],
 ];
-const DASHBOARD_WORKLOAD_CARD_IDS: DashboardCardId[] = ["realActualCompleted", "lowPriceActualCompleted"];
+// 两列网格：真人、低价在第一行，TK 换行后落在真人下方。
+const DASHBOARD_WORKLOAD_CARD_IDS: DashboardCardId[] = ["realActualCompleted", "lowPriceActualCompleted", "tkActualCompleted"];
 const LOW_PRICE_MANUAL_PRODUCT_IDS = [15];
 const LOW_PRICE_UPSTREAM_CATEGORY_IDS = [8, 10];
+const TK_MANUAL_PRODUCT_IDS = [26];
+const TK_UPSTREAM_CATEGORY_IDS = [15];
+const ALWAYS_VISIBLE_CARD_IDS: DashboardCardId[] = [
+  "realManualSubmitted",
+  "lowPriceManualSubmitted",
+  "lowPriceActualCompleted",
+  "tkManualSubmitted",
+  "tkActualCompleted",
+];
 const DEFAULT_FETCH_TASK_TIME_RANGE: FetchTaskTimeRangeSelection = "CURRENT";
 const FETCH_TASK_EXTREMELY_POOR_SUCCESS_RATE = 0.1;
 const FETCH_TASK_POOR_SUCCESS_RATE = 0.5;
@@ -317,6 +348,8 @@ const DASHBOARD_TITLES: Record<DashboardCardId, string> = {
   realActualCompleted: "真人实际完成总量",
   lowPriceManualSubmitted: "低价提交量",
   lowPriceActualCompleted: "低价实际完成量",
+  tkManualSubmitted: "TK提交量",
+  tkActualCompleted: "TK实际完成量",
   averageSpeed: "平均速度",
 };
 
@@ -340,6 +373,12 @@ const DASHBOARD_DEFAULT_CONFIG: Record<DashboardCardId, DashboardCardConfig> = {
   lowPriceActualCompleted: {
     visible: true,
     categoryIds: LOW_PRICE_UPSTREAM_CATEGORY_IDS,
+    fetchTimeRange: DEFAULT_FETCH_TASK_TIME_RANGE,
+  },
+  tkManualSubmitted: { visible: true, categoryIds: TK_MANUAL_PRODUCT_IDS },
+  tkActualCompleted: {
+    visible: true,
+    categoryIds: TK_UPSTREAM_CATEGORY_IDS,
     fetchTimeRange: DEFAULT_FETCH_TASK_TIME_RANGE,
   },
   averageSpeed: { visible: true, categoryIds: [], barryWindowSeconds: 30 },
@@ -383,10 +422,20 @@ export function ManagerDashboardPanel() {
   const [lowPriceDelayAssignmentCount, setLowPriceDelayAssignmentCount] = useState<DelayAssignmentCountSummary | null>(null);
   const [realInletSpeed, setRealInletSpeed] = useState<InletSpeedSummary | null>(null);
   const [lowPriceInletSpeed, setLowPriceInletSpeed] = useState<InletSpeedSummary | null>(null);
-  const [manualSpeed, setManualSpeed] = useState<ManualSpeedSummary | null>(null);
+  const [tkManualSubmittedStatistics, setTkManualSubmittedStatistics] = useState<WorkbenchDashboardStatistics | null>(null);
+  const [tkActualCompleted, setTkActualCompleted] = useState<ActualCompletedSummary | null>(null);
+  const [tkFetchAssignmentMonitor, setTkFetchAssignmentMonitor] = useState<FetchAssignmentMonitorSummary | null>(null);
+  const [tkFetchTaskRefreshSummary, setTkFetchTaskRefreshSummary] = useState<FetchTaskRefreshSummary | null>(null);
+  const [tkDelayAssignmentCount, setTkDelayAssignmentCount] = useState<DelayAssignmentCountSummary | null>(null);
+  const [tkInletSpeed, setTkInletSpeed] = useState<InletSpeedSummary | null>(null);
   const [realManualSpeed, setRealManualSpeed] = useState<ManualSpeedSummary | null>(null);
-  const [actualSpeedPerSecond, setActualSpeedPerSecond] = useState(0);
-  const [realActualSpeedPerSecond, setRealActualSpeedPerSecond] = useState(0);
+  const [lowPriceManualSpeed, setLowPriceManualSpeed] = useState<ManualSpeedSummary | null>(null);
+  const [tkManualSpeed, setTkManualSpeed] = useState<ManualSpeedSummary | null>(null);
+  const [actualSpeedPerSecond, setActualSpeedPerSecond] = useState<Record<WorkloadScope, number>>({
+    real: 0,
+    lowPrice: 0,
+    tk: 0,
+  });
   const [workbenchUserOverview, setWorkbenchUserOverview] = useState<WorkbenchUserOverview | null>(null);
   const [onlineUserMonitorByUserId, setOnlineUserMonitorByUserId] = useState<Map<number, OrderFetchMonitorRecord>>(new Map());
   const [onlineUserMonitorDurationSeconds, setOnlineUserMonitorDurationSeconds] = useState(
@@ -409,12 +458,14 @@ export function ManagerDashboardPanel() {
   const [editingCardId, setEditingCardId] = useState<DashboardCardId | null>(null);
   const realFetchTaskMonitorSnapshotRef = useRef<FetchTaskMonitorSnapshot | null>(null);
   const lowPriceFetchTaskMonitorSnapshotRef = useRef<FetchTaskMonitorSnapshot | null>(null);
+  const tkFetchTaskMonitorSnapshotRef = useRef<FetchTaskMonitorSnapshot | null>(null);
   const [currentFetchTaskTimeRange, setCurrentFetchTaskTimeRange] = useState<FetchTaskTimeRange>(
     () => resolveFetchTaskTimeRangeByDate(new Date()),
   );
-  const actualSpeedSampleRef = useRef<Record<"total" | "real", { count: number; timestamp: number } | undefined>>({
-    total: undefined,
+  const actualSpeedSampleRef = useRef<Record<WorkloadScope, { count: number; timestamp: number } | undefined>>({
     real: undefined,
+    lowPrice: undefined,
+    tk: undefined,
   });
   const onlineUserMonitorTimerRef = useRef<number | null>(null);
   const onlineUserMonitorSessionRef = useRef(0);
@@ -489,7 +540,7 @@ export function ManagerDashboardPanel() {
     };
   }, []);
 
-  const recordActualSpeed = useCallback((scope: "total" | "real", count: number) => {
+  const recordActualSpeed = useCallback((scope: WorkloadScope, count: number) => {
     const timestamp = Date.now();
     const previous = actualSpeedSampleRef.current[scope];
     actualSpeedSampleRef.current[scope] = { count, timestamp };
@@ -497,11 +548,7 @@ export function ManagerDashboardPanel() {
       return;
     }
     const speed = Math.max(count - previous.count, 0) / Math.max((timestamp - previous.timestamp) / 1000, 1);
-    if (scope === "total") {
-      setActualSpeedPerSecond(speed);
-    } else {
-      setRealActualSpeedPerSecond(speed);
-    }
+    setActualSpeedPerSecond((current) => ({ ...current, [scope]: speed }));
   }, []);
 
   const userOverviewWindowSeconds = clampBarryWindowSeconds(
@@ -602,9 +649,6 @@ export function ManagerDashboardPanel() {
       setDashboardMetricFailed((current) => ({ ...current, [metricId]: false }));
       DASHBOARD_METRIC_FETCHERS[metricId]()
         .then((value) => {
-          if (metricId === "actualCompleted") {
-            recordActualSpeed("total", (value as NonNullable<DashboardStatistics["actualCompleted"]>).count);
-          }
           setDashboardStatistics((current) => {
             const next = { ...(current ?? {}), [metricId]: value } as DashboardStatistics;
             mergeDashboardCache({ dashboardStatistics: next });
@@ -620,7 +664,7 @@ export function ManagerDashboardPanel() {
           setDashboardMetricLoading((current) => ({ ...current, [metricId]: false }));
         });
     },
-    [recordActualSpeed],
+    [],
   );
 
   const loadDashboardData = useCallback(
@@ -855,6 +899,17 @@ export function ManagerDashboardPanel() {
     lowPriceFetchTaskTimeRangeSelection,
     currentFetchTaskTimeRange,
   );
+  const tkManualProductIds = configMap.tkManualSubmitted?.categoryIds ?? TK_MANUAL_PRODUCT_IDS;
+  const tkManualProductIdsKey = tkManualProductIds.join(",");
+  const tkUpstreamCategoryIds = configMap.tkActualCompleted?.categoryIds ?? TK_UPSTREAM_CATEGORY_IDS;
+  const tkUpstreamCategoryIdsKey = tkUpstreamCategoryIds.join(",");
+  const tkFetchTaskTimeRangeSelection = normalizeFetchTaskTimeRange(
+    configMap.tkActualCompleted?.fetchTimeRange,
+  );
+  const tkFetchTaskTimeRange = resolveFetchTaskTimeRange(
+    tkFetchTaskTimeRangeSelection,
+    currentFetchTaskTimeRange,
+  );
   const pendingDetectionShopGroupIds = configMap.pendingDetection?.shopGroupIds ?? [];
   const pendingDetectionShopGroupIdsKey = pendingDetectionShopGroupIds.join(",");
 
@@ -908,6 +963,7 @@ export function ManagerDashboardPanel() {
 
     let disposed = false;
     lowPriceFetchTaskMonitorSnapshotRef.current = null;
+    actualSpeedSampleRef.current.lowPrice = undefined;
     setLowPriceFetchTaskRefreshSummary(null);
 
     const loadLowPriceStatistics = () => {
@@ -921,7 +977,10 @@ export function ManagerDashboardPanel() {
       void fetchActualCompleted(
         lowPriceUpstreamCategoryIdsKey ? { shopCategoryIds: lowPriceUpstreamCategoryIdsKey } : undefined,
       )
-        .then(setLowPriceActualCompleted)
+        .then((value) => {
+          recordActualSpeed("lowPrice", value.count);
+          setLowPriceActualCompleted(value);
+        })
         .catch(() => {
           // Keep the most recent low-price completion data while a refresh is unavailable.
         });
@@ -963,7 +1022,75 @@ export function ManagerDashboardPanel() {
       disposed = true;
       window.clearInterval(timer);
     };
-  }, [ready, lowPriceManualProductIdsKey, lowPriceUpstreamCategoryIdsKey, lowPriceFetchTaskTimeRange]);
+  }, [ready, recordActualSpeed, lowPriceManualProductIdsKey, lowPriceUpstreamCategoryIdsKey, lowPriceFetchTaskTimeRange]);
+
+  useEffect(() => {
+    if (!ready) {
+      return;
+    }
+
+    let disposed = false;
+    tkFetchTaskMonitorSnapshotRef.current = null;
+    actualSpeedSampleRef.current.tk = undefined;
+    setTkFetchTaskRefreshSummary(null);
+
+    const loadTkStatistics = () => {
+      void fetchWorkbenchDashboardStatisticsWithComparison(
+        tkManualProductIdsKey ? { shopCategoryIds: tkManualProductIdsKey } : undefined,
+      )
+        .then(setTkManualSubmittedStatistics)
+        .catch(() => {
+          // Keep the most recent TK submission data while a refresh is unavailable.
+        });
+      void fetchActualCompleted(
+        tkUpstreamCategoryIdsKey ? { shopCategoryIds: tkUpstreamCategoryIdsKey } : undefined,
+      )
+        .then((value) => {
+          recordActualSpeed("tk", value.count);
+          setTkActualCompleted(value);
+        })
+        .catch(() => {
+          // Keep the most recent TK completion data while a refresh is unavailable.
+        });
+      void fetchDelayAssignmentCount(
+        tkManualProductIdsKey ? { shopCategoryIds: tkManualProductIdsKey } : undefined,
+      ).then(setTkDelayAssignmentCount).catch(() => setTkDelayAssignmentCount(null));
+      void fetchInletSpeed(
+        tkManualProductIdsKey ? { shopCategoryIds: tkManualProductIdsKey } : undefined,
+      ).then(setTkInletSpeed).catch(() => setTkInletSpeed(null));
+      void fetchFetchAssignmentMonitor(
+        tkManualProductIdsKey
+          ? { shopCategoryIds: tkManualProductIdsKey, fetchTimeRange: tkFetchTaskTimeRange }
+          : { fetchTimeRange: tkFetchTaskTimeRange },
+      )
+        .then((value) => {
+          if (disposed) {
+            return;
+          }
+          const comparison = buildFetchTaskRefreshSummary(
+            tkFetchTaskMonitorSnapshotRef.current,
+            value,
+            Date.now(),
+          );
+          tkFetchTaskMonitorSnapshotRef.current = comparison.snapshot;
+          setTkFetchTaskRefreshSummary(comparison.summary);
+          setTkFetchAssignmentMonitor(value);
+        })
+        .catch(() => {
+          if (!disposed) {
+            setTkFetchAssignmentMonitor(null);
+            setTkFetchTaskRefreshSummary(null);
+          }
+        });
+    };
+
+    loadTkStatistics();
+    const timer = window.setInterval(loadTkStatistics, DASHBOARD_REFRESH_INTERVAL_MS);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
+  }, [ready, recordActualSpeed, tkManualProductIdsKey, tkUpstreamCategoryIdsKey, tkFetchTaskTimeRange]);
 
   const bridgeStatisticScopes = useMemo(
     () => normalizeBridgeStatisticScopes(
@@ -1029,17 +1156,26 @@ export function ManagerDashboardPanel() {
       return;
     }
     const loadManualSpeed = () => {
-      void fetchManualSpeed({ windowSeconds: barryWindowSeconds }).then(setManualSpeed).catch(() => setManualSpeed(null));
       void fetchManualSpeed(
         realManualCategoryIdsKey
           ? { shopCategoryIds: realManualCategoryIdsKey, windowSeconds: barryWindowSeconds }
           : { windowSeconds: barryWindowSeconds },
       ).then(setRealManualSpeed).catch(() => setRealManualSpeed(null));
+      void fetchManualSpeed(
+        lowPriceManualProductIdsKey
+          ? { shopCategoryIds: lowPriceManualProductIdsKey, windowSeconds: barryWindowSeconds }
+          : { windowSeconds: barryWindowSeconds },
+      ).then(setLowPriceManualSpeed).catch(() => setLowPriceManualSpeed(null));
+      void fetchManualSpeed(
+        tkManualProductIdsKey
+          ? { shopCategoryIds: tkManualProductIdsKey, windowSeconds: barryWindowSeconds }
+          : { windowSeconds: barryWindowSeconds },
+      ).then(setTkManualSpeed).catch(() => setTkManualSpeed(null));
     };
     loadManualSpeed();
     const timer = window.setInterval(loadManualSpeed, DASHBOARD_REFRESH_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [barryWindowSeconds, ready, realManualCategoryIdsKey]);
+  }, [barryWindowSeconds, lowPriceManualProductIdsKey, ready, realManualCategoryIdsKey, tkManualProductIdsKey]);
 
   useEffect(() => {
     if (!ready || typeof window === "undefined") {
@@ -1122,6 +1258,21 @@ export function ManagerDashboardPanel() {
     () => buildDerivedManualProductDetails(manualProducts, lowPriceManualSubmittedStatistics),
     [lowPriceManualSubmittedStatistics, manualProducts],
   );
+  const tkManualProductDetails = useMemo(
+    () => buildDerivedManualProductDetails(manualProducts, tkManualSubmittedStatistics),
+    [manualProducts, tkManualSubmittedStatistics],
+  );
+  const tkWorkload = useMemo<WorkloadStatistics>(
+    () => ({
+      manualSubmittedStatistics: tkManualSubmittedStatistics,
+      actualCompleted: tkActualCompleted,
+      fetchAssignmentMonitor: tkFetchAssignmentMonitor,
+      fetchTaskRefreshSummary: tkFetchTaskRefreshSummary,
+      delayAssignmentCount: tkDelayAssignmentCount,
+      inletSpeed: tkInletSpeed,
+    }),
+    [tkActualCompleted, tkDelayAssignmentCount, tkFetchAssignmentMonitor, tkFetchTaskRefreshSummary, tkInletSpeed, tkManualSubmittedStatistics],
+  );
 
   useEffect(() => {
     if (!ready || loading || typeof window === "undefined") {
@@ -1143,30 +1294,23 @@ export function ManagerDashboardPanel() {
     [derivedCategoryDetails, speedHistory],
   );
 
-  // The trend remains useful for context, while its headline figures always come
-  // from the dedicated recent-hour/manual and 10-second actual-completion samples.
-  const speedSeries = useMemo(() => buildSpeedSeries(speedHistory), [speedHistory]);
-  const speedMetrics = useMemo<SpeedOverviewMetrics>(() => ({
-    manualSubmittedPerSecond: manualSpeed?.submittedPerSecond ?? 0,
-    manualDistributedPerSecond: manualSpeed?.distributedPerSecond ?? 0,
-    realManualSubmittedPerSecond: realManualSpeed?.submittedPerSecond ?? 0,
-    realManualDistributedPerSecond: realManualSpeed?.distributedPerSecond ?? 0,
-    actualCompletedPerSecond: actualSpeedPerSecond,
-    realActualCompletedPerSecond: realActualSpeedPerSecond,
-  }), [actualSpeedPerSecond, manualSpeed, realActualSpeedPerSecond, realManualSpeed]);
-  const realManualProductSpeeds = useMemo(
-    () => manualProducts.map((product) => {
-      const categorySpeed = realManualSpeed?.categoryList.find((item) => item.shopCategoryId === product.id);
-      return {
-        key: product.id,
-        productName: product.name || product.code || `人工商品#${product.id}`,
-        submittedPerSecond: categorySpeed?.submittedPerSecond ?? 0,
-        distributedPerSecond: categorySpeed?.distributedPerSecond ?? 0,
-        accountCount: categorySpeed?.accountCount ?? 0,
-      };
-    }).filter((item) => realManualCategoryIds.length === 0 || realManualCategoryIds.includes(item.key)),
-    [manualProducts, realManualCategoryIds, realManualSpeed],
-  );
+  const workloadSpeeds = useMemo<Partial<Record<DashboardCardId, WorkloadSpeed>>>(() => ({
+    realActualCompleted: {
+      distributedPerSecond: realManualSpeed?.distributedPerSecond ?? 0,
+      submittedPerSecond: realManualSpeed?.submittedPerSecond ?? 0,
+      actualCompletedPerSecond: actualSpeedPerSecond.real,
+    },
+    lowPriceActualCompleted: {
+      distributedPerSecond: lowPriceManualSpeed?.distributedPerSecond ?? 0,
+      submittedPerSecond: lowPriceManualSpeed?.submittedPerSecond ?? 0,
+      actualCompletedPerSecond: actualSpeedPerSecond.lowPrice,
+    },
+    tkActualCompleted: {
+      distributedPerSecond: tkManualSpeed?.distributedPerSecond ?? 0,
+      submittedPerSecond: tkManualSpeed?.submittedPerSecond ?? 0,
+      actualCompletedPerSecond: actualSpeedPerSecond.tk,
+    },
+  }), [actualSpeedPerSecond, lowPriceManualSpeed, realManualSpeed, tkManualSpeed]);
 
   const cardViews = useMemo(
     () =>
@@ -1178,7 +1322,11 @@ export function ManagerDashboardPanel() {
             ? categoryDetailsWithSpeed
             : resolveScopedDetails(
               isManualProduct
-                ? (cardId === "lowPriceManualSubmitted" ? lowPriceManualProductDetails : derivedManualProductDetails)
+                ? (cardId === "lowPriceManualSubmitted"
+                  ? lowPriceManualProductDetails
+                  : cardId === "tkManualSubmitted"
+                    ? tkManualProductDetails
+                    : derivedManualProductDetails)
                 : categoryDetailsWithSpeed,
               config.categoryIds,
             );
@@ -1208,7 +1356,9 @@ export function ManagerDashboardPanel() {
               ? realFetchTaskTimeRange
               : cardId === "lowPriceActualCompleted"
                 ? lowPriceFetchTaskTimeRange
-                : currentFetchTaskTimeRange,
+                : cardId === "tkActualCompleted"
+                  ? tkFetchTaskTimeRange
+                  : currentFetchTaskTimeRange,
             cardId === "pendingDetection"
               ? formatShopGroupScopeLabel(config.shopGroupIds ?? [], shopGroups.length)
               : formatCategoryScopeLabel(
@@ -1216,6 +1366,7 @@ export function ManagerDashboardPanel() {
                 isManualProduct ? manualProducts.length : categories.length,
                 isManualProduct ? "人工商品" : "商品类目",
               ),
+            tkWorkload,
           );
           // While an independent metric is still in-flight and has no value yet, show a
           // spinner in place of the default 0 so each card reflects its own load state.
@@ -1229,13 +1380,13 @@ export function ManagerDashboardPanel() {
           return [cardId, view];
         }),
       ) as Record<DashboardCardId, DashboardCardView>,
-    [categories.length, categoryDetailsWithSpeed, configMap, currentFetchTaskTimeRange, dashboardMetricLoading, dashboardStatistics, derivedManualProductDetails, lowPriceActualCompleted, lowPriceDelayAssignmentCount, lowPriceFetchAssignmentMonitor, lowPriceInletSpeed, lowPriceFetchTaskTimeRange, lowPriceFetchTaskRefreshSummary, lowPriceManualProductDetails, lowPriceManualSubmittedStatistics, manualProducts.length, onlineUserMonitorByUserId, pendingDetectionCount, products, realDelayAssignmentCount, realFetchAssignmentMonitor, realInletSpeed, realFetchTaskRefreshSummary, realFetchTaskTimeRange, realManualSubmittedStatistics, users, userStats, workbenchStatistics, workbenchUserOverview],
+    [categories.length, categoryDetailsWithSpeed, configMap, currentFetchTaskTimeRange, dashboardMetricLoading, dashboardStatistics, derivedManualProductDetails, lowPriceActualCompleted, lowPriceDelayAssignmentCount, lowPriceFetchAssignmentMonitor, lowPriceInletSpeed, lowPriceFetchTaskTimeRange, lowPriceFetchTaskRefreshSummary, lowPriceManualProductDetails, lowPriceManualSubmittedStatistics, manualProducts.length, onlineUserMonitorByUserId, pendingDetectionCount, products, realDelayAssignmentCount, realFetchAssignmentMonitor, realInletSpeed, realFetchTaskRefreshSummary, realFetchTaskTimeRange, realManualSubmittedStatistics, tkFetchTaskTimeRange, tkManualProductDetails, tkWorkload, users, userStats, workbenchStatistics, workbenchUserOverview],
   );
 
   const hiddenCardIds = useMemo(
     () =>
       (Object.keys(configMap) as DashboardCardId[]).filter(
-        (cardId) => !["realManualSubmitted", "lowPriceManualSubmitted", "lowPriceActualCompleted"].includes(cardId) && !configMap[cardId]?.visible,
+        (cardId) => !ALWAYS_VISIBLE_CARD_IDS.includes(cardId) && !configMap[cardId]?.visible,
       ),
     [configMap],
   );
@@ -1273,7 +1424,7 @@ export function ManagerDashboardPanel() {
     setConfigMap((current) => ({
       ...current,
       [editingCardId]: {
-        visible: ["realManualSubmitted", "lowPriceManualSubmitted", "lowPriceActualCompleted"].includes(editingCardId)
+        visible: ALWAYS_VISIBLE_CARD_IDS.includes(editingCardId)
           ? true
           : Boolean(values.visible),
         categoryIds: values.categoryIds ?? [],
@@ -1358,7 +1509,8 @@ export function ManagerDashboardPanel() {
                       renderDashboardCard({
                         cardId,
                         view: cardViews[cardId],
-                        relatedView: cardViews[cardId === "realActualCompleted" ? "realManualSubmitted" : "lowPriceManualSubmitted"],
+                        relatedView: cardViews[getWorkloadRelatedCardId(cardId)],
+                        speeds: workloadSpeeds[cardId],
                         onEdit: openEditModal,
                         onOpenDetail: setDetailCardId,
                       }),
@@ -1372,14 +1524,6 @@ export function ManagerDashboardPanel() {
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="dashboard 已全部隐藏，可使用恢复按钮重新展示" />
               </section>
             )}
-
-            <SpeedTrendChart
-              series={speedSeries}
-              speedMetrics={speedMetrics}
-              realManualProductSpeeds={realManualProductSpeeds}
-              barryWindowSeconds={barryWindowSeconds}
-              onEdit={() => openEditModal("averageSpeed")}
-            />
           </>
         )}
       </div>
@@ -1570,7 +1714,7 @@ export function ManagerDashboardPanel() {
         }
       >
         <Form<DashboardCardConfig> form={form} layout="vertical" initialValues={{ visible: true, categoryIds: [] }}>
-          {editingCardId && !["realManualSubmitted", "lowPriceManualSubmitted", "lowPriceActualCompleted"].includes(editingCardId) ? (
+          {editingCardId && !ALWAYS_VISIBLE_CARD_IDS.includes(editingCardId) ? (
             <Form.Item label="显示当前 dashboard" name="visible" valuePropName="checked">
               <Switch checkedChildren="显示" unCheckedChildren="隐藏" />
             </Form.Item>
@@ -1795,7 +1939,7 @@ function mergeDashboardConfig(
     (accumulator, cardId) => {
       const config = incoming[cardId];
       accumulator[cardId] = {
-        visible: ["realManualSubmitted", "lowPriceManualSubmitted", "lowPriceActualCompleted"].includes(cardId)
+        visible: ALWAYS_VISIBLE_CARD_IDS.includes(cardId)
           ? true
           : (config?.visible ?? current[cardId].visible),
         categoryIds: Array.isArray(config?.categoryIds) ? config?.categoryIds : current[cardId].categoryIds,
@@ -1859,6 +2003,12 @@ function applyDashboardConfigPresets(
       categoryIds: LOW_PRICE_UPSTREAM_CATEGORY_IDS,
       fetchTimeRange: DEFAULT_FETCH_TASK_TIME_RANGE,
     },
+    tkManualSubmitted: { visible: true, categoryIds: TK_MANUAL_PRODUCT_IDS },
+    tkActualCompleted: {
+      visible: true,
+      categoryIds: TK_UPSTREAM_CATEGORY_IDS,
+      fetchTimeRange: DEFAULT_FETCH_TASK_TIME_RANGE,
+    },
   };
 }
 
@@ -1866,6 +2016,7 @@ function renderDashboardCard({
   cardId,
   view,
   relatedView,
+  speeds,
   onEdit,
   onOpenDetail,
   actions,
@@ -1874,6 +2025,7 @@ function renderDashboardCard({
   cardId: DashboardCardId;
   view: DashboardCardView;
   relatedView?: DashboardCardView;
+  speeds?: WorkloadSpeed;
   onEdit: (cardId: DashboardCardId) => void;
   onOpenDetail: (cardId: DashboardCardId) => void;
   actions?: ReactNode;
@@ -1882,9 +2034,10 @@ function renderDashboardCard({
   const clickable = !view.disableDetail;
   const hasTopRow = Boolean(view.scopeLabel) || Boolean(actions) || view.editable !== false;
   const isLowPriceWorkload = cardId === "lowPriceActualCompleted";
-  const relatedCardId: DashboardCardId = isLowPriceWorkload ? "lowPriceManualSubmitted" : "realManualSubmitted";
-  const relatedEditTooltip = isLowPriceWorkload ? "编辑低价点赞" : "编辑真人提交统计";
-  const actualEditTooltip = isLowPriceWorkload ? "编辑低价实际完成" : "编辑真人实际完成统计";
+  const isTkWorkload = cardId === "tkActualCompleted";
+  const relatedCardId = getWorkloadRelatedCardId(cardId);
+  const relatedEditTooltip = isLowPriceWorkload ? "编辑低价点赞" : isTkWorkload ? "编辑TK提交统计" : "编辑真人提交统计";
+  const actualEditTooltip = isLowPriceWorkload ? "编辑低价实际完成" : isTkWorkload ? "编辑TK实际完成" : "编辑真人实际完成统计";
   const fetchTaskCallVolumeStatus = view.inlineMetricsRefreshSummary
     ? resolveFetchTaskCallVolumeStatus(
         view.inlineMetricsRefreshSummary.requestCount,
@@ -1892,20 +2045,43 @@ function renderDashboardCard({
       )
     : undefined;
 
-  if ((cardId === "realActualCompleted" || cardId === "lowPriceActualCompleted") && relatedView) {
+  if (isFetchAssignmentMonitorWorkloadCard(cardId) && relatedView) {
     return (
       <article
         key={cardId}
         className={`manager-dashboard-card manager-dashboard-card--expanded manager-dashboard-card--real-workload${
           isLowPriceWorkload ? " manager-dashboard-card--low-price-workload" : ""
-        }`}
+        }${isTkWorkload ? " manager-dashboard-card--tk-workload" : ""}`}
         onClick={() => onOpenDetail(cardId)}
       >
         <div className="manager-dashboard-card__backdrop" style={{ background: view.background }} />
         <div className="manager-dashboard-card__content manager-dashboard-card__content--real-workload">
           <div className="manager-dashboard-card__real-workload-header">
             <div className="manager-section-label manager-dashboard-card__scope">{view.scopeLabel}</div>
-            <div className="manager-dashboard-card__real-workload-header-spacer" />
+            <div className="manager-dashboard-card__real-workload-speeds">
+              {speeds ? (
+                <>
+                  <WorkloadSpeedChip
+                    icon={<SendOutlined />}
+                    label="分发速度"
+                    description="人工商品每秒分发给用户的任务量，按速度统计窗口内的平均值计算。"
+                    perSecond={speeds.distributedPerSecond}
+                  />
+                  <WorkloadSpeedChip
+                    icon={<CloudUploadOutlined />}
+                    label="提交速度"
+                    description="用户每秒提交的人工任务量，按速度统计窗口内的平均值计算。"
+                    perSecond={speeds.submittedPerSecond}
+                  />
+                  <WorkloadSpeedChip
+                    icon={<CheckCircleOutlined />}
+                    label="实际完成速度"
+                    description="上游商品类目每秒新增的实际完成量，由相邻两次刷新的完成量差值计算。"
+                    perSecond={speeds.actualCompletedPerSecond}
+                  />
+                </>
+              ) : null}
+            </div>
             <div
               className="manager-dashboard-card__icon"
               style={{ color: view.accent, background: `${view.accent}16` }}
@@ -2720,6 +2896,7 @@ function buildDashboardCardView(
   lowPriceInletSpeed: InletSpeedSummary | null,
   fetchTaskTimeRange: FetchTaskTimeRange,
   scopeLabel: string,
+  tkWorkload: WorkloadStatistics,
 ): DashboardCardView {
   const currencyTotal = detailRows.reduce((sum, item) => sum + item.todayConsume, 0);
   const remainingTotal = detailRows.reduce((sum, item) => sum + item.taskRemaining, 0);
@@ -2945,24 +3122,31 @@ function buildDashboardCardView(
         compact: true,
       };
     case "lowPriceManualSubmitted":
+    case "tkManualSubmitted": {
+      const isTk = cardId === "tkManualSubmitted";
+      const workloadLabel = isTk ? "TK" : "低价";
+      const manualStatistics = isTk
+        ? tkWorkload.manualSubmittedStatistics
+        : lowPriceManualSubmittedStatistics;
       return {
         title: DASHBOARD_TITLES[cardId],
-        scopeLabel: "低价",
-        unitLabel: "低价提交量",
+        scopeLabel: workloadLabel,
+        unitLabel: `${workloadLabel}提交量`,
         icon: <TeamOutlined style={{ fontSize: 22 }} />,
         accent: "#0f766e",
         background: "linear-gradient(135deg, rgba(15,118,110,0.1), rgba(255,255,255,0))",
-        value: <AnimatedNumber value={lowPriceManualSubmittedStatistics?.submittedNum ?? manualTotal} format={formatCount} />,
+        value: <AnimatedNumber value={manualStatistics?.submittedNum ?? manualTotal} format={formatCount} />,
         comparison: buildDashboardComparison(
-          lowPriceManualSubmittedStatistics?.yesterdaySubmittedNum ?? 0,
-          lowPriceManualSubmittedStatistics?.submittedChange ?? 0,
-          lowPriceManualSubmittedStatistics?.submittedChangeRate ?? 0,
+          manualStatistics?.yesterdaySubmittedNum ?? 0,
+          manualStatistics?.submittedChange ?? 0,
+          manualStatistics?.submittedChangeRate ?? 0,
           formatCount,
         ),
         detailMetrics: [],
         detailRows,
         compact: true,
       };
+    }
     case "realActualCompleted": {
       const realActualCompleted = dashboardStatistics?.realActualCompleted;
       const completedByCategory = new Map(
@@ -3061,9 +3245,22 @@ function buildDashboardCardView(
         expanded: true,
       };
     }
-    case "lowPriceActualCompleted": {
+    case "lowPriceActualCompleted":
+    case "tkActualCompleted": {
+      const isTk = cardId === "tkActualCompleted";
+      const workloadLabel = isTk ? "TK" : "低价";
+      const workload: WorkloadStatistics = isTk
+        ? tkWorkload
+        : {
+          manualSubmittedStatistics: lowPriceManualSubmittedStatistics,
+          actualCompleted: lowPriceActualCompleted,
+          fetchAssignmentMonitor: lowPriceFetchAssignmentMonitor,
+          fetchTaskRefreshSummary: lowPriceFetchTaskRefreshSummary,
+          delayAssignmentCount: lowPriceDelayAssignmentCount,
+          inletSpeed: lowPriceInletSpeed,
+        };
       const completedByCategory = new Map(
-        (lowPriceActualCompleted?.categoryList ?? []).map((item) => [item.shopCategoryId, item.count]),
+        (workload.actualCompleted?.categoryList ?? []).map((item) => [item.shopCategoryId, item.count]),
       );
       const actualDetailRows = detailRows.map((item) => ({
         ...item,
@@ -3071,71 +3268,71 @@ function buildDashboardCardView(
       }));
       return {
         title: DASHBOARD_TITLES[cardId],
-        scopeLabel: "低价",
-        unitLabel: "低价实际完成量",
+        scopeLabel: workloadLabel,
+        unitLabel: `${workloadLabel}实际完成量`,
         icon: <AppstoreOutlined style={{ fontSize: 22 }} />,
         accent: "#16a34a",
         background: "linear-gradient(135deg, rgba(22,163,74,0.1), rgba(255,255,255,0))",
-        value: <AnimatedNumber value={lowPriceActualCompleted?.count ?? 0} format={formatCount} />,
+        value: <AnimatedNumber value={workload.actualCompleted?.count ?? 0} format={formatCount} />,
         comparison: buildDashboardComparison(
-          lowPriceActualCompleted?.yesterdayCount ?? 0,
-          lowPriceActualCompleted?.countChange ?? 0,
-          lowPriceActualCompleted?.countChangeRate ?? 0,
+          workload.actualCompleted?.yesterdayCount ?? 0,
+          workload.actualCompleted?.countChange ?? 0,
+          workload.actualCompleted?.countChangeRate ?? 0,
           formatCount,
         ),
         detailMetrics: [
           {
             label: "未开始",
             value: renderUninitiatedOrderMetricValue(
-              lowPriceActualCompleted?.pendingOrderCount ?? 0,
-              lowPriceActualCompleted?.recentUninitiatedOrderCount ?? 0,
+              workload.actualCompleted?.pendingOrderCount ?? 0,
+              workload.actualCompleted?.recentUninitiatedOrderCount ?? 0,
             ),
           },
           {
             label: "剩余总量",
-            value: renderRemainingWithInletSpeedValue(lowPriceActualCompleted?.remainingOrderCount ?? 0, lowPriceInletSpeed),
+            value: renderRemainingWithInletSpeedValue(workload.actualCompleted?.remainingOrderCount ?? 0, workload.inletSpeed),
           },
           {
             label: "总剩余量",
             value: renderTotalPendingMetricValue(
-              lowPriceActualCompleted?.totalPendingCount ?? ((lowPriceActualCompleted?.pendingCount ?? 0) + (lowPriceActualCompleted?.yesterdayPendingCount ?? 0)),
-              lowPriceActualCompleted?.yesterdayPendingCount ?? 0,
+              workload.actualCompleted?.totalPendingCount ?? ((workload.actualCompleted?.pendingCount ?? 0) + (workload.actualCompleted?.yesterdayPendingCount ?? 0)),
+              workload.actualCompleted?.yesterdayPendingCount ?? 0,
             ),
           },
-          { label: "今日新增总单量", value: formatCount(lowPriceActualCompleted?.totalOrderCount ?? 0) },
-          { label: "今日新增总量", value: formatCount(lowPriceActualCompleted?.totalCount ?? 0) },
-          { label: "完成单量", value: formatCount(lowPriceActualCompleted?.completedOrderCount ?? 0) },
+          { label: "今日新增总单量", value: formatCount(workload.actualCompleted?.totalOrderCount ?? 0) },
+          { label: "今日新增总量", value: formatCount(workload.actualCompleted?.totalCount ?? 0) },
+          { label: "完成单量", value: formatCount(workload.actualCompleted?.completedOrderCount ?? 0) },
           {
             label: "今日分配延迟已检测",
             value: renderDelayDetectionMetricValue(
-              getFinishAssignmentDetectedCount(lowPriceDelayAssignmentCount),
-              getFinishAssignmentDetectionRate(lowPriceDelayAssignmentCount),
+              getFinishAssignmentDetectedCount(workload.delayAssignmentCount),
+              getFinishAssignmentDetectionRate(workload.delayAssignmentCount),
             ),
           },
           {
             label: "今日用户延迟检测数量",
             value: renderDelayDetectionMetricValue(
-              getDelayAssignmentDetectedCount(lowPriceDelayAssignmentCount),
-              getDelayAssignmentDetectionRate(lowPriceDelayAssignmentCount),
+              getDelayAssignmentDetectedCount(workload.delayAssignmentCount),
+              getDelayAssignmentDetectionRate(workload.delayAssignmentCount),
             ),
           },
         ],
         inlineMetricsLabel: todayFetchTimeRangeLabel,
-        inlineMetricsRefreshSummary: lowPriceFetchTaskRefreshSummary,
+        inlineMetricsRefreshSummary: workload.fetchTaskRefreshSummary,
         inlineMetricsStatus: buildFetchTaskSuccessStatus(
-          lowPriceFetchTaskRefreshSummary,
-          lowPriceActualCompleted?.remainingOrderCount,
+          workload.fetchTaskRefreshSummary,
+          workload.actualCompleted?.remainingOrderCount,
           shouldNotifyDownstreamAccounts,
         ),
         inlineMetrics: [
-          { label: "建池待消费", value: renderCompactCountValue(lowPriceFetchAssignmentMonitor?.singleInitPendingCount ?? 0) },
-          { label: "空队列", value: renderCompactCountValue(lowPriceFetchAssignmentMonitor?.emptyQueueFetchCount ?? 0) },
-          { label: "触发建池用户", value: renderCompactCountValue(lowPriceFetchAssignmentMonitor?.initSubmittedUserCount ?? 0) },
+          { label: "建池待消费", value: renderCompactCountValue(workload.fetchAssignmentMonitor?.singleInitPendingCount ?? 0) },
+          { label: "空队列", value: renderCompactCountValue(workload.fetchAssignmentMonitor?.emptyQueueFetchCount ?? 0) },
+          { label: "触发建池用户", value: renderCompactCountValue(workload.fetchAssignmentMonitor?.initSubmittedUserCount ?? 0) },
           {
             label: "本时段取到",
             value: renderDailyFetchMetricValue(
-              lowPriceFetchAssignmentMonitor?.dailyFetchHitCount ?? 0,
-              lowPriceFetchAssignmentMonitor?.dailyFetchHitYesterdayCount ?? 0,
+              workload.fetchAssignmentMonitor?.dailyFetchHitCount ?? 0,
+              workload.fetchAssignmentMonitor?.dailyFetchHitYesterdayCount ?? 0,
               todayFetchTimeRangeLabel,
               yesterdayFetchTimeRangeLabel,
               true,
@@ -3144,14 +3341,14 @@ function buildDashboardCardView(
           {
             label: "本时段无任务",
             value: renderDailyFetchMetricValue(
-              lowPriceFetchAssignmentMonitor?.dailyFetchMissCount ?? 0,
-              lowPriceFetchAssignmentMonitor?.dailyFetchMissYesterdayCount ?? 0,
+              workload.fetchAssignmentMonitor?.dailyFetchMissCount ?? 0,
+              workload.fetchAssignmentMonitor?.dailyFetchMissYesterdayCount ?? 0,
               todayFetchTimeRangeLabel,
               yesterdayFetchTimeRangeLabel,
               true,
             ),
           },
-          { label: "本时段成功率", value: formatPercent(lowPriceFetchAssignmentMonitor?.dailyFetchSuccessRate ?? 0) },
+          { label: "本时段成功率", value: formatPercent(workload.fetchAssignmentMonitor?.dailyFetchSuccessRate ?? 0) },
         ],
         detailRows: actualDetailRows,
         compact: true,
@@ -3561,8 +3758,71 @@ function normalizeShopGroupIds(value: unknown): number[] {
   ).sort((left, right) => left - right);
 }
 
+function WorkloadSpeedChip({
+  icon,
+  label,
+  description,
+  perSecond,
+}: {
+  icon: ReactNode;
+  label: string;
+  description: string;
+  perSecond: number;
+}) {
+  const level = resolveSpeedLevelStatus(perSecond);
+  return (
+    <Tooltip
+      title={(
+        <div>
+          <div style={{ fontWeight: 700 }}>{`${label} · ${level.label}`}</div>
+          <div style={{ marginTop: 2 }}>{description}</div>
+          <div style={{ marginTop: 4 }}>
+            {`${formatRate(perSecond)} /秒 · ${formatRate(perSecond * 60)} /分 · ${formatRate(perSecond * 3600)} /时`}
+          </div>
+        </div>
+      )}
+    >
+      <span
+        className={`manager-dashboard-card__real-workload-speed manager-dashboard-card__real-workload-speed--${level.tone}`}
+        aria-label={label}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <span className="manager-dashboard-card__real-workload-speed-icon">{icon}</span>
+        <span className="manager-dashboard-card__real-workload-speed-value">{formatRate(perSecond)}</span>
+        <span className="manager-dashboard-card__real-workload-speed-sub">/秒</span>
+      </span>
+    </Tooltip>
+  );
+}
+
+// 档位阈值沿用原速度概览：按 条/秒 划分。
+function resolveSpeedLevelStatus(perSecond: number): { tone: "low" | "fair" | "good"; label: string } {
+  const speedPerSecond = Number.isFinite(perSecond) ? perSecond : 0;
+  if (speedPerSecond < 20) {
+    return { tone: "low", label: "偏低" };
+  }
+  if (speedPerSecond < 40) {
+    return { tone: "fair", label: "加油，保持" };
+  }
+  if (speedPerSecond < 60) {
+    return { tone: "good", label: "良好" };
+  }
+  return { tone: "good", label: "极好" };
+}
+
 function isFetchAssignmentMonitorWorkloadCard(cardId: DashboardCardId | null): boolean {
-  return cardId === "realActualCompleted" || cardId === "lowPriceActualCompleted";
+  return cardId === "realActualCompleted" || cardId === "lowPriceActualCompleted" || cardId === "tkActualCompleted";
+}
+
+// 工单大卡左半区展示的提交统计卡。
+function getWorkloadRelatedCardId(cardId: DashboardCardId): DashboardCardId {
+  if (cardId === "lowPriceActualCompleted") {
+    return "lowPriceManualSubmitted";
+  }
+  if (cardId === "tkActualCompleted") {
+    return "tkManualSubmitted";
+  }
+  return "realManualSubmitted";
 }
 
 function normalizeFetchTaskTimeRange(value: unknown): FetchTaskTimeRangeSelection {
@@ -3745,14 +4005,18 @@ function isUpstreamUserMetric(cardId: DashboardCardId | null): boolean {
 function isManualProductMetric(cardId: DashboardCardId | null): boolean {
   return cardId === "manualSubmitted"
     || cardId === "realManualSubmitted"
-    || cardId === "lowPriceManualSubmitted";
+    || cardId === "lowPriceManualSubmitted"
+    || cardId === "tkManualSubmitted";
 }
 
 // Completion cards are viewed along the 上游商品类目 (upstream product category) dimension.
 function isUpstreamCategoryMetric(
   cardId: DashboardCardId | null,
-): cardId is "actualCompleted" | "realActualCompleted" | "lowPriceActualCompleted" {
-  return cardId === "actualCompleted" || cardId === "realActualCompleted" || cardId === "lowPriceActualCompleted";
+): cardId is "actualCompleted" | "realActualCompleted" | "lowPriceActualCompleted" | "tkActualCompleted" {
+  return cardId === "actualCompleted"
+    || cardId === "realActualCompleted"
+    || cardId === "lowPriceActualCompleted"
+    || cardId === "tkActualCompleted";
 }
 
 function isDashboardMetricId(cardId: DashboardCardId): cardId is DashboardMetricId {
@@ -3809,6 +4073,20 @@ function getEditSelectorConfig(cardId: DashboardCardId | null) {
       extra: "该配置仅用于低价实际完成量，不影响真人实际完成量。",
     };
   }
+  if (cardId === "tkManualSubmitted") {
+    return {
+      label: "TK提交人工商品",
+      placeholder: "请选择仅用于TK提交量的人工商品",
+      extra: "该配置仅用于TK提交量，不影响真人人工提交量。",
+    };
+  }
+  if (cardId === "tkActualCompleted") {
+    return {
+      label: "TK完成商品类目",
+      placeholder: "请选择仅用于TK实际完成量的上游商品类目",
+      extra: "该配置仅用于TK实际完成量，不影响真人实际完成量。",
+    };
+  }
   if (isManualProductMetric(cardId)) {
     return {
       label: "人工商品列表",
@@ -3854,6 +4132,10 @@ function getDetailValueTitle(cardId: DashboardCardId | null) {
       return "低价提交";
     case "lowPriceActualCompleted":
       return "低价实际完成";
+    case "tkManualSubmitted":
+      return "TK提交";
+    case "tkActualCompleted":
+      return "TK实际完成";
     case "averageSpeed":
       return "速度";
     default:
@@ -3876,10 +4158,12 @@ function renderMetricValue(record: DerivedCategoryDetail, cardId: DashboardCardI
     case "manualSubmitted":
     case "realManualSubmitted":
     case "lowPriceManualSubmitted":
+    case "tkManualSubmitted":
       return formatCount(record.manualSubmitted);
     case "actualCompleted":
     case "realActualCompleted":
     case "lowPriceActualCompleted":
+    case "tkActualCompleted":
       return formatCount(record.actualCompleted);
     case "averageSpeed":
       return (
@@ -4138,35 +4422,6 @@ function resolveSpeedMetrics(history: DashboardSpeedSnapshot[], categoryIds: num
     manualPerSecond: safeDivide(Math.max(lastTotals.manualSubmitted - firstTotals.manualSubmitted, 0), elapsedSeconds),
     actualPerSecond: safeDivide(Math.max(lastTotals.actualCompleted - firstTotals.actualCompleted, 0), elapsedSeconds),
   };
-}
-
-// Turn the cumulative snapshot history into a per-minute instantaneous speed series
-// (每秒速度) for the 速度概览 chart, limited to the most recent day.
-function buildSpeedSeries(history: DashboardSpeedSnapshot[], now = Date.now()): SpeedSeriesPoint[] {
-  const normalizedHistory = pruneSpeedHistory(history, now);
-  const points: SpeedSeriesPoint[] = [];
-
-  for (let index = 1; index < normalizedHistory.length; index += 1) {
-    const previous = normalizedHistory[index - 1];
-    const current = normalizedHistory[index];
-    const elapsedSeconds = Math.max((current.timestamp - previous.timestamp) / 1000, 1);
-    const previousTotals = sumSnapshotMetrics(previous, null);
-    const currentTotals = sumSnapshotMetrics(current, null);
-
-    points.push({
-      timestamp: current.timestamp,
-      manualPerSecond: safeDivide(
-        Math.max(currentTotals.manualSubmitted - previousTotals.manualSubmitted, 0),
-        elapsedSeconds,
-      ),
-      actualPerSecond: safeDivide(
-        Math.max(currentTotals.actualCompleted - previousTotals.actualCompleted, 0),
-        elapsedSeconds,
-      ),
-    });
-  }
-
-  return points.filter((point) => now - point.timestamp <= DASHBOARD_SPEED_CHART_WINDOW_MS);
 }
 
 function sumSnapshotMetrics(snapshot: DashboardSpeedSnapshot, targetIds: Set<number> | null) {

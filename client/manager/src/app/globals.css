@@ -2636,6 +2636,10 @@ select {
   --manager-workload-accent: #7c3aed;
 }
 
+.manager-dashboard-card--tk-workload {
+  --manager-workload-accent: #db2777;
+}
+
 .manager-dashboard-layout {
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
@@ -2823,8 +2827,58 @@ select {
   content: "";
 }
 
-.manager-dashboard-card__real-workload-header-spacer {
+.manager-dashboard-card__real-workload-speeds {
+  display: flex;
   flex: 1;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* 速度档位用颜色表达：偏低=橙、加油=蓝、良好/极好=绿，具体档位见悬停说明。 */
+.manager-dashboard-card__real-workload-speed {
+  --speed-tone: #16a34a;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--speed-tone) 28%, transparent);
+  border-radius: var(--manager-radius-pill);
+  background: color-mix(in srgb, var(--speed-tone) 8%, #fff);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.manager-dashboard-card__real-workload-speed--low {
+  --speed-tone: #d97706;
+}
+
+.manager-dashboard-card__real-workload-speed--fair {
+  --speed-tone: #2563eb;
+}
+
+.manager-dashboard-card__real-workload-speed-icon {
+  display: inline-flex;
+  color: var(--speed-tone);
+  font-size: 12px;
+}
+
+.manager-dashboard-card__real-workload-speed-value {
+  color: var(--manager-text);
+  font-family: var(--manager-mono);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.manager-dashboard-card__real-workload-speed-sub {
+  color: var(--manager-text-soft);
+  font-size: 11px;
 }
 
 .manager-dashboard-card__real-workload-groups {
@@ -3589,227 +3643,6 @@ select {
   background: rgba(255, 255, 255, 0.8);
   color: var(--manager-text-soft);
   font-weight: 600;
-}
-
-.manager-speed-chart {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.manager-speed-chart__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.manager-speed-chart__title {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.manager-speed-chart__title-icon {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  color: var(--manager-accent);
-  background: rgba(15, 118, 110, 0.1);
-  font-size: 20px;
-}
-
-.manager-speed-chart__groups {
-  display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-  gap: 14px;
-}
-
-.manager-speed-chart__group {
-  min-width: 0;
-}
-
-.manager-speed-chart__group-title {
-  margin-bottom: 6px;
-  color: var(--manager-text-soft);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.manager-speed-chart__stats {
-  display: grid;
-  gap: 8px;
-}
-
-.manager-speed-chart__stats--manual {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.manager-speed-chart__stats--actual {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.manager-speed-chart__stat {
-  border: 1px solid var(--manager-border);
-  border-radius: 8px;
-  background: var(--manager-panel);
-  padding: 9px 11px;
-  min-width: 0;
-}
-
-.manager-speed-chart__stat--action {
-  width: 100%;
-  color: inherit;
-  cursor: pointer;
-  text-align: start;
-  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
-}
-
-.manager-speed-chart__stat--action:hover {
-  border-color: var(--manager-primary);
-  box-shadow: var(--manager-shadow-soft);
-  transform: translateY(-1px);
-}
-
-.manager-speed-chart__stat--action:focus-visible {
-  outline: 2px solid var(--manager-primary);
-  outline-offset: 2px;
-}
-
-.manager-speed-chart__stat-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--manager-text-soft);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.manager-speed-chart__speed-level-tag.ant-tag {
-  margin-inline-start: auto;
-  margin-inline-end: 0;
-  padding-inline: 7px;
-  border-radius: var(--manager-radius-pill);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 18px;
-}
-
-.manager-speed-chart__stat-values {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  margin-top: 7px;
-}
-
-.manager-speed-chart__stat-values > div {
-  display: flex;
-  align-items: baseline;
-  gap: 3px;
-  white-space: nowrap;
-}
-
-.manager-speed-chart__stat-values strong {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--manager-text);
-  font-variant-numeric: tabular-nums;
-}
-
-.manager-speed-chart__stat-values span {
-  color: var(--manager-text-faint);
-  font-size: 11px;
-}
-
-.manager-speed-chart__dot {
-  display: inline-block;
-  width: 9px;
-  height: 9px;
-  border-radius: 999px;
-  flex: none;
-}
-
-.manager-speed-chart__canvas {
-  position: relative;
-  width: 100%;
-}
-
-.manager-speed-chart__svg {
-  width: 100%;
-  height: 260px;
-  display: block;
-  overflow: visible;
-}
-
-.manager-speed-chart__axis-text {
-  fill: var(--manager-text-faint);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-}
-
-.manager-speed-chart__tooltip {
-  position: absolute;
-  top: 8px;
-  transform: translateX(-50%);
-  pointer-events: none;
-  background: var(--manager-text);
-  color: #fff;
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 12px;
-  line-height: 1.6;
-  white-space: nowrap;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.22);
-  z-index: 2;
-}
-
-.manager-speed-chart__tooltip-time {
-  font-weight: 700;
-  margin-bottom: 2px;
-}
-
-.manager-speed-chart__tooltip-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-variant-numeric: tabular-nums;
-}
-
-.manager-speed-chart__empty {
-  display: grid;
-  place-items: center;
-  height: 260px;
-}
-
-.manager-speed-chart__legend {
-  display: flex;
-  gap: 8px;
-}
-
-@media (max-width: 1180px) {
-  .manager-speed-chart__groups {
-    grid-template-columns: 1fr;
-  }
-
-  .manager-speed-chart__stats--manual {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 760px) {
-  .manager-speed-chart__stats--manual {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 560px) {
-  .manager-speed-chart__stats--manual,
-  .manager-speed-chart__stats--actual {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 .manager-stagger-1,
