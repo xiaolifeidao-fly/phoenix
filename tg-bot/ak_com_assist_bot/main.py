@@ -7,6 +7,8 @@ from bot import handlers
 from lib.settings.configuration import get_bot_token
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s: %(message)s", level=logging.INFO)
+# httpx 在 INFO 级别会把请求 URL 整条打出来，而 Telegram 的 URL 里带明文 token，压到 WARNING 避免泄漏
+logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger("ak_com_assist_bot")
 
 
@@ -19,7 +21,7 @@ def main():
         )
         sys.exit(1)
 
-    application = ApplicationBuilder().token(token).build()
+    application = ApplicationBuilder().token(token).post_init(handlers.post_init).build()
     handlers.register(application)
 
     log.info("start ak_com_assist_bot")
