@@ -25,6 +25,8 @@ import { App, Button, Drawer, Empty, Form, InputNumber, Select, Space, Spin, Swi
 import type { ColumnsType } from "antd/es/table";
 import type { ReactNode } from "react";
 import { AnimatedNumber } from "./AnimatedNumber";
+import { FetchMissReasonButton } from "./FetchMissReasonButton";
+import { FetchSlowMonitorButton } from "./FetchSlowMonitorButton";
 import {
   fetchProductCategories,
   fetchProducts,
@@ -204,6 +206,8 @@ interface DashboardCardView {
   inlineMetricsLabel?: string;
   inlineMetricsRefreshSummary?: FetchTaskRefreshSummary | null;
   inlineMetricsStatus?: FetchTaskSuccessStatus;
+  /** 取单监控原始数据，供"无任务分布"弹框按商品筛选原因。 */
+  inlineMetricsFetchMonitor?: FetchAssignmentMonitorSummary | null;
   detailRows: DerivedCategoryDetail[];
   comparison?: DashboardComparison;
   editable?: boolean;
@@ -2194,6 +2198,17 @@ function renderDashboardCard({
                       </Tag>
                     </Tooltip>
                   ) : null}
+                  <FetchMissReasonButton
+                    monitor={view.inlineMetricsFetchMonitor}
+                    timeRangeLabel={view.inlineMetricsLabel}
+                  />
+                  {view.inlineMetricsFetchMonitor ? (
+                    <FetchSlowMonitorButton
+                      categoryNames={Object.fromEntries(
+                        view.inlineMetricsFetchMonitor.categoryList.map((item) => [item.shopCategoryId, item.categoryName]),
+                      )}
+                    />
+                  ) : null}
                   {view.inlineMetricsStatus ? (
                     <Tooltip title={view.inlineMetricsStatus.message}>
                       <Tag
@@ -3209,6 +3224,7 @@ function buildDashboardCardView(
         ],
         inlineMetricsLabel: todayFetchTimeRangeLabel,
         inlineMetricsRefreshSummary: realFetchTaskRefreshSummary,
+        inlineMetricsFetchMonitor: realFetchAssignmentMonitor,
         inlineMetricsStatus: buildFetchTaskSuccessStatus(
           realFetchTaskRefreshSummary,
           realActualCompleted?.remainingOrderCount,
@@ -3319,6 +3335,7 @@ function buildDashboardCardView(
         ],
         inlineMetricsLabel: todayFetchTimeRangeLabel,
         inlineMetricsRefreshSummary: workload.fetchTaskRefreshSummary,
+        inlineMetricsFetchMonitor: workload.fetchAssignmentMonitor,
         inlineMetricsStatus: buildFetchTaskSuccessStatus(
           workload.fetchTaskRefreshSummary,
           workload.actualCompleted?.remainingOrderCount,

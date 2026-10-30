@@ -243,7 +243,15 @@ export interface FetchAssignmentMonitorSummary {
     dailyFetchHitYesterdayCount: number;
     dailyFetchMissYesterdayCount: number;
     dailyFetchSuccessRate: number;
+    /** 所选时段该品类无任务的原因分布；不同品类会重复计同一次请求，只按单品类看。 */
+    missReasonList?: FetchMissReasonCount[];
   }>;
+}
+
+export interface FetchMissReasonCount {
+  reason: string;
+  label: string;
+  count: number;
 }
 
 export interface InletSpeedSummary {
@@ -430,6 +438,55 @@ export async function fetchFetchAssignmentMonitor(
 ) {
   const response = await instance.get<ApiResponse<FetchAssignmentMonitorSummary>>(
     "/barry/workbench-dashboard/fetch-assignment-monitor",
+    { params: query },
+  );
+  return unwrapApiResponse(response.data);
+}
+
+export interface FetchSlowBucketCount {
+  bucket: string;
+  label: string;
+  count: number;
+  hitCount: number;
+  missCount: number;
+}
+
+export interface FetchSlowSample {
+  time: string;
+  costMs: number;
+  /** 进入取单循环前：查配置、上限校验、加锁。 */
+  preCheckMs: number;
+  /** 取单循环（多轮 × 多品类）。 */
+  fetchMs: number;
+  thresholdMs: number;
+  userId?: number;
+  uid?: string;
+  code?: string;
+  /** HIT 取到 / MISS 无任务 / PRECHECK 前置校验拦截 / ERROR 异常 */
+  result: string;
+  categoryList?: Array<{ shopCategoryId: number; costMs: number; attempts: number }>;
+}
+
+export interface FetchSlowMonitorSummary {
+  statDate: string;
+  totalCount: number;
+  hitCount: number;
+  missCount: number;
+  bucketList: FetchSlowBucketCount[];
+  hourList: Array<{
+    hour: number;
+    count: number;
+    hitCount: number;
+    missCount: number;
+    bucketList: FetchSlowBucketCount[];
+  }>;
+  /** 最近的慢请求，新的在前，不按 statDate 过滤。 */
+  sampleList: FetchSlowSample[];
+}
+
+export async function fetchFetchSlowMonitor(query?: { statDate?: string; sampleLimit?: number }) {
+  const response = await instance.get<ApiResponse<FetchSlowMonitorSummary>>(
+    "/barry/workbench-dashboard/fetch-slow-monitor",
     { params: query },
   );
   return unwrapApiResponse(response.data);

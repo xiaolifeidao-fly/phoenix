@@ -3156,6 +3156,15 @@ select {
   content: "·";
 }
 
+.manager-dashboard-card__fetch-miss-reason-button.ant-btn {
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--manager-radius-pill);
+  font-size: 11px;
+  font-weight: 800;
+}
+
 .manager-dashboard-card__fetch-volume-tag.ant-tag {
   flex: 0 0 auto;
   margin-inline-end: 0;

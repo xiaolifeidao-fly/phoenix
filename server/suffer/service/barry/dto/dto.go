@@ -1748,6 +1748,11 @@ type WorkbenchDashboardMetricQueryDTO struct {
 	FetchTimeRange    string `json:"fetchTimeRange,omitempty" form:"fetchTimeRange"`
 }
 
+type WorkbenchDashboardFetchSlowMonitorQueryDTO struct {
+	StatDate    string `json:"statDate,omitempty" form:"statDate"`
+	SampleLimit int    `json:"sampleLimit,omitempty" form:"sampleLimit"`
+}
+
 type BridgeDailyStatisticQueryDTO struct {
 	StartDate    string `json:"startDate,omitempty" form:"startDate"`
 	EndDate      string `json:"endDate,omitempty" form:"endDate"`
@@ -1859,6 +1864,15 @@ type WorkbenchDashboardFetchAssignmentMonitorCategoryDTO struct {
 	DailyFetchHitYesterdayCount  int64   `json:"dailyFetchHitYesterdayCount"`
 	DailyFetchMissYesterdayCount int64   `json:"dailyFetchMissYesterdayCount"`
 	DailyFetchSuccessRate        float64 `json:"dailyFetchSuccessRate"`
+	// MissReasonList is this category's no-task reason breakdown for the selected time range.
+	// Reasons of different categories overlap on the same request, so only read it per category.
+	MissReasonList []*WorkbenchDashboardFetchMissReasonCountDTO `json:"missReasonList"`
+}
+
+type WorkbenchDashboardFetchMissReasonCountDTO struct {
+	Reason string `json:"reason"`
+	Label  string `json:"label"`
+	Count  int64  `json:"count"`
 }
 
 type WorkbenchDashboardFetchAssignmentMonitorDTO struct {
@@ -1875,6 +1889,53 @@ type WorkbenchDashboardFetchAssignmentMonitorDTO struct {
 	DailyFetchMissYesterdayCount int64                                                  `json:"dailyFetchMissYesterdayCount"`
 	DailyFetchSuccessRate        float64                                                `json:"dailyFetchSuccessRate"`
 	CategoryList                 []*WorkbenchDashboardFetchAssignmentMonitorCategoryDTO `json:"categoryList"`
+}
+
+type WorkbenchDashboardFetchSlowBucketCountDTO struct {
+	Bucket    string `json:"bucket"`
+	Label     string `json:"label"`
+	Count     int64  `json:"count"`
+	HitCount  int64  `json:"hitCount"`
+	MissCount int64  `json:"missCount"`
+}
+
+type WorkbenchDashboardFetchSlowHourCountDTO struct {
+	Hour       int                                          `json:"hour"`
+	Count      int64                                        `json:"count"`
+	HitCount   int64                                        `json:"hitCount"`
+	MissCount  int64                                        `json:"missCount"`
+	BucketList []*WorkbenchDashboardFetchSlowBucketCountDTO `json:"bucketList"`
+}
+
+type WorkbenchDashboardFetchSlowCategoryCostDTO struct {
+	ShopCategoryID int64 `json:"shopCategoryId"`
+	CostMs         int64 `json:"costMs"`
+	Attempts       int   `json:"attempts"`
+}
+
+type WorkbenchDashboardFetchSlowSampleDTO struct {
+	Time         string                                        `json:"time"`
+	CostMs       int64                                         `json:"costMs"`
+	PreCheckMs   int64                                         `json:"preCheckMs"`
+	FetchMs      int64                                         `json:"fetchMs"`
+	ThresholdMs  int64                                         `json:"thresholdMs"`
+	UserID       int64                                         `json:"userId"`
+	UID          string                                        `json:"uid"`
+	Code         string                                        `json:"code"`
+	Result       string                                        `json:"result"`
+	CategoryList []*WorkbenchDashboardFetchSlowCategoryCostDTO `json:"categoryList"`
+}
+
+// WorkbenchDashboardFetchSlowMonitorDTO is Barry's slow fetch-task distribution for one day
+// plus the latest slow request samples.
+type WorkbenchDashboardFetchSlowMonitorDTO struct {
+	StatDate   string                                       `json:"statDate"`
+	TotalCount int64                                        `json:"totalCount"`
+	HitCount   int64                                        `json:"hitCount"`
+	MissCount  int64                                        `json:"missCount"`
+	BucketList []*WorkbenchDashboardFetchSlowBucketCountDTO `json:"bucketList"`
+	HourList   []*WorkbenchDashboardFetchSlowHourCountDTO   `json:"hourList"`
+	SampleList []*WorkbenchDashboardFetchSlowSampleDTO      `json:"sampleList"`
 }
 
 type WorkbenchDashboardDelayAssignmentCountCategoryDTO struct {

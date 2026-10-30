@@ -92,6 +92,21 @@ func (s *WorkbenchDashboardStatisticsService) FetchAssignmentMonitor(ctx context
 	return response.Data, nil
 }
 
+func (s *WorkbenchDashboardStatisticsService) FetchSlowMonitor(ctx context.Context, query barryDTO.WorkbenchDashboardFetchSlowMonitorQueryDTO) (*barryDTO.WorkbenchDashboardFetchSlowMonitorDTO, error) {
+	response := &barryDTO.DetailResponseDTO[barryDTO.WorkbenchDashboardFetchSlowMonitorDTO]{}
+	err := s.client.GetAbsolute(ctx, innerServicePath(barryInnerWorkbenchDashboardFetchSlowMonitorPath), buildValues(
+		"statDate", query.StatDate,
+		"sampleLimit", query.SampleLimit,
+	), response)
+	if err != nil {
+		return nil, err
+	}
+	if !response.Success || response.Data == nil {
+		return nil, responseError(response.Message, "barry workbench fetch slow monitor response is empty")
+	}
+	return response.Data, nil
+}
+
 func (s *WorkbenchDashboardStatisticsService) DelayAssignmentCount(ctx context.Context, query barryDTO.WorkbenchDashboardMetricQueryDTO) (*barryDTO.WorkbenchDashboardDelayAssignmentCountDTO, error) {
 	response := &barryDTO.DetailResponseDTO[barryDTO.WorkbenchDashboardDelayAssignmentCountDTO]{}
 	err := s.client.GetAbsolute(ctx, innerServicePath(barryInnerWorkbenchDashboardDelayAssignmentCountPath), buildValues(

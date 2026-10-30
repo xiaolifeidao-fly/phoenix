@@ -25,6 +25,7 @@ func (h *BarryHandler) registerTransactionRoutes(engine *gin.RouterGroup) {
 	engine.GET("/barry/workbench-dashboard/manual-speed", h.getWorkbenchManualSpeed)
 	engine.GET("/barry/workbench-dashboard/pending-detection-count", h.getWorkbenchPendingDetectionCount)
 	engine.GET("/barry/workbench-dashboard/fetch-assignment-monitor", h.getWorkbenchFetchAssignmentMonitor)
+	engine.GET("/barry/workbench-dashboard/fetch-slow-monitor", h.getWorkbenchFetchSlowMonitor)
 	engine.GET("/barry/workbench-dashboard/delay-assignment-count", h.getWorkbenchDelayAssignmentCount)
 	engine.GET("/barry/workbench-dashboard/inlet-speed", h.getWorkbenchInletSpeed)
 	engine.GET("/barry/workbench-dashboard/manual-submitted-comparison", h.getWorkbenchManualSubmittedComparison)
@@ -211,6 +212,16 @@ func (h *BarryHandler) getWorkbenchFetchAssignmentMonitor(c *gin.Context) {
 		return
 	}
 	response, err := h.barryService.WorkbenchDashboardStats.FetchAssignmentMonitor(c.Request.Context(), q)
+	commonRouter.ToJson(c, response, err)
+}
+
+func (h *BarryHandler) getWorkbenchFetchSlowMonitor(c *gin.Context) {
+	var q barryDTO.WorkbenchDashboardFetchSlowMonitorQueryDTO
+	if c.ShouldBindQuery(&q) != nil {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := h.barryService.WorkbenchDashboardStats.FetchSlowMonitor(c.Request.Context(), q)
 	commonRouter.ToJson(c, response, err)
 }
 
