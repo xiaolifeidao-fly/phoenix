@@ -18,6 +18,14 @@ DEFAULT_ONLINE_COUNT_WINDOW_SECONDS = 120
 DEFAULT_ONLINE_COUNT_OFFSET = 500
 DEFAULT_ONLINE_COUNT_TIMEOUT_SECONDS = 5.0
 
+# 告警转发的默认配置，config/config.ini 的 [ALERT] 可逐项覆盖；token、群 id、路径密钥放 .env
+# 默认只监听本机，由同机 nginx 把 /cms-alert/ 反代进来
+DEFAULT_ALERT_LISTEN_HOST = "127.0.0.1"
+DEFAULT_ALERT_LISTEN_PORT = 18090
+DEFAULT_ALERT_TELEGRAM_API_BASE = "https://api.telegram.org"
+# 云监控回调超时是 5 秒，发 Telegram 要在这之前结束，否则云监控会当失败重试
+DEFAULT_ALERT_TIMEOUT_SECONDS = 4.0
+
 
 def get(section, option, default=None):
     """读配置项，分组或配置项缺失时回落到默认值"""
@@ -75,3 +83,40 @@ def get_online_count_offset():
 def get_online_count_timeout_seconds():
     """请求公开接口的超时时间，单位秒"""
     return get_float("ONLINE_COUNT", "timeout_seconds", DEFAULT_ONLINE_COUNT_TIMEOUT_SECONDS)
+
+
+def get_alert_bot_token():
+    """告警机器人 token，只取环境变量 ALERT_BOT_TOKEN，和菜单机器人的 token 分开"""
+    return (os.environ.get("ALERT_BOT_TOKEN") or "").strip()
+
+
+def get_alert_chat_id():
+    """告警群 chat_id，优先取环境变量 ALERT_CHAT_ID，其次取 [ALERT] chat_id"""
+    return (os.environ.get("ALERT_CHAT_ID") or get("ALERT", "chat_id") or "").strip()
+
+
+def get_alert_path_secret():
+    """回调路径里的密钥，云监控回调没有可校验的签名，靠它挡住外部乱调；只取环境变量"""
+    return (os.environ.get("ALERT_PATH_SECRET") or "").strip()
+
+
+def get_alert_listen_host():
+    """告警转发服务监听地址"""
+    host = get("ALERT", "listen_host") or ""
+    return host.strip() or DEFAULT_ALERT_LISTEN_HOST
+
+
+def get_alert_listen_port():
+    """告警转发服务监听端口"""
+    return get_int("ALERT", "listen_port", DEFAULT_ALERT_LISTEN_PORT)
+
+
+def get_alert_telegram_api_base():
+    """Telegram Bot API 地址，去掉结尾多余的 /；本地联调时可指向假服务"""
+    base = os.environ.get("ALERT_TELEGRAM_API_BASE") or get("ALERT", "telegram_api_base") or ""
+    return (base.strip() or DEFAULT_ALERT_TELEGRAM_API_BASE).rstrip("/")
+
+
+def get_alert_timeout_seconds():
+    """发 Telegram 的超时时间，单位秒"""
+    return get_float("ALERT", "timeout_seconds", DEFAULT_ALERT_TIMEOUT_SECONDS)

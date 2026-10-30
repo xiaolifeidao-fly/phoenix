@@ -119,6 +119,15 @@ sshpass -p "$remote_password" ssh -p $remote_port -o StrictHostKeyChecking=no -T
 
   echo "启动新进程..."
   bash script/start.sh
+
+  # 告警转发服务：.env 里配了 ALERT_BOT_TOKEN 才启动，没配就跳过，不影响机器人本身
+  bash script/stop_alert.sh || true
+  if grep -q '^ALERT_BOT_TOKEN=' .env 2>/dev/null; then
+    echo "启动告警转发服务..."
+    bash script/start_alert.sh
+  else
+    echo "ℹ️  .env 未配置 ALERT_BOT_TOKEN，跳过告警转发服务"
+  fi
 EOF
 if [ $? -ne 0 ]; then
     echo "❌ 远端解包 / 安装依赖 / 启动失败"
@@ -140,6 +149,13 @@ sshpass -p "$remote_password" ssh -p $remote_port -o StrictHostKeyChecking=no -T
           echo "⚠️  日志中出现异常堆栈，请人工确认: $REMOTE_PATH/server.log"
       fi
       echo "📊 查看日志: tail -f $REMOTE_PATH/server.log"
+      alert_pid=\$(ps -ef | grep "$REMOTE_PATH/.venv/bin/python alert_main.py" | grep -v grep | awk '{print \$2}')
+      if [ -n "\$alert_pid" ]; then
+          echo "✅ 告警转发服务运行中，进程ID: \$alert_pid"
+          tail -n 5 alert.log 2>/dev/null || true
+      else
+          echo "ℹ️  告警转发服务未运行（未配置或启动失败），日志: $REMOTE_PATH/alert.log"
+      fi
   else
       echo "❌ 应用启动失败，日志如下: $REMOTE_PATH/server.log"
       tail -n 50 server.log 2>/dev/null || echo "(暂无日志)"

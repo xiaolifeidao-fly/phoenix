@@ -14,3 +14,13 @@ window_seconds = 120
 offset = 500
 # 请求超时时间，单位秒
 timeout_seconds = 5
+
+# 云监控告警转发（alert_main.py），留空即用代码里的默认值
+# 敏感配置只放 .env：ALERT_BOT_TOKEN（告警机器人 token）、ALERT_CHAT_ID（告警群 id）、ALERT_PATH_SECRET（回调路径密钥）
+# 云监控回调地址：http://<本机公网 IP>/cms-alert/<ALERT_PATH_SECRET>，由同机 nginx 反代到下面的监听端口
+[ALERT]
+# 监听地址，默认只监听本机
+listen_host = 127.0.0.1
+listen_port = 18090
+# 发 Telegram 的超时时间，单位秒，要小于云监控回调的 5 秒超时
+timeout_seconds = 4
