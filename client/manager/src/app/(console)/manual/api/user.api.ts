@@ -120,6 +120,9 @@ export class BarryUserWhitelistRecord {
 
   /** 审核加积分方式，留空取商品全局值 */
   eatMode?: EatMode;
+
+  /** 绑定的价格策略组，留空走商品默认组 */
+  scoreGroupId?: number;
 }
 
 export interface ManualUserListQuery {
@@ -247,8 +250,8 @@ export async function saveBarryUserWhitelist(payload: BarryUserWhitelistPayload)
   return unwrapApiResponse(response.data);
 }
 
-/** 只改白名单用户的积分配置，不改白名单状态；已剔除（失效）的用户同样可配。 */
-export async function updateBarryUserWhitelistPointsRule(id: number, rule: PointsRule) {
+/** 只改白名单用户的积分配置，不改白名单状态；已剔除（失效）的用户同样可配。scoreGroupId 为 null 走商品默认组。 */
+export async function updateBarryUserWhitelistPointsRule(id: number, rule: PointsRule & { scoreGroupId: number | null }) {
   const response = await instance.put<ApiResponse<BarryUserWhitelistRecord | null>>(`/barry/user-whitelists/${id}/points-rule`, rule);
   return unwrapApiResponse(response.data);
 }

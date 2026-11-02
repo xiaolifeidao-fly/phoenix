@@ -1,6 +1,10 @@
 package barry
 
-import "testing"
+import (
+	"testing"
+
+	barryDTO "suffer/service/barry/dto"
+)
 
 func TestPointsRuleValidation(t *testing.T) {
 	str := func(s string) *string { return &s }
@@ -22,5 +26,26 @@ func TestPointsRuleValidation(t *testing.T) {
 	}
 	if validatePointsRule(nil, str("POINTS")) == "" || validatePointsRule(nil, str("approve")) == "" {
 		t.Fatal("unknown eat mode should be rejected")
+	}
+}
+
+func TestScoreConfigValidation(t *testing.T) {
+	valid := barryDTO.ScoreConfigDTO{
+		Options: []barryDTO.ScoreOptionDTO{{ID: 1, Score: 55}},
+		Groups:  []barryDTO.ScoreGroupDTO{{ID: 2, Name: "标准", DefaultGroup: true, Items: []barryDTO.ScoreGroupItemDTO{{OptionID: 0, Weight: 1}, {OptionID: 1, Weight: 0.5}}}},
+	}
+	if msg := validateScoreConfig(valid); msg != "" {
+		t.Fatalf("expected valid: %s", msg)
+	}
+	if validateScoreConfig(barryDTO.ScoreConfigDTO{}) != "" {
+		t.Fatal("empty config means clear and should be valid")
+	}
+	negative := barryDTO.ScoreConfigDTO{Options: []barryDTO.ScoreOptionDTO{{ID: 1, Score: -1}}}
+	if validateScoreConfig(negative) == "" {
+		t.Fatal("negative score should be rejected")
+	}
+	zeroWeight := barryDTO.ScoreConfigDTO{Groups: []barryDTO.ScoreGroupDTO{{ID: 2, Name: "标准", Items: []barryDTO.ScoreGroupItemDTO{{OptionID: 0, Weight: 0}}}}}
+	if validateScoreConfig(zeroWeight) == "" {
+		t.Fatal("zero weight should be rejected")
 	}
 }

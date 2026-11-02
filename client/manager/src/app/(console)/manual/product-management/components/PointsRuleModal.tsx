@@ -5,12 +5,13 @@ import { SaveOutlined } from "@ant-design/icons";
 import { Button, Input, InputNumber, Modal, Select, Space, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { message } from "@/utils/notify";
-import { fetchPointsRule, savePointsRule, type EatMode, type ManualProductRecord } from "../../api/product.api";
+import { fetchPointsRule, savePointsRule, type EatMode, type ManualProductRecord, type ScoreConfig } from "../../api/product.api";
 import {
   fetchBarryUserWhitelists,
   updateBarryUserWhitelistPointsRule,
   type BarryUserWhitelistRecord,
 } from "../../api/user.api";
+import { ScoreConfigSection, summarizeScoreGroup } from "./ScoreConfigSection";
 
 const { Text } = Typography;
 
@@ -39,19 +40,21 @@ interface PointsRuleModalProps {
 }
 
 /**
- * 人工商品 - 积分配置：审核加积分方式（按提交量 / 按审核）+ 吃量比例，两项互不相关。
- * 吃量只在提交任务时按比例执行；加积分方式只决定二次审核失败的单是否加积分。
+ * 人工商品 - 积分配置：审核加积分方式（按提交量 / 按审核）+ 吃量比例 + 价格策略，各项互不相关。
+ * 吃量只在提交任务时按比例执行；加积分方式只决定二次审核失败的单是否加积分；价格策略决定领任务时这一单的积分。
  *
  * <p>上方是商品全局配置；下方是加过白名单的用户（剔除白名单只改状态，失效用户也在列表里），
- * 可逐个覆盖，两项各自留空取全局值。
+ * 可逐个覆盖，各项留空取全局值（价格策略组留空走默认组）。
  */
 export function PointsRuleModal({ product, open, onClose }: PointsRuleModalProps) {
   const shopCategoryId = product?.id ? Number(product.id) : 0;
+  const baseScore = Number(product?.score ?? 0);
 
   const [globalRatio, setGlobalRatio] = useState<number | null>(null);
   const [globalMode, setGlobalMode] = useState<EatMode>(DEFAULT_EAT_MODE);
   const [globalLoading, setGlobalLoading] = useState(false);
   const [globalSaving, setGlobalSaving] = useState(false);
+  const [scoreConfig, setScoreConfig] = useState<ScoreConfig | null>(null);
 
   const [users, setUsers] = useState<BarryUserWhitelistRecord[]>([]);
   const [total, setTotal] = useState(0);
@@ -65,6 +68,7 @@ export function PointsRuleModal({ product, open, onClose }: PointsRuleModalProps
   const [editing, setEditing] = useState<BarryUserWhitelistRecord | null>(null);
   const [userRatio, setUserRatio] = useState<number | null>(null);
   const [userMode, setUserMode] = useState<EatMode | null>(null);
+  const [userScoreGroupId, setUserScoreGroupId] = useState<number | null>(null);
   const [userSaving, setUserSaving] = useState(false);
 
   const loadUsers = useCallback(
@@ -107,11 +111,13 @@ export function PointsRuleModal({ product, open, onClose }: PointsRuleModalProps
       .then((rule) => {
         setGlobalRatio(toPercent(rule.eatRatio));
         setGlobalMode(rule.eatMode ?? DEFAULT_EAT_MODE);
+        setScoreConfig(rule.scoreConfig);
       })
       .catch((error) => {
         message.error(error instanceof Error ? error.message : "加载积分配置失败");
         setGlobalRatio(null);
         setGlobalMode(DEFAULT_EAT_MODE);
+        setScoreConfig(null);
       })
       .finally(() => setGlobalLoading(false));
     void loadUsers(1, 10, "", "");
@@ -136,6 +142,7 @@ export function PointsRuleModal({ product, open, onClose }: PointsRuleModalProps
     setEditing(record);
     setUserRatio(toPercent(record.eatRatio));
     setUserMode(record.eatMode ?? null);
+    setUserScoreGroupId(record.scoreGroupId ?? null);
   };
 
   const saveUser = async () => {
@@ -145,6 +152,7 @@ export function PointsRuleModal({ product, open, onClose }: PointsRuleModalProps
       await updateBarryUserWhitelistPointsRule(Number(editing.id), {
         eatRatio: userRatio === null ? null : userRatio / 100,
         eatMode: userMode,
+        scoreGroupId: userScoreGroupId,
       });
       message.success("用户积分配置已保存");
       setEditing(null);
@@ -155,6 +163,14 @@ export function PointsRuleModal({ product, open, onClose }: PointsRuleModalProps
       setUserSaving(false);
     }
   };
+
+  const scoreGroups = scoreConfig?.groups ?? [];
+  const defaultScoreGroup = scoreGroups.find((group) => group.defaultGroup);
+  const defaultScoreText = defaultScoreGroup ? `默认组：${defaultScoreGroup.name}` : `原价 ${baseScore}`;
+  const scoreGroupOptions = scoreGroups.map((group) => ({
+    value: group.id,
+    label: `${group.name}${group.defaultGroup ? "（默认）" : ""}：${summarizeScoreGroup(group, scoreConfig?.options ?? [], baseScore).text}`,
+  }));
 
   const globalText = `${eatModeLabel(globalMode)} · ${globalRatio === null ? "吃量按系统默认比例" : `吃量 ${globalRatio}%`}`;
 
@@ -184,6 +200,16 @@ export function PointsRuleModal({ product, open, onClose }: PointsRuleModalProps
       render: (_, record) => (record.eatRatio == null ? <Text type="secondary">全局</Text> : `${toPercent(record.eatRatio)}%`),
     },
     {
+      title: "价格策略组",
+      key: "scoreGroupId",
+      width: 140,
+      render: (_, record) => {
+        if (record.scoreGroupId == null) return <Text type="secondary">{defaultScoreText}</Text>;
+        const group = scoreGroups.find((entry) => entry.id === record.scoreGroupId);
+        return group ? group.name : <Text type="warning">组已删除，走默认</Text>;
+      },
+    },
+    {
       title: "操作",
       key: "actions",
       width: 80,
@@ -200,7 +226,7 @@ export function PointsRuleModal({ product, open, onClose }: PointsRuleModalProps
       <Modal
         title={`积分配置${product ? `：${product.name || product.id}` : ""}`}
         open={open}
-        width={880}
+        width={960}
         footer={null}
         destroyOnClose
         onCancel={onClose}
@@ -234,9 +260,17 @@ export function PointsRuleModal({ product, open, onClose }: PointsRuleModalProps
           </Button>
         </Space>
 
+        <ScoreConfigSection
+          shopCategoryId={shopCategoryId}
+          baseScore={baseScore}
+          config={scoreConfig}
+          loading={globalLoading}
+          onSaved={setScoreConfig}
+        />
+
         <div style={{ marginBottom: 8, fontWeight: 600 }}>按用户配置</div>
         <Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
-          列表为本商品加过白名单的用户（含已剔除）。加积分方式、吃量比例各自留空即取全局值。
+          列表为本商品加过白名单的用户（含已剔除）。加积分方式、吃量比例各自留空即取全局值；价格策略组留空走默认组。
         </Text>
         <Space size={8} style={{ marginBottom: 12 }}>
           <Input.Search
@@ -307,6 +341,16 @@ export function PointsRuleModal({ product, open, onClose }: PointsRuleModalProps
             onChange={(value) => setUserRatio(value === null ? null : Number(value))}
           />
         </Space>
+        <div style={{ marginTop: 16, marginBottom: 8 }}>价格策略组</div>
+        <Select<number>
+          allowClear
+          value={scoreGroups.some((group) => group.id === userScoreGroupId) ? (userScoreGroupId ?? undefined) : undefined}
+          options={scoreGroupOptions}
+          placeholder={`留空：${defaultScoreText}`}
+          style={{ width: "100%" }}
+          notFoundContent="还没有策略组，先在上方添加并保存"
+          onChange={(value) => setUserScoreGroupId(value ?? null)}
+        />
       </Modal>
     </>
   );

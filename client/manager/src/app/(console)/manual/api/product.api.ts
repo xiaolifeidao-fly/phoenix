@@ -502,10 +502,53 @@ export interface PointsRule {
   eatMode: EatMode | null;
 }
 
-export async function fetchPointsRule(shopCategoryId: number): Promise<PointsRule> {
-  const response = await instance.get<ApiResponse<PointsRule | null>>("/barry/points-rules", { params: { shopCategoryId } });
+/** 价格档位 ID 0 固定表示商品原价，取价时实时用商品积分。 */
+export const BASE_SCORE_OPTION_ID = 0;
+
+export interface ScoreOption {
+  id: number;
+  score: number;
+}
+
+export interface ScoreGroupItem {
+  optionId: number;
+  /** 权重，组内按占比随机，不要求合计为 1 */
+  weight: number;
+}
+
+export interface ScoreGroup {
+  id: number;
+  name: string;
+  /** 商品默认组：用户没绑组时用它，最多一个 */
+  defaultGroup: boolean;
+  items: ScoreGroupItem[];
+}
+
+/**
+ * 人工商品价格档位 + 策略组：领任务时按用户绑定的组（没绑走默认组，都没有用原价）按权重随机积分。
+ * 档位与组共用 seq 分配 ID，删掉的 ID 不再复用。
+ */
+export interface ScoreConfig {
+  seq?: number | null;
+  options: ScoreOption[];
+  groups: ScoreGroup[];
+}
+
+export async function fetchPointsRule(shopCategoryId: number): Promise<PointsRule & { scoreConfig: ScoreConfig | null }> {
+  const response = await instance.get<ApiResponse<(PointsRule & { scoreConfig?: ScoreConfig | null }) | null>>("/barry/points-rules", {
+    params: { shopCategoryId },
+  });
   const data = unwrapApiResponse(response.data);
-  return { eatRatio: data?.eatRatio ?? null, eatMode: data?.eatMode ?? null };
+  return { eatRatio: data?.eatRatio ?? null, eatMode: data?.eatMode ?? null, scoreConfig: data?.scoreConfig ?? null };
+}
+
+/** 整份替换价格档位与策略组；档位、组都为空表示清空（只用原价）。 */
+export async function saveScoreConfig(shopCategoryId: number, scoreConfig: ScoreConfig) {
+  const response = await instance.put<ApiResponse<(PointsRule & { scoreConfig?: ScoreConfig | null }) | null>>(
+    "/barry/points-rules/score-config",
+    { shopCategoryId, scoreConfig },
+  );
+  return unwrapApiResponse(response.data);
 }
 
 export async function savePointsRule(shopCategoryId: number, rule: PointsRule) {

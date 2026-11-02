@@ -8,7 +8,7 @@ import (
 	barryDTO "suffer/service/barry/dto"
 )
 
-// PointsRuleService 人工商品积分配置(吃量比例 + 审核加积分方式): 商品全局 + 白名单用户维度.
+// PointsRuleService 人工商品积分配置(吃量比例 + 审核加积分方式 + 价格档位/策略组): 商品全局 + 白名单用户维度.
 type PointsRuleService struct {
 	client *Client
 }
@@ -34,6 +34,14 @@ func (s *PointsRuleService) SaveGlobal(ctx context.Context, shopCategoryID int64
 		values.Set("eatMode", *rule.EatMode)
 	}
 	err := s.client.PostAbsolute(ctx, innerServicePath(barryInnerPointsRuleSavePath)+"?"+values.Encode(), nil, response)
+	return response, err
+}
+
+// SaveScoreConfig 整份替换价格档位与策略组; 档位、组都为空表示清空.
+func (s *PointsRuleService) SaveScoreConfig(ctx context.Context, shopCategoryID int64, config barryDTO.ScoreConfigDTO) (*barryDTO.DetailResponseDTO[barryDTO.PointsRuleDTO], error) {
+	response := &barryDTO.DetailResponseDTO[barryDTO.PointsRuleDTO]{}
+	requestURL := innerServicePath(barryInnerPointsRuleScoreConfigPath) + "?" + buildValues("shopCategoryId", shopCategoryID).Encode()
+	err := s.client.PostAbsolute(ctx, requestURL, config, response)
 	return response, err
 }
 

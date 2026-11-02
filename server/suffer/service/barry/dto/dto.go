@@ -59,7 +59,9 @@ type DetailResponseDTO[T any] struct {
 	Success bool   `json:"success"`
 	Code    string `json:"code,omitempty"`
 	Message string `json:"message,omitempty"`
-	Data    *T     `json:"data,omitempty"`
+	// ErrorMsg barry WebResponse 的失败原因字段.
+	ErrorMsg string `json:"errorMsg,omitempty"`
+	Data     *T     `json:"data,omitempty"`
 }
 
 type ActionResponseDTO struct {
@@ -871,12 +873,41 @@ type UserWhitelistDTO struct {
 	// 用户积分配置, 为空时取商品全局值.
 	EatRatio *float64 `json:"eatRatio,omitempty"`
 	EatMode  string   `json:"eatMode,omitempty"`
+	// ScoreGroupID 绑定的积分策略组, 为空走商品默认组.
+	ScoreGroupID *int `json:"scoreGroupId,omitempty"`
 }
 
 // PointsRuleDTO 人工商品积分配置. 吃量比例 0~1, 提交任务时吃量; 审核加积分方式 SUBMIT_COUNT 按提交量 / APPROVE 按审核. 两项各自可为空.
 type PointsRuleDTO struct {
 	EatRatio *float64 `json:"eatRatio"`
 	EatMode  *string  `json:"eatMode"`
+	// ScoreConfig 价格档位与策略组, 只读; 保存走单独接口.
+	ScoreConfig *ScoreConfigDTO `json:"scoreConfig,omitempty"`
+}
+
+// ScoreConfigDTO 人工商品价格档位 + 策略组, 领任务时按用户绑定的组(没绑走默认组)按权重随机积分.
+// 档位 ID 0 固定为商品原价; 档位与组共用 Seq 分配 ID, 删掉的 ID 不复用. 校验在 barry 侧.
+type ScoreConfigDTO struct {
+	Seq     *int             `json:"seq,omitempty"`
+	Options []ScoreOptionDTO `json:"options"`
+	Groups  []ScoreGroupDTO  `json:"groups"`
+}
+
+type ScoreOptionDTO struct {
+	ID    int   `json:"id"`
+	Score int64 `json:"score"`
+}
+
+type ScoreGroupDTO struct {
+	ID           int                 `json:"id"`
+	Name         string              `json:"name"`
+	DefaultGroup bool                `json:"defaultGroup"`
+	Items        []ScoreGroupItemDTO `json:"items"`
+}
+
+type ScoreGroupItemDTO struct {
+	OptionID int     `json:"optionId"`
+	Weight   float64 `json:"weight"`
 }
 
 // SettleChannelDTO 结算通道, 手续费率为 0~1 小数; ID 为空表示新增.
@@ -908,11 +939,12 @@ type UserSettleConfigDTO struct {
 	UpdatedTime       string `json:"updatedTime,omitempty"`
 }
 
-// SaveUserPointsRuleDTO 白名单用户积分配置, ID 为白名单记录主键; 两项各自为空表示取商品全局值.
+// SaveUserPointsRuleDTO 白名单用户积分配置, ID 为白名单记录主键; 各项为空表示取商品全局值(策略组为空走默认组).
 type SaveUserPointsRuleDTO struct {
-	ID       int64    `json:"id"`
-	EatRatio *float64 `json:"eatRatio"`
-	EatMode  *string  `json:"eatMode"`
+	ID           int64    `json:"id"`
+	EatRatio     *float64 `json:"eatRatio"`
+	EatMode      *string  `json:"eatMode"`
+	ScoreGroupID *int     `json:"scoreGroupId"`
 }
 
 type UserWhitelistQueryDTO struct {

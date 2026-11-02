@@ -60,6 +60,7 @@ const (
 	barryInnerUserPointsRuleSavePath                          = "barry.url.inner.user.whitelist.points.rule.save.suffix"
 	barryInnerPointsRuleGetPath                               = "barry.url.inner.points.rule.get.suffix"
 	barryInnerPointsRuleSavePath                              = "barry.url.inner.points.rule.save.suffix"
+	barryInnerPointsRuleScoreConfigPath                       = "barry.url.inner.points.rule.score.config.suffix"
 	barryInnerReconManualDimensionPath                        = "barry.url.inner.reconciliation.manual.dimension.suffix"
 	barryInnerReconLedgerListPath                             = "barry.url.inner.reconciliation.ledger.list.suffix"
 	barryInnerReconLedgerSummaryPath                          = "barry.url.inner.reconciliation.ledger.summary.suffix"
