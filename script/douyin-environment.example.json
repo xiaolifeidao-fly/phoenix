@@ -1,0 +1,151 @@
+{
+  "sdk": {
+    "name": "BDMS",
+    "version": "1.0.1.19-fix.01",
+    "sourceUrl": "https://p-pc-weboff.byteimg.com/tos-cn-i-9r5gewecjs/bdms_1.0.1.19_fix.js",
+    "sha256": "a0e46f84476d63a1fa57bdcb47223e0e545c6ce0c3dacdd2818180dfa087909e",
+    "init": {
+      "aid": 6383,
+      "pageId": 6241,
+      "paths": [
+        "^/webcast/",
+        "^/aweme/v1/",
+        "^/aweme/v2/",
+        "/douplus/",
+        "^/api/ad/v1/inspire",
+        "/v1/message/send",
+        "^/live/",
+        "^/captcha/",
+        "^/ecom/",
+        "^/luna/pc"
+      ],
+      "boe": false,
+      "ddrt": 8.5,
+      "ic": 8.5
+    }
+  },
+  "window": {
+    "tag": "[object Window]",
+    "innerWidth": 1728,
+    "innerHeight": 1117,
+    "outerWidth": 1728,
+    "outerHeight": 1117,
+    "devicePixelRatio": 2,
+    "isSecureContext": true,
+    "aliases": ["window", "self", "globalThis", "top", "parent", "frames"]
+  },
+  "navigator": {
+    "tag": "[object Navigator]",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "platform": "MacIntel",
+    "language": "zh-CN",
+    "languages": ["zh-CN", "zh"],
+    "hardwareConcurrency": 14,
+    "deviceMemory": 32,
+    "cookieEnabled": true,
+    "maxTouchPoints": 0,
+    "onLine": true,
+    "product": "Gecko",
+    "productSub": "20030107",
+    "vendor": "Google Inc.",
+    "vendorSub": "",
+    "webdriver": false,
+    "plugins": {
+      "tag": "[object PluginArray]",
+      "length": 0
+    },
+    "storage": "[object StorageManager]",
+    "pemrissions": null,
+    "vendorSubs": null
+  },
+  "screen": {
+    "tag": "[object Screen]",
+    "width": 1728,
+    "height": 1117,
+    "availWidth": 1728,
+    "availHeight": 1117,
+    "colorDepth": 24,
+    "pixelDepth": 24,
+    "availLeft": 0,
+    "availTop": 0,
+    "isExtended": false,
+    "orientation": {
+      "angle": 0,
+      "type": "landscape-primary"
+    }
+  },
+  "document": {
+    "tag": "[object HTMLDocument]",
+    "URL": "https://www.douyin.com/",
+    "referrer": "",
+    "charset": "utf-8",
+    "characterSet": "UTF-8",
+    "readyState": "complete",
+    "hidden": false,
+    "visibilityState": "visible",
+    "cookie": "caller-provided; redacted; not read by current a_bogus calculation",
+    "all": {
+      "tag": "[object HTMLAllCollection]",
+      "chromiumSemantics": {
+        "typeof": "undefined",
+        "boolean": false,
+        "looselyEqualsNull": true,
+        "strictlyEqualsUndefined": false
+      },
+      "implementation": "HTMLDDA comparison opcode compatibility patch"
+    },
+    "canvas": {
+      "tag": "[object HTMLCanvasElement]",
+      "width": 300,
+      "height": 150,
+      "context": null,
+      "toDataURL": "data:image/png;base64,",
+      "nativeMethodAppearance": true
+    }
+  },
+  "location": {
+    "tag": "[object Location]",
+    "href": "https://www.douyin.com/",
+    "origin": "https://www.douyin.com",
+    "protocol": "https:",
+    "host": "www.douyin.com",
+    "hostname": "www.douyin.com",
+    "port": "",
+    "pathname": "/",
+    "search": "",
+    "hash": ""
+  },
+  "history": {
+    "tag": "[object History]",
+    "length": 1,
+    "state": null
+  },
+  "storage": {
+    "localStorage": {
+      "tag": "[object Storage]",
+      "defaultEntries": {},
+      "optionalReadKey": "xmst"
+    },
+    "sessionStorage": {
+      "tag": "[object Storage]",
+      "defaultEntries": {}
+    }
+  },
+  "timing": {
+    "performanceNow": "monotonic clock starting near 5000ms",
+    "requestAnimationFrame": "uses the same monotonic clock",
+    "timeOrigin": "current process wall-clock time"
+  },
+  "request": {
+    "method": "GET",
+    "origin": "https://www.douyin.com",
+    "cookieRole": "HTTP authentication only; not a direct BDMS input",
+    "headerRole": "request headers are set after a_bogus is generated; navigator fields are fingerprint inputs",
+    "signedUrlInputs": [
+      "ordered query string",
+      "navigator/browser fingerprint",
+      "time",
+      "randomness"
+    ]
+  }
+}

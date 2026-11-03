@@ -1,0 +1,10 @@
+{
+  "secUserId": "填入目标用户的 sec_user_id",
+  "cursor": "max_cursor=0&min_cursor=0",
+  "cookie": "填入完整 Cookie 字符串",
+  "webid": "可选；请求中存在时填入 webid，否则删除本字段",
+  "uifid": "填入 UIFID",
+  "msToken": "填入 msToken",
+  "verifyFp": "填入 verifyFp",
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"
+}
