@@ -20,6 +20,7 @@ import { Button, DatePicker, Drawer, Form, Input, InputNumber, Modal, Pagination
 import { message } from "@/utils/notify";
 import { DropMonitorRuleModal } from "./DropMonitorRuleModal";
 import { PointsRuleModal } from "./PointsRuleModal";
+import { applyScoreTiers, ScoreTierEditor, toScoreTierRows, type ScoreTierRow } from "./ScoreTierEditor";
 import { ManualProductScoreHistoryDrawer } from "./ManualProductScoreHistoryDrawer";
 import type { ColumnsType } from "antd/es/table";
 import { WorkspaceDrawer } from "@/components/manager-shell/WorkspaceDrawer";
@@ -62,6 +63,9 @@ import {
   type ManualProductPayload,
   type ManualProductRecord,
   type ManualProductTypeRecord,
+  fetchPointsRule,
+  saveScoreConfig,
+  type ScoreConfig,
 } from "../../api/product.api";
 import {
   createShopGroup,
@@ -91,6 +95,7 @@ interface ProductFormValues {
   score: number;
   shopGroupId: number;
   shopTypeCodes: string[];
+  visible: boolean;
 }
 
 interface ShopGroupFormValues {
@@ -367,6 +372,10 @@ const videoUrlKeywordOptions = [
 
 export function ManualProductManagementPanel() {
   const [form] = Form.useForm<ProductFormValues>();
+  const [scoreConfig, setScoreConfig] = useState<ScoreConfig | null>(null);
+  const [scoreTiers, setScoreTiers] = useState<ScoreTierRow[] | null>(null);
+  const [scoreTiersLoading, setScoreTiersLoading] = useState(false);
+  const scoreTiersRequestRef = useRef(0);
   const [shopGroupForm] = Form.useForm<ShopGroupFormValues>();
   const [assignConfigForm] = Form.useForm<AssignConfigFormValues>();
   const [judgeConfigForm] = Form.useForm<JudgeConfigPreviewRecord>();
@@ -653,6 +662,7 @@ export function ManualProductManagementPanel() {
   );
 
   const openCreateModal = () => {
+    scoreTiersRequestRef.current += 1;
     setEditingProduct(null);
     form.setFieldsValue({
       name: "",
@@ -660,6 +670,7 @@ export function ManualProductManagementPanel() {
       score: 0,
       shopGroupId: selectedShopGroupId ?? activeShopGroups[0]?.id,
       shopTypeCodes: [],
+      visible: false,
     });
     setModalOpen(true);
   };
@@ -1009,8 +1020,29 @@ export function ManualProductManagementPanel() {
       score: record.score,
       shopGroupId: record.shopGroupId,
       shopTypeCodes: (record.shopTypeModelList ?? []).map((item) => item.code).filter(Boolean),
+      visible: record.showStatus === "ACTIVE",
     });
     setModalOpen(true);
+    void loadScoreTiers(Number(record.id));
+  };
+
+  /** 只认最后一次打开的商品，避免快速切换商品时旧请求覆盖新商品的档位。 */
+  const loadScoreTiers = async (shopCategoryId: number) => {
+    const requestId = ++scoreTiersRequestRef.current;
+    setScoreConfig(null);
+    setScoreTiers(null);
+    setScoreTiersLoading(true);
+    try {
+      const rule = await fetchPointsRule(shopCategoryId);
+      if (requestId !== scoreTiersRequestRef.current) return;
+      setScoreConfig(rule.scoreConfig);
+      setScoreTiers(toScoreTierRows(rule.scoreConfig));
+    } catch {
+      if (requestId !== scoreTiersRequestRef.current) return;
+      setScoreTiers(null);
+    } finally {
+      if (requestId === scoreTiersRequestRef.current) setScoreTiersLoading(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -1029,12 +1061,25 @@ export function ManualProductManagementPanel() {
       shopGroupId,
       shopTypeCodeList: values.shopTypeCodes ?? [],
       status: editingProduct ? resolveStatus(editingProduct.status) : "ACTIVE",
+      showStatus: values.visible ? "ACTIVE" : "EXPIRE",
     };
 
     setSubmitting(true);
     try {
       if (editingProduct) {
         await updateManualProduct(editingProduct.id, payload);
+        const nextScoreConfig = scoreTiers ? applyScoreTiers(scoreConfig, scoreTiers) : null;
+        if (nextScoreConfig) {
+          try {
+            const saved = await saveScoreConfig(Number(editingProduct.id), nextScoreConfig);
+            setScoreConfig(saved?.scoreConfig ?? null);
+          } catch (error) {
+            // 商品已保存，留在抽屉里让用户重试档位，不要把已填的档位丢掉
+            await loadData();
+            message.error(`商品已保存，其他档位保存失败：${error instanceof Error ? error.message : "请重试"}`);
+            return;
+          }
+        }
       } else {
         await createManualProduct(payload);
       }
@@ -2490,8 +2535,23 @@ export function ManualProductManagementPanel() {
           <Form.Item name="code" label="商品编码" rules={[{ required: true, message: "请输入商品编码" }]}>
             <Input placeholder="例如：MANUAL_LIKE" />
           </Form.Item>
-          <Form.Item name="score" label="积分" rules={[{ required: true, message: "请输入积分" }]} initialValue={0}>
+          <Form.Item name="score" label="原价积分" rules={[{ required: true, message: "请输入积分" }]} initialValue={0}>
             <InputNumber min={0} precision={0} style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item label="其他档位" extra={editingProduct ? "原价以外的价格，在积分配置的策略组里选用；回车可继续添加。" : undefined}>
+            {editingProduct ? (
+              <ScoreTierEditor config={scoreConfig} tiers={scoreTiers} loading={scoreTiersLoading} onChange={setScoreTiers} />
+            ) : (
+              <Typography.Text type="secondary">创建商品后，在编辑里添加其他档位。</Typography.Text>
+            )}
+          </Form.Item>
+          <Form.Item
+            name="visible"
+            label="是否展示"
+            valuePropName="checked"
+            extra="开启后展示在用户端，并计入用户首页的积分区间。"
+          >
+            <Switch checkedChildren="展示" unCheckedChildren="不展示" />
           </Form.Item>
           <Form.Item name="shopGroupId" label="商品分组" rules={[{ required: true, message: "请选择商品分组" }]}>
             <Select

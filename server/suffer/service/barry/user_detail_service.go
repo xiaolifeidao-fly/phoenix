@@ -149,3 +149,29 @@ func (s *UserDetailService) ChangePassword(ctx context.Context, req *barryDTO.Ch
 	}
 	return response, nil
 }
+
+func (s *UserDetailService) ResetPubToken(ctx context.Context, req *barryDTO.ResetUserDetailPubTokenDTO) (*barryDTO.ActionResponseDTO, error) {
+	if req == nil {
+		return nil, fmt.Errorf("request is nil")
+	}
+	response := &barryDTO.ActionResponseDTO{Success: true}
+	err := s.client.PostAbsolute(ctx, innerServicePath(barryInnerUserDetailPubTokenResetPath), req, response)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+// Ban 封禁做单用户：barry 把 pubToken、密码都换成随机值并清掉 Redis 鉴权缓存，banCount+1。
+// barry 接口的请求体是裸 Long，这里直接发 userId 数字而不是对象。
+func (s *UserDetailService) Ban(ctx context.Context, req *barryDTO.BanUserDetailDTO) (*barryDTO.ActionResponseDTO, error) {
+	if req == nil {
+		return nil, fmt.Errorf("request is nil")
+	}
+	response := &barryDTO.ActionResponseDTO{Success: true}
+	err := s.client.PostAbsolute(ctx, innerServicePath(barryInnerUserDetailBanPath), req.UserID, response)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}

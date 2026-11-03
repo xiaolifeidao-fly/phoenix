@@ -8,7 +8,7 @@ import (
 	barryDTO "suffer/service/barry/dto"
 )
 
-// PointsRuleService 人工商品积分配置(吃量比例 + 审核加积分方式 + 价格档位/策略组): 商品全局 + 白名单用户维度.
+// PointsRuleService 人工商品积分配置(吃量比例 + 审核加积分方式 + 价格档位/策略组 + 审核配置): 商品全局 + 白名单用户维度.
 type PointsRuleService struct {
 	client *Client
 }
@@ -23,7 +23,7 @@ func (s *PointsRuleService) GetGlobal(ctx context.Context, shopCategoryID int64)
 	return response, err
 }
 
-// SaveGlobal 为 nil 的一项不下发参数, barry 侧清空为未配置.
+// SaveGlobal 为 nil 的一项不下发参数: 吃量比例、加积分方式 barry 侧清空为未配置, 审核配置 barry 侧保持原值.
 func (s *PointsRuleService) SaveGlobal(ctx context.Context, shopCategoryID int64, rule barryDTO.PointsRuleDTO) (*barryDTO.DetailResponseDTO[barryDTO.PointsRuleDTO], error) {
 	response := &barryDTO.DetailResponseDTO[barryDTO.PointsRuleDTO]{}
 	values := buildValues("shopCategoryId", shopCategoryID)
@@ -32,6 +32,12 @@ func (s *PointsRuleService) SaveGlobal(ctx context.Context, shopCategoryID int64
 	}
 	if rule.EatMode != nil {
 		values.Set("eatMode", *rule.EatMode)
+	}
+	if rule.DeleteApprove != nil {
+		values.Set("deleteApprove", strconv.FormatBool(*rule.DeleteApprove))
+	}
+	if rule.SecretApprove != nil {
+		values.Set("secretApprove", strconv.FormatBool(*rule.SecretApprove))
 	}
 	err := s.client.PostAbsolute(ctx, innerServicePath(barryInnerPointsRuleSavePath)+"?"+values.Encode(), nil, response)
 	return response, err

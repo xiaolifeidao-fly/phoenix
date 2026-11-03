@@ -46,6 +46,9 @@ export class ManualUserRecord {
 
   settleChannelName?: string;
 
+  /** 历史封禁次数，只增不减；解封（改密码）后不归零，不代表当前是否封禁。 */
+  banCount = 0;
+
   createdTime?: string;
 
   updatedTime?: string;
@@ -123,6 +126,12 @@ export class BarryUserWhitelistRecord {
 
   /** 绑定的价格策略组，留空走商品默认组 */
   scoreGroupId?: number;
+
+  /** 视频删除是否给审核成功，留空取商品全局值 */
+  deleteApprove?: boolean;
+
+  /** 设置隐私（含未授权）是否给审核成功，留空取商品全局值 */
+  secretApprove?: boolean;
 }
 
 export interface ManualUserListQuery {
@@ -284,6 +293,18 @@ export async function updateManualUser(payload: UpdateManualUserPayload) {
 
 export async function changeManualUserPassword(payload: ChangeManualUserPasswordPayload) {
   const response = await instance.put<ApiResponse<string | null>>("/barry/user-details/password", payload);
+  return unwrapApiResponse(response.data);
+}
+
+/** 封禁做单用户：秘钥、密码都换成随机值，旧秘钥立即失效；解封走修改密码。 */
+export async function banManualUser(userId: number) {
+  const response = await instance.put<ApiResponse<string | null>>("/barry/user-details/ban", { userId });
+  return unwrapApiResponse(response.data);
+}
+
+/** 重置做单用户秘钥(pubToken)：旧秘钥立即失效，返回新秘钥。 */
+export async function resetManualUserPubToken(userId: number) {
+  const response = await instance.put<ApiResponse<string | null>>("/barry/user-details/pub-token", { userId });
   return unwrapApiResponse(response.data);
 }
 

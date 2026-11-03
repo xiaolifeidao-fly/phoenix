@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { DeleteOutlined, PlusOutlined, SaveOutlined } from "@ant-design/icons";
-import { Button, Card, Checkbox, Input, InputNumber, Popconfirm, Space, Table, Tag, Typography } from "antd";
+import { Button, Checkbox, Empty, Input, InputNumber, Popconfirm, Space, Table, Tabs, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { message } from "@/utils/notify";
 import {
@@ -55,6 +55,7 @@ interface ScoreConfigSectionProps {
 export function ScoreConfigSection({ shopCategoryId, baseScore, config, loading, onSaved }: ScoreConfigSectionProps) {
   const [options, setOptions] = useState<ScoreOption[]>([]);
   const [groups, setGroups] = useState<ScoreGroup[]>([]);
+  const [activeGroupId, setActiveGroupId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const seqRef = useRef(0);
 
@@ -71,27 +72,32 @@ export function ScoreConfigSection({ shopCategoryId, baseScore, config, loading,
   };
 
   const optionRows = listScoreOptions(options, baseScore);
+  // 当前组被删或配置重新加载后，落到第一个组
+  const activeGroup = groups.find((group) => group.id === activeGroupId) ?? groups[0];
 
   const updateGroup = (groupId: number, patch: (group: ScoreGroup) => ScoreGroup) =>
     setGroups((current) => current.map((group) => (group.id === groupId ? patch(group) : group)));
 
-  const removeOption = (optionId: number) => {
-    setOptions((current) => current.filter((option) => option.id !== optionId));
-    setGroups((current) =>
-      current.map((group) => ({ ...group, items: group.items.filter((item) => item.optionId !== optionId) })),
-    );
-  };
-
-  const addGroup = () =>
+  const addGroup = () => {
+    const id = nextId();
     setGroups((current) => [
       ...current,
       {
-        id: nextId(),
+        id,
         name: current.length ? `策略组${current.length + 1}` : "标准",
         defaultGroup: current.length === 0,
         items: [{ optionId: BASE_SCORE_OPTION_ID, weight: 1 }],
       },
     ]);
+    setActiveGroupId(id);
+  };
+
+  const removeGroup = (groupId: number) => {
+    const index = groups.findIndex((group) => group.id === groupId);
+    const rest = groups.filter((group) => group.id !== groupId);
+    setGroups(rest);
+    setActiveGroupId(rest[Math.min(index, rest.length - 1)]?.id ?? null);
+  };
 
   const save = async () => {
     setSaving(true);
@@ -168,91 +174,94 @@ export function ScoreConfigSection({ shopCategoryId, baseScore, config, loading,
     <div style={{ marginBottom: 24 }}>
       <div style={{ marginBottom: 8, fontWeight: 600 }}>价格策略</div>
       <Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
-        领任务时按用户绑定的策略组随机积分：没绑组走默认组，没有默认组用原价。原价跟随商品积分，改商品积分不用改这里。
+        领任务时按用户绑定的策略组随机积分：没绑组走默认组，没有默认组用原价。原价和其他档位在商品「编辑」里改。
         <br />
         删除策略组后，绑定它的用户自动改走默认组。
       </Text>
 
       <Space wrap size={8} style={{ marginBottom: 12 }}>
-        <Tag color="blue">原价 {baseScore}</Tag>
-        {options.map((option, index) => (
-          <Space.Compact key={option.id}>
-            <InputNumber
-              addonBefore={`档位${index + 1}`}
-              min={0}
-              precision={0}
-              value={option.score}
-              style={{ width: 150 }}
-              onChange={(value) =>
-                setOptions((current) =>
-                  current.map((entry) => (entry.id === option.id ? { ...entry, score: Number(value ?? 0) } : entry)),
-                )
-              }
-            />
-            <Button icon={<DeleteOutlined />} onClick={() => removeOption(option.id)} />
-          </Space.Compact>
+        {optionRows.map((option) => (
+          <Tag key={option.id} color={option.id === BASE_SCORE_OPTION_ID ? "blue" : undefined}>
+            {option.label} {option.score}
+          </Tag>
         ))}
-        <Button icon={<PlusOutlined />} onClick={() => setOptions((current) => [...current, { id: nextId(), score: baseScore }])}>
-          添加档位
-        </Button>
       </Space>
 
-      <Space direction="vertical" size={12} style={{ width: "100%" }}>
-        {groups.map((group) => (
-          <Card
-            key={group.id}
-            size="small"
-            title={
-              <Input
-                value={group.name}
-                maxLength={20}
-                style={{ width: 200 }}
-                onChange={(event) => updateGroup(group.id, (current) => ({ ...current, name: event.target.value }))}
-              />
-            }
-            extra={
-              <Space>
-                <Checkbox
-                  checked={group.defaultGroup}
-                  onChange={(event) =>
-                    setGroups((current) =>
-                      current.map((entry) => ({
-                        ...entry,
-                        defaultGroup: entry.id === group.id ? event.target.checked : event.target.checked ? false : entry.defaultGroup,
-                      })),
-                    )
-                  }
-                >
-                  默认组
-                </Checkbox>
-                <Popconfirm
-                  title="删除策略组？"
-                  description="保存后，绑定该组的用户改走默认组。"
-                  onConfirm={() => setGroups((current) => current.filter((entry) => entry.id !== group.id))}
-                >
-                  <Button type="text" danger icon={<DeleteOutlined />} />
-                </Popconfirm>
+      {groups.length === 0 ? (
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有策略组，领任务全部按原价">
+          <Button icon={<PlusOutlined />} onClick={addGroup}>
+            添加策略组
+          </Button>
+        </Empty>
+      ) : (
+        <Tabs
+          type="editable-card"
+          size="small"
+          activeKey={String(activeGroup?.id)}
+          addIcon={<PlusOutlined aria-label="添加策略组" />}
+          onChange={(key) => setActiveGroupId(Number(key))}
+          onEdit={(_, action) => {
+            if (action === "add") addGroup();
+          }}
+          items={groups.map((group) => ({
+            key: String(group.id),
+            closable: false,
+            label: (
+              <Space size={4}>
+                {group.name || "未命名"}
+                {group.defaultGroup && <Tag color="green" style={{ marginInlineEnd: 0 }}>默认</Tag>}
               </Space>
-            }
-          >
-            <Table<OptionRow>
-              rowKey="id"
-              size="small"
-              pagination={false}
-              columns={groupColumns(group)}
-              dataSource={optionRows}
-            />
-            <Text type="secondary" style={{ display: "block", marginTop: 8 }}>
-              期望积分：{summarizeScoreGroup(group, options, baseScore).expected.toFixed(2)}
-            </Text>
-          </Card>
-        ))}
-      </Space>
+            ),
+            children: (
+              <>
+                <Space style={{ width: "100%", justifyContent: "space-between", marginBottom: 12 }}>
+                  <Input
+                    aria-label="策略组名称"
+                    value={group.name}
+                    maxLength={20}
+                    style={{ width: 200 }}
+                    onChange={(event) => updateGroup(group.id, (current) => ({ ...current, name: event.target.value }))}
+                  />
+                  <Space>
+                    <Checkbox
+                      checked={group.defaultGroup}
+                      onChange={(event) =>
+                        setGroups((current) =>
+                          current.map((entry) => ({
+                            ...entry,
+                            defaultGroup: entry.id === group.id ? event.target.checked : event.target.checked ? false : entry.defaultGroup,
+                          })),
+                        )
+                      }
+                    >
+                      默认组
+                    </Checkbox>
+                    <Popconfirm
+                      title="删除策略组？"
+                      description="保存后，绑定该组的用户改走默认组。"
+                      onConfirm={() => removeGroup(group.id)}
+                    >
+                      <Button type="text" danger aria-label="删除策略组" icon={<DeleteOutlined />} />
+                    </Popconfirm>
+                  </Space>
+                </Space>
+                <Table<OptionRow>
+                  rowKey="id"
+                  size="small"
+                  pagination={false}
+                  columns={groupColumns(group)}
+                  dataSource={optionRows}
+                />
+                <Text type="secondary" style={{ display: "block", marginTop: 8 }}>
+                  期望积分：{summarizeScoreGroup(group, options, baseScore).expected.toFixed(2)}
+                </Text>
+              </>
+            ),
+          }))}
+        />
+      )}
 
       <Space size={8} style={{ marginTop: 12 }}>
-        <Button icon={<PlusOutlined />} onClick={addGroup}>
-          添加策略组
-        </Button>
         <Button type="primary" icon={<SaveOutlined />} loading={saving} disabled={loading} onClick={() => void save()}>
           保存价格策略
         </Button>

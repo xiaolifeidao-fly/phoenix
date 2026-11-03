@@ -22,6 +22,8 @@ func (h *BarryHandler) registerUserRoutes(engine *gin.RouterGroup) {
 	engine.POST("/barry/user-details", h.createUserDetail)
 	engine.PUT("/barry/user-details", h.updateUserDetail)
 	engine.PUT("/barry/user-details/password", h.changeUserDetailPassword)
+	engine.PUT("/barry/user-details/pub-token", h.resetUserDetailPubToken)
+	engine.PUT("/barry/user-details/ban", h.banUserDetail)
 	engine.GET("/barry/user-points", h.listUserPoints)
 	engine.POST("/barry/user-points/adjust", h.adjustUserPoints)
 	engine.GET("/barry/user-points/summary", h.getUserPointsSummary)
@@ -326,6 +328,36 @@ func (h *BarryHandler) changeUserDetailPassword(c *gin.Context) {
 		return
 	}
 	response, err := h.barryService.UserDetail.ChangePassword(c.Request.Context(), &req)
+	if err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	commonRouter.ToJson(c, response.Data, nil)
+}
+
+// 封禁做单用户：秘钥和密码都换成随机值，旧秘钥立即失效；解封走修改密码。
+func (h *BarryHandler) banUserDetail(c *gin.Context) {
+	var req barryDTO.BanUserDetailDTO
+	if c.ShouldBindJSON(&req) != nil || req.UserID <= 0 {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := h.barryService.UserDetail.Ban(c.Request.Context(), &req)
+	if err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	commonRouter.ToJson(c, response.Data, nil)
+}
+
+// 重置做单用户秘钥(pubToken)，旧秘钥立即失效，返回新秘钥。
+func (h *BarryHandler) resetUserDetailPubToken(c *gin.Context) {
+	var req barryDTO.ResetUserDetailPubTokenDTO
+	if c.ShouldBindJSON(&req) != nil || req.UserID <= 0 {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := h.barryService.UserDetail.ResetPubToken(c.Request.Context(), &req)
 	if err != nil {
 		commonRouter.ToJson(c, nil, err)
 		return

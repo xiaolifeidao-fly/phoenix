@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SaveOutlined } from "@ant-design/icons";
-import { Button, Input, InputNumber, Modal, Select, Space, Table, Tag, Typography } from "antd";
+import { Button, Checkbox, Input, InputNumber, Modal, Select, Space, Table, Tabs, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { message } from "@/utils/notify";
 import { fetchPointsRule, savePointsRule, type EatMode, type ManualProductRecord, type ScoreConfig } from "../../api/product.api";
@@ -25,6 +25,18 @@ const DEFAULT_EAT_MODE: EatMode = "APPROVE";
 
 const eatModeLabel = (mode?: string | null) => eatModeOptions.find((option) => option.value === mode)?.label;
 
+/** antd Select 的 value 不支持布尔值，这里用 "1" / "0" 表示给 / 不给成功。 */
+const auditApproveOptions = [
+  { label: "给成功", value: "1" },
+  { label: "不给成功", value: "0" },
+];
+
+const toAuditValue = (approve: boolean | null) => (approve === null ? undefined : approve ? "1" : "0");
+
+const fromAuditValue = (value?: string) => (value === undefined ? null : value === "1");
+
+const auditApproveLabel = (approve?: boolean | null) => (approve ? "给成功" : "不给成功");
+
 const toPercent = (ratio?: number | null) => (ratio == null ? null : Number((Number(ratio) * 100).toFixed(2)));
 
 const statusFilterOptions = [
@@ -40,10 +52,11 @@ interface PointsRuleModalProps {
 }
 
 /**
- * 人工商品 - 积分配置：审核加积分方式（按提交量 / 按审核）+ 吃量比例 + 价格策略，各项互不相关。
- * 吃量只在提交任务时按比例执行；加积分方式只决定二次审核失败的单是否加积分；价格策略决定领任务时这一单的积分。
+ * 人工商品 - 积分配置：审核加积分方式（按提交量 / 按审核）+ 吃量比例 + 审核配置 + 价格策略，各项互不相关。
+ * 吃量只在提交任务时按比例执行；加积分方式只决定二次审核失败的单是否加积分；
+ * 审核配置决定二次审核判为视频删除、设置隐私的单是否改判审核成功；价格策略决定领任务时这一单的积分。
  *
- * <p>上方是商品全局配置；下方是加过白名单的用户（剔除白名单只改状态，失效用户也在列表里），
+ * <p>分两个页签：全局配置是商品维度；用户配置是加过白名单的用户（剔除白名单只改状态，失效用户也在列表里），
  * 可逐个覆盖，各项留空取全局值（价格策略组留空走默认组）。
  */
 export function PointsRuleModal({ product, open, onClose }: PointsRuleModalProps) {
@@ -52,6 +65,8 @@ export function PointsRuleModal({ product, open, onClose }: PointsRuleModalProps
 
   const [globalRatio, setGlobalRatio] = useState<number | null>(null);
   const [globalMode, setGlobalMode] = useState<EatMode>(DEFAULT_EAT_MODE);
+  const [globalDeleteApprove, setGlobalDeleteApprove] = useState(false);
+  const [globalSecretApprove, setGlobalSecretApprove] = useState(false);
   const [globalLoading, setGlobalLoading] = useState(false);
   const [globalSaving, setGlobalSaving] = useState(false);
   const [scoreConfig, setScoreConfig] = useState<ScoreConfig | null>(null);
@@ -69,6 +84,8 @@ export function PointsRuleModal({ product, open, onClose }: PointsRuleModalProps
   const [userRatio, setUserRatio] = useState<number | null>(null);
   const [userMode, setUserMode] = useState<EatMode | null>(null);
   const [userScoreGroupId, setUserScoreGroupId] = useState<number | null>(null);
+  const [userDeleteApprove, setUserDeleteApprove] = useState<boolean | null>(null);
+  const [userSecretApprove, setUserSecretApprove] = useState<boolean | null>(null);
   const [userSaving, setUserSaving] = useState(false);
 
   const loadUsers = useCallback(
@@ -111,12 +128,16 @@ export function PointsRuleModal({ product, open, onClose }: PointsRuleModalProps
       .then((rule) => {
         setGlobalRatio(toPercent(rule.eatRatio));
         setGlobalMode(rule.eatMode ?? DEFAULT_EAT_MODE);
+        setGlobalDeleteApprove(Boolean(rule.deleteApprove));
+        setGlobalSecretApprove(Boolean(rule.secretApprove));
         setScoreConfig(rule.scoreConfig);
       })
       .catch((error) => {
         message.error(error instanceof Error ? error.message : "加载积分配置失败");
         setGlobalRatio(null);
         setGlobalMode(DEFAULT_EAT_MODE);
+        setGlobalDeleteApprove(false);
+        setGlobalSecretApprove(false);
         setScoreConfig(null);
       })
       .finally(() => setGlobalLoading(false));
@@ -129,6 +150,8 @@ export function PointsRuleModal({ product, open, onClose }: PointsRuleModalProps
       await savePointsRule(shopCategoryId, {
         eatRatio: globalRatio === null ? null : globalRatio / 100,
         eatMode: globalMode,
+        deleteApprove: globalDeleteApprove,
+        secretApprove: globalSecretApprove,
       });
       message.success("全局积分配置已保存");
     } catch (error) {
@@ -143,6 +166,8 @@ export function PointsRuleModal({ product, open, onClose }: PointsRuleModalProps
     setUserRatio(toPercent(record.eatRatio));
     setUserMode(record.eatMode ?? null);
     setUserScoreGroupId(record.scoreGroupId ?? null);
+    setUserDeleteApprove(record.deleteApprove ?? null);
+    setUserSecretApprove(record.secretApprove ?? null);
   };
 
   const saveUser = async () => {
@@ -153,6 +178,8 @@ export function PointsRuleModal({ product, open, onClose }: PointsRuleModalProps
         eatRatio: userRatio === null ? null : userRatio / 100,
         eatMode: userMode,
         scoreGroupId: userScoreGroupId,
+        deleteApprove: userDeleteApprove,
+        secretApprove: userSecretApprove,
       });
       message.success("用户积分配置已保存");
       setEditing(null);
@@ -200,6 +227,18 @@ export function PointsRuleModal({ product, open, onClose }: PointsRuleModalProps
       render: (_, record) => (record.eatRatio == null ? <Text type="secondary">全局</Text> : `${toPercent(record.eatRatio)}%`),
     },
     {
+      title: "视频删除",
+      key: "deleteApprove",
+      width: 100,
+      render: (_, record) => (record.deleteApprove == null ? <Text type="secondary">全局</Text> : auditApproveLabel(record.deleteApprove)),
+    },
+    {
+      title: "设置隐私",
+      key: "secretApprove",
+      width: 100,
+      render: (_, record) => (record.secretApprove == null ? <Text type="secondary">全局</Text> : auditApproveLabel(record.secretApprove)),
+    },
+    {
       title: "价格策略组",
       key: "scoreGroupId",
       width: 140,
@@ -226,85 +265,111 @@ export function PointsRuleModal({ product, open, onClose }: PointsRuleModalProps
       <Modal
         title={`积分配置${product ? `：${product.name || product.id}` : ""}`}
         open={open}
-        width={960}
+        width={1100}
         footer={null}
         destroyOnClose
         onCancel={onClose}
       >
-        <div style={{ marginBottom: 8, fontWeight: 600 }}>全局配置</div>
-        <Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
-          审核加积分方式：按提交量 = 审核成功和失败都加积分；按审核 = 只有审核成功才加积分。
-          <br />
-          吃量比例：提交任务时按比例吃量，填 0 表示不吃量，留空按系统默认比例。两项可分别保存。
-        </Text>
-        <Space size={8} style={{ marginBottom: 24 }}>
-          <Select<EatMode>
-            loading={globalLoading}
-            value={globalMode}
-            options={eatModeOptions}
-            style={{ width: 140 }}
-            onChange={(value) => setGlobalMode(value)}
-          />
-          <InputNumber
-            value={globalRatio}
-            min={0}
-            max={100}
-            precision={2}
-            addonAfter="%"
-            placeholder="吃量比例"
-            style={{ width: 150 }}
-            onChange={(value) => setGlobalRatio(value === null ? null : Number(value))}
-          />
-          <Button type="primary" icon={<SaveOutlined />} loading={globalSaving} disabled={globalLoading} onClick={() => void saveGlobal()}>
-            保存
-          </Button>
-        </Space>
+        <Tabs
+          defaultActiveKey="global"
+          items={[
+            {
+              key: "global",
+              label: "全局配置",
+              children: (
+                <>
+                  <Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
+                    审核加积分方式：按提交量 = 审核成功和失败都加积分；按审核 = 只有审核成功才加积分。
+                    <br />
+                    吃量比例：提交任务时按比例吃量，填 0 表示不吃量，留空按系统默认比例。两项可分别保存。
+                    <br />
+                    审核配置：二次审核判为视频删除、设置隐私（含未授权）的单，勾选后改判审核成功并按审核成功加积分，默认都不给成功。
+                  </Text>
+                  <Space size={8} wrap style={{ marginBottom: 24 }}>
+                    <Select<EatMode>
+                      loading={globalLoading}
+                      value={globalMode}
+                      options={eatModeOptions}
+                      style={{ width: 140 }}
+                      onChange={(value) => setGlobalMode(value)}
+                    />
+                    <InputNumber
+                      value={globalRatio}
+                      min={0}
+                      max={100}
+                      precision={2}
+                      addonAfter="%"
+                      placeholder="吃量比例"
+                      style={{ width: 150 }}
+                      onChange={(value) => setGlobalRatio(value === null ? null : Number(value))}
+                    />
+                    <Checkbox checked={globalDeleteApprove} disabled={globalLoading} onChange={(event) => setGlobalDeleteApprove(event.target.checked)}>
+                      视频删除给成功
+                    </Checkbox>
+                    <Checkbox checked={globalSecretApprove} disabled={globalLoading} onChange={(event) => setGlobalSecretApprove(event.target.checked)}>
+                      设置隐私给成功
+                    </Checkbox>
+                    <Button type="primary" icon={<SaveOutlined />} loading={globalSaving} disabled={globalLoading} onClick={() => void saveGlobal()}>
+                      保存
+                    </Button>
+                  </Space>
 
-        <ScoreConfigSection
-          shopCategoryId={shopCategoryId}
-          baseScore={baseScore}
-          config={scoreConfig}
-          loading={globalLoading}
-          onSaved={setScoreConfig}
-        />
-
-        <div style={{ marginBottom: 8, fontWeight: 600 }}>按用户配置</div>
-        <Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
-          列表为本商品加过白名单的用户（含已剔除）。加积分方式、吃量比例各自留空即取全局值；价格策略组留空走默认组。
-        </Text>
-        <Space size={8} style={{ marginBottom: 12 }}>
-          <Input.Search
-            allowClear
-            placeholder="按用户名搜索"
-            value={keyword}
-            style={{ width: 220 }}
-            onChange={(event) => setKeyword(event.target.value)}
-            onSearch={(value) => void loadUsers(1, pageSize, value.trim(), status)}
-          />
-          <Select
-            value={status}
-            options={statusFilterOptions}
-            style={{ width: 110 }}
-            onChange={(value) => {
-              setStatus(value);
-              void loadUsers(1, pageSize, keyword.trim(), value);
-            }}
-          />
-        </Space>
-        <Table<BarryUserWhitelistRecord>
-          rowKey={(record) => String(record.id || record.userId)}
-          size="small"
-          loading={usersLoading}
-          columns={columns}
-          dataSource={users}
-          pagination={{
-            current: pageIndex,
-            pageSize,
-            total,
-            showSizeChanger: true,
-            onChange: (nextPage, nextSize) => void loadUsers(nextPage, nextSize, keyword.trim(), status),
-          }}
-          locale={{ emptyText: "本商品还没有加过白名单的用户" }}
+                  <ScoreConfigSection
+                    shopCategoryId={shopCategoryId}
+                    baseScore={baseScore}
+                    config={scoreConfig}
+                    loading={globalLoading}
+                    onSaved={setScoreConfig}
+                  />
+                </>
+              ),
+            },
+            {
+              key: "user",
+              label: "用户配置",
+              children: (
+                <>
+                  <Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
+                    列表为本商品加过白名单的用户（含已剔除）。加积分方式、吃量比例、审核配置各自留空即取全局值；价格策略组留空走默认组。
+                  </Text>
+                  <Space size={8} style={{ marginBottom: 12 }}>
+                    <Input.Search
+                      allowClear
+                      placeholder="按用户名搜索"
+                      value={keyword}
+                      style={{ width: 220 }}
+                      onChange={(event) => setKeyword(event.target.value)}
+                      onSearch={(value) => void loadUsers(1, pageSize, value.trim(), status)}
+                    />
+                    <Select
+                      value={status}
+                      options={statusFilterOptions}
+                      style={{ width: 110 }}
+                      onChange={(value) => {
+                        setStatus(value);
+                        void loadUsers(1, pageSize, keyword.trim(), value);
+                      }}
+                    />
+                  </Space>
+                  <Table<BarryUserWhitelistRecord>
+                    rowKey={(record) => String(record.id || record.userId)}
+                    size="small"
+                    loading={usersLoading}
+                    columns={columns}
+                    dataSource={users}
+                    pagination={{
+                      current: pageIndex,
+                      pageSize,
+                      total,
+                      showSizeChanger: true,
+                      onChange: (nextPage, nextSize) => void loadUsers(nextPage, nextSize, keyword.trim(), status),
+                    }}
+                    locale={{ emptyText: "本商品还没有加过白名单的用户" }}
+                  />
+                </>
+              ),
+            },
+          ]}
         />
       </Modal>
 
@@ -339,6 +404,25 @@ export function PointsRuleModal({ product, open, onClose }: PointsRuleModalProps
             placeholder={globalRatio === null ? "全局：系统默认" : `全局：${globalRatio}`}
             style={{ width: 170 }}
             onChange={(value) => setUserRatio(value === null ? null : Number(value))}
+          />
+        </Space>
+        <div style={{ marginTop: 16, marginBottom: 8 }}>审核配置</div>
+        <Space>
+          <Select<string>
+            allowClear
+            value={toAuditValue(userDeleteApprove)}
+            options={auditApproveOptions}
+            placeholder={`视频删除 全局：${auditApproveLabel(globalDeleteApprove)}`}
+            style={{ width: 200 }}
+            onChange={(value) => setUserDeleteApprove(fromAuditValue(value))}
+          />
+          <Select<string>
+            allowClear
+            value={toAuditValue(userSecretApprove)}
+            options={auditApproveOptions}
+            placeholder={`设置隐私 全局：${auditApproveLabel(globalSecretApprove)}`}
+            style={{ width: 200 }}
+            onChange={(value) => setUserSecretApprove(fromAuditValue(value))}
           />
         </Space>
         <div style={{ marginTop: 16, marginBottom: 8 }}>价格策略组</div>

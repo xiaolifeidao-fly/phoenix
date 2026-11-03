@@ -39,7 +39,7 @@ interface TrueBalanceStripProps {
 /**
  * 真实结余 = 人工余额 − 用户余额 − 待审核预估。
  * 用户余额：起始日期之后积分有变动的做单用户的可用 + 冻结，按「做单用户」页的排除名单排除；
- * 待审核预估：起始日期 ~ 今天各人工商品的待审核积分之和 × 审核成功率（默认 95%）。
+ * 待审核预估：起始日期 ~ 昨天各人工商品的待审核积分之和 × 审核成功率（默认 95%），不算当天。
  */
 export function TrueBalanceStrip({ manualBalance, manualBalanceDate }: TrueBalanceStripProps) {
   const [startDate, setStartDate] = useState<Dayjs>(() =>
@@ -65,7 +65,7 @@ export function TrueBalanceStrip({ manualBalance, manualBalanceDate }: TrueBalan
           updatedTime: start.format("YYYY-MM-DD HH:mm:ss"),
           excludedUserIds: excluded.map((item) => item.userId).join(","),
         }),
-        fetchManualPendingEstimate(start.format("YYYY-MM-DD")),
+        fetchManualPendingEstimate(start.format("YYYY-MM-DD"), dayjs().subtract(1, "day").format("YYYY-MM-DD")),
       ]);
       if (seq !== seqRef.current) return;
       setPoints(summary);
@@ -102,13 +102,13 @@ export function TrueBalanceStrip({ manualBalance, manualBalanceDate }: TrueBalan
           人工余额 − 用户余额 − 待审核预估
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 6, alignItems: "center" }}>
-          <Tooltip title="用户余额只统计这天之后积分有变动的账号；待审核取这天到今天">
+          <Tooltip title="用户余额只统计这天之后积分有变动的账号；待审核取这天到昨天，不算当天">
             <DatePicker
               size="small"
               allowClear={false}
               value={startDate}
               disabledDate={(current) =>
-                current.isAfter(dayjs().endOf("day")) ||
+                current.isAfter(dayjs().subtract(1, "day").endOf("day")) ||
                 current.isBefore(dayjs().subtract(MAX_LOOKBACK_DAYS - 1, "day").startOf("day"))
               }
               onChange={(value) => value && setStartDate(value.startOf("day"))}

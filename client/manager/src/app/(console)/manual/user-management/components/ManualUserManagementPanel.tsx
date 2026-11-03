@@ -12,7 +12,9 @@ import {
   AccountBookOutlined,
   PlusOutlined,
   ReloadOutlined,
+  SafetyCertificateOutlined,
   SearchOutlined,
+  StopOutlined,
   WalletOutlined,
 } from "@ant-design/icons";
 import {
@@ -22,6 +24,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Popconfirm,
   Radio,
   Select,
   Space,
@@ -36,6 +39,7 @@ import { WorkspaceDrawer } from "@/components/manager-shell/WorkspaceDrawer";
 import { fetchManualChannels, type ManualChannelRecord } from "../../api/channel.api";
 import {
   adjustManualUserPoints,
+  banManualUser,
   changeManualUserPassword,
   createManualUser,
   fetchBarryAppUsers,
@@ -43,6 +47,7 @@ import {
   fetchManualUserPaymentMethods,
   fetchManualUserPointsSummary,
   fetchManualUsers,
+  resetManualUserPubToken,
   type ManualPaymentMethodRecord,
   type ManualUserPointsSummaryRecord,
   type ManualUserRecord,
@@ -120,6 +125,7 @@ export function ManualUserManagementPanel() {
   const [passwordViewDrawerOpen, setPasswordViewDrawerOpen] = useState(false);
   const [passwordViewUser, setPasswordViewUser] = useState<ManualUserRecord | null>(null);
   const [passwordViewLoading, setPasswordViewLoading] = useState(false);
+  const [pubTokenResult, setPubTokenResult] = useState<{ username: string; pubToken: string } | null>(null);
   const [paymentDrawerOpen, setPaymentDrawerOpen] = useState(false);
   const [paymentUser, setPaymentUser] = useState<ManualUserRecord | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<ManualPaymentMethodRecord[]>([]);
@@ -319,6 +325,26 @@ export function ManualUserManagementPanel() {
       setPasswordViewDrawerOpen(false);
     } finally {
       setPasswordViewLoading(false);
+    }
+  };
+
+  const handleBanUser = async (record: ManualUserRecord) => {
+    try {
+      await banManualUser(record.id);
+      message.success("用户已封禁");
+      await loadUsers();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "封禁用户失败");
+    }
+  };
+
+  const handleResetPubToken = async (record: ManualUserRecord) => {
+    try {
+      const pubToken = await resetManualUserPubToken(record.id);
+      message.success("秘钥已重置");
+      setPubTokenResult({ username: record.username, pubToken: pubToken ?? "" });
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "重置秘钥失败");
     }
   };
 
@@ -563,6 +589,13 @@ export function ManualUserManagementPanel() {
         <Space direction="vertical" size={2}>
           <Text style={{ color: "var(--manager-text)", fontWeight: 600 }}>{value || "-"}</Text>
           <Text type="secondary">{formatUserRole(record.role)}</Text>
+          {record.banCount > 0 ? (
+            <Tooltip title="历史封禁次数，解封后不会归零">
+              <Tag color="red" style={{ marginInlineEnd: 0, width: "fit-content" }}>
+                封禁过 {record.banCount} 次
+              </Tag>
+            </Tooltip>
+          ) : null}
         </Space>
       ),
     },
@@ -624,9 +657,9 @@ export function ManualUserManagementPanel() {
       key: "actions",
       fixed: "right",
       // 动作带文字会超宽，表格是 table-layout: fixed，超出的按钮会直接画到固定列外面。
-      // 和渠道、商品列表一致改成图标 + Tooltip：34px 按钮 × 7 + 间距 4 × 6 + 单元格左右内边距 32 = 294，
-      // 列宽留到 316，缩放或主题调 controlHeight 时也不会顶破。
-      width: 316,
+      // 和渠道、商品列表一致改成图标 + Tooltip：34px 按钮 × 9 + 间距 4 × 8 + 单元格左右内边距 32 = 370，
+      // 列宽留到 392，缩放或主题调 controlHeight 时也不会顶破。
+      width: 392,
       render: (_, record) => (
         <Space size={4} wrap={false}>
           <Tooltip title="编辑">
@@ -648,6 +681,29 @@ export function ManualUserManagementPanel() {
               onClick={() => openChangePasswordDrawer(record)}
             />
           </Tooltip>
+          <Popconfirm
+            title="重置秘钥"
+            description="旧秘钥立即失效，用户要换新秘钥才能继续取任务"
+            okText="确认重置"
+            cancelText="取消"
+            onConfirm={() => handleResetPubToken(record)}
+          >
+            <Tooltip title="修改秘钥">
+              <Button type="text" aria-label="修改秘钥" icon={<SafetyCertificateOutlined />} />
+            </Tooltip>
+          </Popconfirm>
+          <Popconfirm
+            title="封禁用户"
+            description="秘钥和密码都会换成随机值，用户立即无法取任务和登录；解封请用修改密码"
+            okText="确认封禁"
+            okButtonProps={{ danger: true }}
+            cancelText="取消"
+            onConfirm={() => handleBanUser(record)}
+          >
+            <Tooltip title="封禁">
+              <Button type="text" danger aria-label="封禁" icon={<StopOutlined />} />
+            </Tooltip>
+          </Popconfirm>
           <Tooltip title="支付信息">
             <Button
               type="text"
@@ -874,6 +930,22 @@ export function ManualUserManagementPanel() {
             ]}
           >
             <Input.Password placeholder="请再次输入新密码" autoComplete="new-password" />
+          </Form.Item>
+        </Form>
+      </WorkspaceDrawer>
+
+      <WorkspaceDrawer
+        title={pubTokenResult ? `新秘钥 · ${pubTokenResult.username}` : "新秘钥"}
+        open={pubTokenResult !== null}
+        cancelText="关闭"
+        width={480}
+        onClose={() => setPubTokenResult(null)}
+      >
+        <Form className="manager-form-skin" layout="vertical">
+          <Form.Item label="秘钥（pubToken）" extra="旧秘钥已失效，请把新秘钥发给用户">
+            <Typography.Paragraph copyable={{ text: pubTokenResult?.pubToken }} style={{ marginBottom: 0 }}>
+              <Text code>{pubTokenResult?.pubToken}</Text>
+            </Typography.Paragraph>
           </Form.Item>
         </Form>
       </WorkspaceDrawer>

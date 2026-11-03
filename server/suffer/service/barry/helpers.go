@@ -92,6 +92,8 @@ const (
 	barryInnerUserDetailSavePath                              = "barry.url.inner.user.detail.save.suffix"
 	barryInnerUserDetailUpdatePath                            = "barry.url.inner.user.detail.update.suffix"
 	barryInnerUserDetailPasswordUpdatePath                    = "barry.url.inner.user.detail.password.update.suffix"
+	barryInnerUserDetailBanPath                               = "barry.url.inner.user.detail.ban.suffix"
+	barryInnerUserDetailPubTokenResetPath                     = "barry.url.inner.user.detail.pub.token.reset.suffix"
 	barryInnerUserPaymentMethodListPath                       = "barry.url.inner.user.payment.method.list.suffix"
 	barryInnerRecordSummaryPath                               = "barry.url.inner.record.summary.suffix"
 	barryInnerManualTaskStatisticsPath                        = "barry.url.inner.manual.task.statistics.suffix"
