@@ -9,11 +9,24 @@ import {
   type FetchSlowBucketCount,
   type FetchSlowMonitorSummary,
   type FetchSlowSample,
+  type FetchSlowTraceNode,
 } from "../api/workbench-dashboard.api";
 
 type HourRow = FetchSlowMonitorSummary["hourList"][number];
 
+interface TraceRow {
+  key: string;
+  name: string;
+  count?: number;
+  totalMs: number;
+  maxMs?: number;
+  offsetMs?: number;
+  children?: TraceRow[];
+}
+
 const SAMPLE_LIMIT_OPTIONS = [200, 500, 2000];
+/** 明细按最低耗时筛选（秒），与 barry 的耗时档位下限一致。 */
+const MIN_COST_SECONDS_OPTIONS = [3, 5, 7, 10, 20, 30, 60];
 
 const RESULT_TAGS: Record<string, { color: string; label: string }> = {
   HIT: { color: "success", label: "取到" },
@@ -41,18 +54,67 @@ function buildDateOptions() {
   });
 }
 
+function toTraceRows(nodes: FetchSlowTraceNode[], parentKey: string): TraceRow[] {
+  return nodes.map((node, index) => {
+    const key = `${parentKey}-${index}`;
+    const children = node.children?.length ? toTraceRows(node.children, key) : undefined;
+    return { ...node, key, children };
+  });
+}
+
+function formatMs(value?: number) {
+  return value === undefined ? "-" : `${formatCount(value)}ms`;
+}
+
+/** 展开一条慢请求：各环节耗时树。"未归属"是总耗时减去顶层环节之和，偏大说明还有环节没打到点。 */
+function FetchSlowTraceTable({ sample }: { sample: FetchSlowSample }) {
+  const nodes = sample.traceList ?? [];
+  if (nodes.length === 0) {
+    return <Empty description="该请求没有链路数据（barry 未开启链路跟踪）" />;
+  }
+  const trackedMs = nodes.reduce((sum, node) => sum + node.totalMs, 0);
+  const rows: TraceRow[] = [
+    ...toTraceRows(nodes, "trace"),
+    { key: "untracked", name: "未归属", totalMs: Math.max(sample.costMs - trackedMs, 0) },
+  ];
+  const columns: ColumnsType<TraceRow> = [
+    { title: "环节", dataIndex: "name" },
+    { title: "次数", dataIndex: "count", width: 70, align: "right" },
+    { title: "总耗时", dataIndex: "totalMs", width: 110, align: "right", render: formatMs },
+    { title: "最大单次", dataIndex: "maxMs", width: 110, align: "right", render: formatMs },
+    { title: "首次开始", dataIndex: "offsetMs", width: 110, align: "right", render: formatMs },
+    {
+      title: "占总耗时",
+      key: "ratio",
+      width: 90,
+      align: "right",
+      render: (_, record) => `${sample.costMs > 0 ? ((record.totalMs / sample.costMs) * 100).toFixed(1) : "0.0"}%`,
+    },
+  ];
+  return (
+    <Table<TraceRow>
+      size="small"
+      pagination={false}
+      columns={columns}
+      dataSource={rows}
+      expandable={{ defaultExpandAllRows: true }}
+    />
+  );
+}
+
 interface FetchSlowMonitorButtonProps {
   /** 当前卡片的品类名，用来把明细里的品类 ID 显示成名称；不在卡片里的品类显示 ID。 */
   categoryNames?: Record<number, string>;
 }
 
-/** 取单统计行上的"慢请求"入口：取单接口总耗时超过阈值（默认 10 秒）的分布与明细，统计范围是全部取单接口。 */
+/** 取单统计行上的"慢请求"入口：取单接口总耗时超过阈值（默认 3 秒）的分布与明细，统计范围是全部取单接口。 */
 export function FetchSlowMonitorButton({ categoryNames }: FetchSlowMonitorButtonProps) {
   const dateOptions = useMemo(buildDateOptions, []);
   const [open, setOpen] = useState(false);
   const [statDate, setStatDate] = useState(dateOptions[0].value);
   const [sampleLimit, setSampleLimit] = useState(SAMPLE_LIMIT_OPTIONS[0]);
   const [codeFilter, setCodeFilter] = useState<string | undefined>();
+  const [minCostSeconds, setMinCostSeconds] = useState<number | undefined>();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<FetchSlowMonitorSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -76,8 +138,13 @@ export function FetchSlowMonitorButton({ categoryNames }: FetchSlowMonitorButton
   const bucketList = data?.bucketList ?? [];
   const hourRows = (data?.hourList ?? []).filter((item) => item.count > 0);
   const samples = useMemo(
-    () => (data?.sampleList ?? []).filter((item) => !codeFilter || item.code === codeFilter),
-    [data, codeFilter],
+    () =>
+      (data?.sampleList ?? []).filter(
+        (item) =>
+          (!codeFilter || item.code === codeFilter) &&
+          (minCostSeconds === undefined || item.costMs >= minCostSeconds * 1000),
+      ),
+    [data, codeFilter, minCostSeconds],
   );
   const codeOptions = useMemo(
     () =>
@@ -95,11 +162,12 @@ export function FetchSlowMonitorButton({ categoryNames }: FetchSlowMonitorButton
   ];
 
   const hourColumns: ColumnsType<HourRow> = [
-    { title: "小时", dataIndex: "hour", width: 90, render: (hour: number) => `${String(hour).padStart(2, "0")}:00` },
+    { title: "小时", dataIndex: "hour", width: 90, fixed: "left", render: (hour: number) => `${String(hour).padStart(2, "0")}:00` },
     { title: "合计", dataIndex: "count", align: "right", render: formatCount },
     ...bucketList.map((bucket, index) => ({
       title: bucket.label,
       key: bucket.bucket,
+      width: 90,
       align: "right" as const,
       render: (_: unknown, record: HourRow) => formatCount(record.bucketList[index]?.count ?? 0),
     })),
@@ -108,6 +176,7 @@ export function FetchSlowMonitorButton({ categoryNames }: FetchSlowMonitorButton
 
   const sampleColumns: ColumnsType<FetchSlowSample> = [
     { title: "时间", dataIndex: "time", width: 160 },
+    { title: "结束时间", dataIndex: "endTime", width: 160, render: (value?: string) => value || "-" },
     { title: "总耗时", dataIndex: "costMs", width: 80, align: "right", render: formatSeconds },
     {
       title: (
@@ -141,6 +210,7 @@ export function FetchSlowMonitorButton({ categoryNames }: FetchSlowMonitorButton
       },
     },
     { title: "取单商品", dataIndex: "code", width: 140 },
+    { title: "机器", dataIndex: "host", width: 140, ellipsis: true, render: (value?: string) => value || "-" },
     { title: "用户", dataIndex: "userId", width: 70 },
     { title: "uid", dataIndex: "uid", width: 160, ellipsis: true },
     {
@@ -158,7 +228,7 @@ export function FetchSlowMonitorButton({ categoryNames }: FetchSlowMonitorButton
 
   return (
     <>
-      <Tooltip title="全部取单接口中总耗时超过阈值（默认 10 秒）的请求分布与明细">
+      <Tooltip title="全部取单接口中总耗时超过阈值（默认 3 秒）的请求分布与明细">
         <Button
           className="manager-dashboard-card__fetch-miss-reason-button"
           size="small"
@@ -173,7 +243,7 @@ export function FetchSlowMonitorButton({ categoryNames }: FetchSlowMonitorButton
         open={open}
         onCancel={() => setOpen(false)}
         footer={null}
-        width={1100}
+        width={1200}
         destroyOnHidden
       >
         <Space direction="vertical" size={12} style={{ width: "100%" }}>
@@ -205,7 +275,7 @@ export function FetchSlowMonitorButton({ categoryNames }: FetchSlowMonitorButton
                   pagination={false}
                   columns={hourColumns}
                   dataSource={hourRows}
-                  scroll={{ y: 260 }}
+                  scroll={{ x: 1000, y: 260 }}
                 />
               ) : (
                 <Empty description="当天还没有慢请求记录（统计从本次上线后开始累计）" />
@@ -228,6 +298,15 @@ export function FetchSlowMonitorButton({ categoryNames }: FetchSlowMonitorButton
                   onChange={setCodeFilter}
                   options={codeOptions}
                 />
+                <Select
+                  size="small"
+                  allowClear
+                  placeholder="按最低耗时筛选"
+                  style={{ width: 150 }}
+                  value={minCostSeconds}
+                  onChange={setMinCostSeconds}
+                  options={MIN_COST_SECONDS_OPTIONS.map((value) => ({ value, label: `${value} 秒以上` }))}
+                />
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                   明细不按日期筛选，Redis 只保留最近 2000 条
                 </Typography.Text>
@@ -238,7 +317,8 @@ export function FetchSlowMonitorButton({ categoryNames }: FetchSlowMonitorButton
                 columns={sampleColumns}
                 dataSource={samples}
                 pagination={{ pageSize: 20, showSizeChanger: false }}
-                scroll={{ x: 1100 }}
+                scroll={{ x: 1400 }}
+                expandable={{ expandedRowRender: (record) => <FetchSlowTraceTable sample={record} /> }}
               />
             </Space>
           </Spin>

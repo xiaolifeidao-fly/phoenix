@@ -451,8 +451,21 @@ export interface FetchSlowBucketCount {
   missCount: number;
 }
 
+export interface FetchSlowTraceNode {
+  name: string;
+  count: number;
+  totalMs: number;
+  maxMs: number;
+  /** 第一次开始时距请求开始的毫秒数。 */
+  offsetMs: number;
+  children?: FetchSlowTraceNode[];
+}
+
 export interface FetchSlowSample {
   time: string;
+  endTime?: string;
+  /** 处理该请求的机器名。 */
+  host?: string;
   costMs: number;
   /** 进入取单循环前：查配置、上限校验、加锁。 */
   preCheckMs: number;
@@ -465,6 +478,8 @@ export interface FetchSlowSample {
   /** HIT 取到 / MISS 无任务 / PRECHECK 前置校验拦截 / ERROR 异常 */
   result: string;
   categoryList?: Array<{ shopCategoryId: number; costMs: number; attempts: number }>;
+  /** 各环节耗时树；barry 未开启链路跟踪时为空。 */
+  traceList?: FetchSlowTraceNode[];
 }
 
 export interface FetchSlowMonitorSummary {

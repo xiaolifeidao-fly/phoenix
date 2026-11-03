@@ -13,6 +13,7 @@ import (
 func (h *BarryHandler) registerPointsRuleRoutes(engine *gin.RouterGroup) {
 	engine.GET("/barry/points-rules", h.getPointsRule)
 	engine.POST("/barry/points-rules", h.savePointsRule)
+	engine.PUT("/barry/points-rules/score-config", h.saveScoreConfig)
 	engine.PUT("/barry/user-whitelists/:id/points-rule", h.saveUserPointsRule)
 }
 
@@ -57,6 +58,49 @@ func (h *BarryHandler) savePointsRule(c *gin.Context) {
 	commonRouter.ToJson(c, response.Data, nil)
 }
 
+// saveScoreConfig 价格档位与策略组整份保存; 规则校验在 barry, 这里只拦明显的非法值, barry 的提示原样返回.
+func (h *BarryHandler) saveScoreConfig(c *gin.Context) {
+	var req struct {
+		ShopCategoryID int64                   `json:"shopCategoryId"`
+		ScoreConfig    barryDTO.ScoreConfigDTO `json:"scoreConfig"`
+	}
+	if c.ShouldBindJSON(&req) != nil || req.ShopCategoryID <= 0 {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	if msg := validateScoreConfig(req.ScoreConfig); msg != "" {
+		commonRouter.ToError(c, msg)
+		return
+	}
+	response, err := h.barryService.PointsRule.SaveScoreConfig(c.Request.Context(), req.ShopCategoryID, req.ScoreConfig)
+	if err != nil {
+		commonRouter.ToJson(c, nil, err)
+		return
+	}
+	if !response.Success && response.Code != "0" {
+		commonRouter.ToError(c, firstNonEmpty(firstNonEmpty(response.Message, response.ErrorMsg), "保存价格策略失败"))
+		return
+	}
+	commonRouter.ToJson(c, response.Data, nil)
+}
+
+// validateScoreConfig 档位积分不能为负、组内权重必须大于 0.
+func validateScoreConfig(config barryDTO.ScoreConfigDTO) string {
+	for _, option := range config.Options {
+		if option.Score < 0 {
+			return "档位积分不能为负数"
+		}
+	}
+	for _, group := range config.Groups {
+		for _, item := range group.Items {
+			if item.Weight <= 0 {
+				return "策略组「" + group.Name + "」的权重必须大于0"
+			}
+		}
+	}
+	return ""
+}
+
 func (h *BarryHandler) saveUserPointsRule(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || id <= 0 {
@@ -69,10 +113,14 @@ func (h *BarryHandler) saveUserPointsRule(c *gin.Context) {
 		return
 	}
 	req.ID = id
-	// 用户维度两项各自兜底到商品全局值, 允许只填一项.
+	// 用户维度各项分别兜底到商品全局值, 允许只填一项.
 	req.EatMode = normalizeEatMode(req.EatMode)
 	if msg := validatePointsRule(req.EatRatio, req.EatMode); msg != "" {
 		commonRouter.ToError(c, msg)
+		return
+	}
+	if req.ScoreGroupID != nil && *req.ScoreGroupID <= 0 {
+		commonRouter.ToError(c, "积分策略组不正确")
 		return
 	}
 	response, err := h.barryService.PointsRule.SaveUser(c.Request.Context(), &req)

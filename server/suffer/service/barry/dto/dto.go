@@ -59,7 +59,9 @@ type DetailResponseDTO[T any] struct {
 	Success bool   `json:"success"`
 	Code    string `json:"code,omitempty"`
 	Message string `json:"message,omitempty"`
-	Data    *T     `json:"data,omitempty"`
+	// ErrorMsg barry WebResponse 的失败原因字段.
+	ErrorMsg string `json:"errorMsg,omitempty"`
+	Data     *T     `json:"data,omitempty"`
 }
 
 type ActionResponseDTO struct {
@@ -340,6 +342,7 @@ type ProductCategoryDTO struct {
 	Code              string            `json:"code"`
 	Score             int64             `json:"score"`
 	Status            string            `json:"status"`
+	ShowStatus        string            `json:"showStatus"`
 	ShopTypeModelList []*ProductTypeDTO `json:"shopTypeModelList,omitempty"`
 }
 
@@ -379,6 +382,7 @@ type SaveProductCategoryDTO struct {
 	Code              string            `json:"code"`
 	Score             int64             `json:"score"`
 	Status            string            `json:"status"`
+	ShowStatus        string            `json:"showStatus,omitempty"`
 	ShopTypeCodeList  []string          `json:"shopTypeCodeList,omitempty"`
 	ShopTypeModelList []*ProductTypeDTO `json:"shopTypeModelList,omitempty"`
 	// 管理端当前登录人, barry 记积分变更流水的操作人
@@ -815,7 +819,7 @@ type SaveChannelDetailDTO struct {
 }
 
 type UpdateChannelDetailDTO struct {
-	ID                      int      `json:"id" binding:"required"`
+	ID                      int      `json:"id"`
 	Code                    string   `json:"code" binding:"required"`
 	Name                    string   `json:"name" binding:"required"`
 	Type                    string   `json:"type" binding:"required"`
@@ -871,12 +875,47 @@ type UserWhitelistDTO struct {
 	// 用户积分配置, 为空时取商品全局值.
 	EatRatio *float64 `json:"eatRatio,omitempty"`
 	EatMode  string   `json:"eatMode,omitempty"`
+	// ScoreGroupID 绑定的积分策略组, 为空走商品默认组.
+	ScoreGroupID *int `json:"scoreGroupId,omitempty"`
+	// 审核配置: 视频删除/设置隐私是否给审核成功, 为空时取商品全局值.
+	DeleteApprove *bool `json:"deleteApprove,omitempty"`
+	SecretApprove *bool `json:"secretApprove,omitempty"`
 }
 
 // PointsRuleDTO 人工商品积分配置. 吃量比例 0~1, 提交任务时吃量; 审核加积分方式 SUBMIT_COUNT 按提交量 / APPROVE 按审核. 两项各自可为空.
 type PointsRuleDTO struct {
 	EatRatio *float64 `json:"eatRatio"`
 	EatMode  *string  `json:"eatMode"`
+	// ScoreConfig 价格档位与策略组, 只读; 保存走单独接口.
+	ScoreConfig *ScoreConfigDTO `json:"scoreConfig,omitempty"`
+	// 审核配置: 视频删除/设置隐私(含未授权)是否给审核成功; 保存时 nil 表示不修改.
+	DeleteApprove *bool `json:"deleteApprove"`
+	SecretApprove *bool `json:"secretApprove"`
+}
+
+// ScoreConfigDTO 人工商品价格档位 + 策略组, 领任务时按用户绑定的组(没绑走默认组)按权重随机积分.
+// 档位 ID 0 固定为商品原价; 档位与组共用 Seq 分配 ID, 删掉的 ID 不复用. 校验在 barry 侧.
+type ScoreConfigDTO struct {
+	Seq     *int             `json:"seq,omitempty"`
+	Options []ScoreOptionDTO `json:"options"`
+	Groups  []ScoreGroupDTO  `json:"groups"`
+}
+
+type ScoreOptionDTO struct {
+	ID    int   `json:"id"`
+	Score int64 `json:"score"`
+}
+
+type ScoreGroupDTO struct {
+	ID           int                 `json:"id"`
+	Name         string              `json:"name"`
+	DefaultGroup bool                `json:"defaultGroup"`
+	Items        []ScoreGroupItemDTO `json:"items"`
+}
+
+type ScoreGroupItemDTO struct {
+	OptionID int     `json:"optionId"`
+	Weight   float64 `json:"weight"`
 }
 
 // SettleChannelDTO 结算通道, 手续费率为 0~1 小数; ID 为空表示新增.
@@ -908,11 +947,15 @@ type UserSettleConfigDTO struct {
 	UpdatedTime       string `json:"updatedTime,omitempty"`
 }
 
-// SaveUserPointsRuleDTO 白名单用户积分配置, ID 为白名单记录主键; 两项各自为空表示取商品全局值.
+// SaveUserPointsRuleDTO 白名单用户积分配置, ID 为白名单记录主键; 各项为空表示取商品全局值(策略组为空走默认组).
 type SaveUserPointsRuleDTO struct {
-	ID       int64    `json:"id"`
-	EatRatio *float64 `json:"eatRatio"`
-	EatMode  *string  `json:"eatMode"`
+	ID           int64    `json:"id"`
+	EatRatio     *float64 `json:"eatRatio"`
+	EatMode      *string  `json:"eatMode"`
+	ScoreGroupID *int     `json:"scoreGroupId"`
+	// 视频删除/设置隐私是否给审核成功, 为空取商品全局值.
+	DeleteApprove *bool `json:"deleteApprove"`
+	SecretApprove *bool `json:"secretApprove"`
 }
 
 type UserWhitelistQueryDTO struct {
@@ -971,6 +1014,8 @@ type UserDetailDTO struct {
 	SettleCurrency    string `json:"settleCurrency,omitempty"`
 	SettleChannelID   *int64 `json:"settleChannelId,omitempty"`
 	SettleChannelName string `json:"settleChannelName,omitempty"`
+	// 历史封禁次数，只增不减；解封（改密码）后不会归零，不代表当前是否封禁。
+	BanCount int `json:"banCount"`
 }
 
 // AdjustUserPointsDTO is a manual points adjustment issued from the console.
@@ -1073,6 +1118,14 @@ type UpdateUserDetailDTO struct {
 type ChangeUserDetailPasswordDTO struct {
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
+}
+
+type BanUserDetailDTO struct {
+	UserID int64 `json:"userId" binding:"required"`
+}
+
+type ResetUserDetailPubTokenDTO struct {
+	UserID int64 `json:"userId" binding:"required"`
 }
 
 type UserWithdrawRecordDTO struct {
@@ -1913,8 +1966,20 @@ type WorkbenchDashboardFetchSlowCategoryCostDTO struct {
 	Attempts       int   `json:"attempts"`
 }
 
+// WorkbenchDashboardFetchSlowTraceNodeDTO is one merged step of a slow request's call chain.
+type WorkbenchDashboardFetchSlowTraceNodeDTO struct {
+	Name     string                                     `json:"name"`
+	Count    int                                        `json:"count"`
+	TotalMs  int64                                      `json:"totalMs"`
+	MaxMs    int64                                      `json:"maxMs"`
+	OffsetMs int64                                      `json:"offsetMs"`
+	Children []*WorkbenchDashboardFetchSlowTraceNodeDTO `json:"children"`
+}
+
 type WorkbenchDashboardFetchSlowSampleDTO struct {
 	Time         string                                        `json:"time"`
+	EndTime      string                                        `json:"endTime"`
+	Host         string                                        `json:"host"`
 	CostMs       int64                                         `json:"costMs"`
 	PreCheckMs   int64                                         `json:"preCheckMs"`
 	FetchMs      int64                                         `json:"fetchMs"`
@@ -1924,6 +1989,7 @@ type WorkbenchDashboardFetchSlowSampleDTO struct {
 	Code         string                                        `json:"code"`
 	Result       string                                        `json:"result"`
 	CategoryList []*WorkbenchDashboardFetchSlowCategoryCostDTO `json:"categoryList"`
+	TraceList    []*WorkbenchDashboardFetchSlowTraceNodeDTO    `json:"traceList"`
 }
 
 // WorkbenchDashboardFetchSlowMonitorDTO is Barry's slow fetch-task distribution for one day

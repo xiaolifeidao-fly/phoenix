@@ -28,6 +28,8 @@ func TestSettleAndPointsRuleRoutesResolve(t *testing.T) {
 		{"GET", "/barry/user-details/detail", "/barry/user-details/detail"},
 		{"GET", "/barry/user-details/payment-methods", "/barry/user-details/payment-methods"},
 		{"PUT", "/barry/user-details/password", "/barry/user-details/password"},
+		{"PUT", "/barry/user-details/pub-token", "/barry/user-details/pub-token"},
+		{"PUT", "/barry/user-details/ban", "/barry/user-details/ban"},
 		{"GET", "/barry/user-details/12/settle", "/barry/user-details/:userId/settle"},
 		{"PUT", "/barry/user-details/12/settle", "/barry/user-details/:userId/settle"},
 		{"GET", "/barry/settle-channels", "/barry/settle-channels"},
