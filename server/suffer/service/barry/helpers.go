@@ -94,6 +94,9 @@ const (
 	barryInnerUserDetailPasswordUpdatePath                    = "barry.url.inner.user.detail.password.update.suffix"
 	barryInnerUserDetailBanPath                               = "barry.url.inner.user.detail.ban.suffix"
 	barryInnerUserDetailPubTokenResetPath                     = "barry.url.inner.user.detail.pub.token.reset.suffix"
+	barryInnerUserDetailUnbanPath                             = "barry.url.inner.user.detail.unban.suffix"
+	barryInnerUserDetailUnlockPath                            = "barry.url.inner.user.detail.unlock.suffix"
+	barryInnerUserDetailParentsPath                           = "barry.url.inner.user.detail.parents.suffix"
 	barryInnerUserPaymentMethodListPath                       = "barry.url.inner.user.payment.method.list.suffix"
 	barryInnerRecordSummaryPath                               = "barry.url.inner.record.summary.suffix"
 	barryInnerManualTaskStatisticsPath                        = "barry.url.inner.manual.task.statistics.suffix"
@@ -157,6 +160,18 @@ func innerServicePath(configKey string) string {
 		return prefix
 	}
 	return prefix + "/" + strings.TrimLeft(suffix, "/")
+}
+
+// innerServicePathWithDefault 配置里没有这一项时用默认路径: 线上若挂载了自己的配置文件, 漏加新配置项也不会请求错地址.
+func innerServicePathWithDefault(configKey, defaultSuffix string) string {
+	if strings.TrimSpace(vipper.GetString(configKey)) != "" {
+		return innerServicePath(configKey)
+	}
+	prefix := strings.TrimRight(strings.TrimSpace(vipper.GetString(barryInnerPrefixPath)), "/")
+	if prefix == "" {
+		return ""
+	}
+	return prefix + "/" + strings.TrimLeft(defaultSuffix, "/")
 }
 
 func configuredInnerServicePath(configKey string) string {

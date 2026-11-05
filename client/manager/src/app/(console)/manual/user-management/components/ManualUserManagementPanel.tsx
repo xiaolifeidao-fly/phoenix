@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dayjs, { type Dayjs } from "dayjs";
 import {
+  CheckCircleOutlined,
   CreditCardOutlined,
   DatabaseOutlined,
   EditOutlined,
@@ -15,6 +16,7 @@ import {
   SafetyCertificateOutlined,
   SearchOutlined,
   StopOutlined,
+  UnlockOutlined,
   WalletOutlined,
 } from "@ant-design/icons";
 import {
@@ -44,13 +46,17 @@ import {
   createManualUser,
   fetchBarryAppUsers,
   fetchManualUserDetail,
+  fetchManualUserParentOptions,
   fetchManualUserPaymentMethods,
   fetchManualUserPointsSummary,
   fetchManualUsers,
   resetManualUserPubToken,
   type ManualPaymentMethodRecord,
+  type ManualUserParentOptionRecord,
   type ManualUserPointsSummaryRecord,
   type ManualUserRecord,
+  unbanManualUser,
+  unlockManualUserLogin,
   updateManualUser,
 } from "../../api/user.api";
 import {
@@ -92,6 +98,8 @@ interface UserFormValues {
   username: string;
   password?: string;
   channel?: string;
+  /** 上级用户ID，只在新增普通用户时可选 */
+  parentUserId?: number;
   inventCode?: string;
   alipayName?: string;
   alipayAccount?: string;
@@ -119,6 +127,8 @@ export function ManualUserManagementPanel() {
   const [submitting, setSubmitting] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<ManualUserRecord | null>(null);
+  const [parentOptions, setParentOptions] = useState<ManualUserParentOptionRecord[]>([]);
+  const [parentLoading, setParentLoading] = useState(false);
   const [passwordDrawerOpen, setPasswordDrawerOpen] = useState(false);
   const [passwordUser, setPasswordUser] = useState<ManualUserRecord | null>(null);
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
@@ -223,6 +233,51 @@ export function ManualUserManagementPanel() {
     [],
   );
 
+  const watchedChannel = Form.useWatch("channel", form);
+  const watchedRole = Form.useWatch("role", form);
+  // 只有新增普通用户时才能选上级（管理员不挂上级，编辑不改上下级关系）
+  const parentSelectable = modalOpen && !editingUser && watchedRole !== "admin";
+
+  // 换渠道就清掉已选的上级，重新拉该渠道的管理员；只认最后一次请求的结果
+  useEffect(() => {
+    if (!parentSelectable) {
+      return;
+    }
+    form.setFieldValue("parentUserId", undefined);
+    const channel = (watchedChannel || "").trim();
+    if (!channel) {
+      setParentOptions([]);
+      return;
+    }
+    let cancelled = false;
+    setParentLoading(true);
+    fetchManualUserParentOptions(channel)
+      .then((result) => {
+        if (!cancelled) {
+          setParentOptions(result);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setParentOptions([]);
+          message.error(error instanceof Error ? error.message : "加载上级失败");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setParentLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [form, parentSelectable, watchedChannel]);
+
+  const parentSelectOptions = useMemo(
+    () => parentOptions.map((item) => ({ label: `${item.username}（ID ${item.id}）`, value: item.id })),
+    [parentOptions],
+  );
+
   const channelOptions = useMemo(
     () =>
       channels.map((item) => ({
@@ -257,6 +312,7 @@ export function ManualUserManagementPanel() {
       username: "",
       password: "",
       channel: "",
+      parentUserId: undefined,
       inventCode: "",
       alipayName: "",
       alipayAccount: "",
@@ -295,7 +351,11 @@ export function ManualUserManagementPanel() {
       if (editingUser) {
         await updateManualUser(payload);
       } else {
-        await createManualUser({ ...payload, password: values.password!.trim() });
+        await createManualUser({
+          ...payload,
+          password: values.password!.trim(),
+          parentUserId: values.role === "admin" ? undefined : values.parentUserId ?? undefined,
+        });
       }
       message.success(editingUser ? "人工用户已更新" : "人工用户已创建");
       setModalOpen(false);
@@ -335,6 +395,26 @@ export function ManualUserManagementPanel() {
       await loadUsers();
     } catch (error) {
       message.error(error instanceof Error ? error.message : "封禁用户失败");
+    }
+  };
+
+  const handleUnbanUser = async (record: ManualUserRecord) => {
+    try {
+      await unbanManualUser(record.id);
+      message.success("用户已解封，密码已换成封禁时的新密码，请在「查看密码」里查看后告知用户");
+      await loadUsers();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "解封用户失败");
+    }
+  };
+
+  const handleUnlockLogin = async (record: ManualUserRecord) => {
+    try {
+      const result = await unlockManualUserLogin(record.id);
+      message.success(result || "已解除登录锁定");
+      await loadUsers();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "解除登录锁定失败");
     }
   };
 
@@ -589,11 +669,23 @@ export function ManualUserManagementPanel() {
         <Space direction="vertical" size={2}>
           <Text style={{ color: "var(--manager-text)", fontWeight: 600 }}>{value || "-"}</Text>
           <Text type="secondary">{formatUserRole(record.role)}</Text>
+          {record.banned ? (
+            <Tooltip title="当前处于封禁状态：不能登录、不能取任务，可在操作栏解封">
+              <Tag color="red" style={{ marginInlineEnd: 0, width: "fit-content" }}>
+                已封禁
+              </Tag>
+            </Tooltip>
+          ) : null}
+          {record.loginLocked ? (
+            <Tooltip title="输错密码次数过多被锁定登录，可在操作栏解锁">
+              <Tag color="orange" style={{ marginInlineEnd: 0, width: "fit-content" }}>
+                登录锁定
+              </Tag>
+            </Tooltip>
+          ) : null}
           {record.banCount > 0 ? (
             <Tooltip title="历史封禁次数，解封后不会归零">
-              <Tag color="red" style={{ marginInlineEnd: 0, width: "fit-content" }}>
-                封禁过 {record.banCount} 次
-              </Tag>
+              <Tag style={{ marginInlineEnd: 0, width: "fit-content" }}>封禁过 {record.banCount} 次</Tag>
             </Tooltip>
           ) : null}
         </Space>
@@ -657,9 +749,9 @@ export function ManualUserManagementPanel() {
       key: "actions",
       fixed: "right",
       // 动作带文字会超宽，表格是 table-layout: fixed，超出的按钮会直接画到固定列外面。
-      // 和渠道、商品列表一致改成图标 + Tooltip：34px 按钮 × 9 + 间距 4 × 8 + 单元格左右内边距 32 = 370，
-      // 列宽留到 392，缩放或主题调 controlHeight 时也不会顶破。
-      width: 392,
+      // 和渠道、商品列表一致改成图标 + Tooltip：最多 10 个按钮（封禁/解封二选一，被锁时多一个解锁），
+      // 34px 按钮 × 10 + 间距 4 × 9 + 单元格左右内边距 32 = 408，列宽留到 430，缩放或主题调 controlHeight 时也不会顶破。
+      width: 430,
       render: (_, record) => (
         <Space size={4} wrap={false}>
           <Tooltip title="编辑">
@@ -692,18 +784,45 @@ export function ManualUserManagementPanel() {
               <Button type="text" aria-label="修改秘钥" icon={<SafetyCertificateOutlined />} />
             </Tooltip>
           </Popconfirm>
-          <Popconfirm
-            title="封禁用户"
-            description="秘钥和密码都会换成随机值，用户立即无法取任务和登录；解封请用修改密码"
-            okText="确认封禁"
-            okButtonProps={{ danger: true }}
-            cancelText="取消"
-            onConfirm={() => handleBanUser(record)}
-          >
-            <Tooltip title="封禁">
-              <Button type="text" danger aria-label="封禁" icon={<StopOutlined />} />
-            </Tooltip>
-          </Popconfirm>
+          {record.banned ? (
+            <Popconfirm
+              title="解封用户"
+              description="只把账号改回可用，密码和秘钥沿用封禁时换的新值；解封后在「查看密码」里查看密码告诉用户"
+              okText="确认解封"
+              cancelText="取消"
+              onConfirm={() => handleUnbanUser(record)}
+            >
+              <Tooltip title="解封">
+                <Button type="text" aria-label="解封" icon={<CheckCircleOutlined />} />
+              </Tooltip>
+            </Popconfirm>
+          ) : (
+            <Popconfirm
+              title="封禁用户"
+              description="账号置为封禁，秘钥和密码都换成随机值，用户立即无法取任务和登录；可随时解封"
+              okText="确认封禁"
+              okButtonProps={{ danger: true }}
+              cancelText="取消"
+              onConfirm={() => handleBanUser(record)}
+            >
+              <Tooltip title="封禁">
+                <Button type="text" danger aria-label="封禁" icon={<StopOutlined />} />
+              </Tooltip>
+            </Popconfirm>
+          )}
+          {record.loginLocked ? (
+            <Popconfirm
+              title="解除登录锁定"
+              description="清掉输错密码造成的锁定，用户可以马上重新登录；如果客户端还在用错的密码，会再次被锁"
+              okText="确认解锁"
+              cancelText="取消"
+              onConfirm={() => handleUnlockLogin(record)}
+            >
+              <Tooltip title="解锁登录">
+                <Button type="text" aria-label="解锁登录" icon={<UnlockOutlined />} />
+              </Tooltip>
+            </Popconfirm>
+          ) : null}
           <Tooltip title="支付信息">
             <Button
               type="text"
@@ -848,6 +967,24 @@ export function ManualUserManagementPanel() {
               loading={channelLoading}
             />
           </Form.Item>
+          {parentSelectable ? (
+            <Form.Item
+              name="parentUserId"
+              label="上级"
+              extra="选填。只能选所选渠道的管理员，不选就没有上级；绑定后该用户做任务，上级有提成。"
+            >
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder={watchedChannel ? "不选则没有上级" : "请先选择渠道"}
+                disabled={!watchedChannel}
+                options={parentSelectOptions}
+                loading={parentLoading}
+                notFoundContent={parentLoading ? "加载中..." : "该渠道没有可选的管理员"}
+              />
+            </Form.Item>
+          ) : null}
           <Form.Item name="inventCode" label="邀请码">
             <Input placeholder="请输入邀请码" />
           </Form.Item>
@@ -861,7 +998,7 @@ export function ManualUserManagementPanel() {
             name="role"
             label="角色"
             rules={[{ required: true, message: "请选择角色" }]}
-            extra="管理员可在 App 内为自己开下级账号。"
+            extra="管理员可以作为同渠道用户的上级（新增用户时选择）。"
           >
             <Select options={USER_ROLE_OPTIONS} placeholder="请选择角色" />
           </Form.Item>
@@ -964,7 +1101,10 @@ export function ManualUserManagementPanel() {
           <Text type="secondary">正在加载...</Text>
         ) : (
           <Form className="manager-form-skin" layout="vertical">
-            <Form.Item label="密码">
+            <Form.Item
+              label="密码"
+              extra={passwordViewUser?.banned ? "该用户已封禁；解封后再打开这里，看到的就是登录密码" : undefined}
+            >
               <Input.Password value={passwordViewUser?.originalPassword || ""} readOnly visibilityToggle />
             </Form.Item>
           </Form>

@@ -162,7 +162,7 @@ func (s *UserDetailService) ResetPubToken(ctx context.Context, req *barryDTO.Res
 	return response, nil
 }
 
-// Ban 封禁做单用户：barry 把 pubToken、密码都换成随机值并清掉 Redis 鉴权缓存，banCount+1。
+// Ban 封禁做单用户：barry 置封禁状态，pubToken、密码都换成随机值并清掉 Redis 鉴权缓存，banCount+1；解封走 Unban。
 // barry 接口的请求体是裸 Long，这里直接发 userId 数字而不是对象。
 func (s *UserDetailService) Ban(ctx context.Context, req *barryDTO.BanUserDetailDTO) (*barryDTO.ActionResponseDTO, error) {
 	if req == nil {
@@ -170,6 +170,44 @@ func (s *UserDetailService) Ban(ctx context.Context, req *barryDTO.BanUserDetail
 	}
 	response := &barryDTO.ActionResponseDTO{Success: true}
 	err := s.client.PostAbsolute(ctx, innerServicePath(barryInnerUserDetailBanPath), req.UserID, response)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+// Unban 解封做单用户：只把封禁状态改回可用，沿用封禁时换的密码和秘钥，banCount 不变，同时解除登录锁定。
+func (s *UserDetailService) Unban(ctx context.Context, req *barryDTO.UnbanUserDetailDTO) (*barryDTO.ActionResponseDTO, error) {
+	if req == nil {
+		return nil, fmt.Errorf("request is nil")
+	}
+	response := &barryDTO.ActionResponseDTO{Success: true}
+	err := s.client.PostAbsolute(ctx, innerServicePathWithDefault(barryInnerUserDetailUnbanPath, "/user/detail/unban"), req, response)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+// Unlock 解除做单用户的登录锁定（输错密码太多次被锁），清掉该账号所有 IP 上的锁。
+func (s *UserDetailService) Unlock(ctx context.Context, req *barryDTO.UnlockUserDetailDTO) (*barryDTO.ActionResponseDTO, error) {
+	if req == nil {
+		return nil, fmt.Errorf("request is nil")
+	}
+	response := &barryDTO.ActionResponseDTO{Success: true}
+	err := s.client.PostAbsolute(ctx, innerServicePathWithDefault(barryInnerUserDetailUnlockPath, "/user/detail/unlock"), req, response)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+// ParentOptions 新增做单用户时可选的上级：该渠道下未封禁的管理员。
+func (s *UserDetailService) ParentOptions(ctx context.Context, channel string) (*barryDTO.ListResponseDTO[barryDTO.UserParentOptionDTO], error) {
+	response := &barryDTO.ListResponseDTO[barryDTO.UserParentOptionDTO]{}
+	values := url.Values{}
+	values.Set("channel", strings.TrimSpace(channel))
+	err := s.client.GetAbsolute(ctx, innerServicePathWithDefault(barryInnerUserDetailParentsPath, "/user/detail/parents"), values, response)
 	if err != nil {
 		return nil, err
 	}

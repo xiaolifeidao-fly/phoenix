@@ -1014,8 +1014,12 @@ type UserDetailDTO struct {
 	SettleCurrency    string `json:"settleCurrency,omitempty"`
 	SettleChannelID   *int64 `json:"settleChannelId,omitempty"`
 	SettleChannelName string `json:"settleChannelName,omitempty"`
-	// 历史封禁次数，只增不减；解封（改密码）后不会归零，不代表当前是否封禁。
+	// 历史封禁次数，只增不减；解封后不会归零，不代表当前是否封禁（看 Banned）。
 	BanCount int `json:"banCount"`
+	// 当前是否封禁。
+	Banned bool `json:"banned"`
+	// 是否被登录防暴破锁住（输错密码太多次），可在后台解锁。
+	LoginLocked bool `json:"loginLocked"`
 }
 
 // AdjustUserPointsDTO is a manual points adjustment issued from the console.
@@ -1104,6 +1108,8 @@ type SaveUserDetailDTO struct {
 	AlipayName       string `json:"alipayName,omitempty"`
 	AlipayAccount    string `json:"alipayAccount,omitempty"`
 	Role             string `json:"role,omitempty"`
+	// 上级用户ID，须是同渠道、未封禁的管理员（barry 校验）；不选为空。
+	ParentUserID *int64 `json:"parentUserId,omitempty"`
 }
 
 type UpdateUserDetailDTO struct {
@@ -1126,6 +1132,27 @@ type BanUserDetailDTO struct {
 
 type ResetUserDetailPubTokenDTO struct {
 	UserID int64 `json:"userId" binding:"required"`
+}
+
+// UnbanUserDetailDTO 解封：只把封禁状态改回可用，沿用封禁时换的密码和秘钥。
+type UnbanUserDetailDTO struct {
+	UserID int64 `json:"userId" binding:"required"`
+}
+
+// UnlockUserDetailDTO 解除登录锁定（输错密码太多次被锁）。
+type UnlockUserDetailDTO struct {
+	UserID int64 `json:"userId" binding:"required"`
+}
+
+type UserParentOptionQueryDTO struct {
+	Channel string `json:"channel,omitempty" form:"channel"`
+}
+
+// UserParentOptionDTO 新增做单用户时可选的上级（同渠道未封禁的管理员）。
+type UserParentOptionDTO struct {
+	ID       int64  `json:"id"`
+	Username string `json:"username"`
+	Channel  string `json:"channel,omitempty"`
 }
 
 type UserWithdrawRecordDTO struct {

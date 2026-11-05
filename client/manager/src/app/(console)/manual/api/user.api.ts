@@ -46,12 +46,27 @@ export class ManualUserRecord {
 
   settleChannelName?: string;
 
-  /** 历史封禁次数，只增不减；解封（改密码）后不归零，不代表当前是否封禁。 */
+  /** 历史封禁次数，只增不减；解封后不归零，不代表当前是否封禁（看 banned）。 */
   banCount = 0;
+
+  /** 当前是否封禁 */
+  banned = false;
+
+  /** 是否因输错密码次数过多被登录锁定，可在操作栏解锁 */
+  loginLocked = false;
 
   createdTime?: string;
 
   updatedTime?: string;
+}
+
+/** 新增人工用户时可选的上级：所选渠道下未封禁的管理员。 */
+export class ManualUserParentOptionRecord {
+  id = 0;
+
+  username = "";
+
+  channel = "";
 }
 
 /** 全部账号积分汇总。 */
@@ -200,6 +215,8 @@ export interface CreateManualUserPayload {
   alipayName?: string;
   alipayAccount?: string;
   role?: string;
+  /** 上级用户ID，选填；barry 校验必须是同渠道、未封禁的管理员 */
+  parentUserId?: number;
 }
 
 export interface UpdateManualUserPayload {
@@ -296,10 +313,27 @@ export async function changeManualUserPassword(payload: ChangeManualUserPassword
   return unwrapApiResponse(response.data);
 }
 
-/** 封禁做单用户：秘钥、密码都换成随机值，旧秘钥立即失效；解封走修改密码。 */
+/** 封禁做单用户：置为封禁，秘钥、密码都换成随机值，旧秘钥立即失效。 */
 export async function banManualUser(userId: number) {
   const response = await instance.put<ApiResponse<string | null>>("/barry/user-details/ban", { userId });
   return unwrapApiResponse(response.data);
+}
+
+/** 解封做单用户：只把状态改回可用，密码和秘钥沿用封禁时换的值，同时解除登录锁定。 */
+export async function unbanManualUser(userId: number) {
+  const response = await instance.put<ApiResponse<string | null>>("/barry/user-details/unban", { userId });
+  return unwrapApiResponse(response.data);
+}
+
+/** 解除登录锁定（输错密码次数过多被锁），返回 barry 的处理结果说明。 */
+export async function unlockManualUserLogin(userId: number) {
+  const response = await instance.put<ApiResponse<string | null>>("/barry/user-details/unlock", { userId });
+  return unwrapApiResponse(response.data);
+}
+
+/** 新增人工用户时「上级」下拉框的选项：该渠道下未封禁的管理员。 */
+export async function fetchManualUserParentOptions(channel: string) {
+  return getDataList(ManualUserParentOptionRecord, "/barry/user-details/parent-options", { channel: channel.trim() });
 }
 
 /** 重置做单用户秘钥(pubToken)：旧秘钥立即失效，返回新秘钥。 */

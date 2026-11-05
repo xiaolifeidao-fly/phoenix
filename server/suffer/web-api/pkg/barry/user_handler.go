@@ -24,6 +24,9 @@ func (h *BarryHandler) registerUserRoutes(engine *gin.RouterGroup) {
 	engine.PUT("/barry/user-details/password", h.changeUserDetailPassword)
 	engine.PUT("/barry/user-details/pub-token", h.resetUserDetailPubToken)
 	engine.PUT("/barry/user-details/ban", h.banUserDetail)
+	engine.PUT("/barry/user-details/unban", h.unbanUserDetail)
+	engine.PUT("/barry/user-details/unlock", h.unlockUserDetail)
+	engine.GET("/barry/user-details/parent-options", h.listUserDetailParentOptions)
 	engine.GET("/barry/user-points", h.listUserPoints)
 	engine.POST("/barry/user-points/adjust", h.adjustUserPoints)
 	engine.GET("/barry/user-points/summary", h.getUserPointsSummary)
@@ -299,10 +302,34 @@ func (h *BarryHandler) createUserDetail(c *gin.Context) {
 		commonRouter.ToError(c, "参数错误")
 		return
 	}
+	// 上级可选：不选或传 0 都按没有上级处理；是否同渠道管理员由 barry 校验，不通过不建号
+	req.ParentUserID = normalizeParentUserID(req.ParentUserID)
 	response, err := h.barryService.UserDetail.Save(c.Request.Context(), &req)
+	respondBarryAction(c, response, err, "添加人工用户失败")
+}
+
+// 新增人工用户时「上级」下拉框：所选渠道下未封禁的管理员；没选渠道返回空列表。
+func (h *BarryHandler) listUserDetailParentOptions(c *gin.Context) {
+	var q barryDTO.UserParentOptionQueryDTO
+	if c.ShouldBindQuery(&q) != nil {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	if strings.TrimSpace(q.Channel) == "" {
+		commonRouter.ToJson(c, []*barryDTO.UserParentOptionDTO{}, nil)
+		return
+	}
+	response, err := h.barryService.UserDetail.ParentOptions(c.Request.Context(), q.Channel)
 	if err != nil {
 		commonRouter.ToJson(c, nil, err)
 		return
+	}
+	if !response.Success {
+		commonRouter.ToError(c, firstNonEmpty(response.Message, "加载上级失败"))
+		return
+	}
+	if response.Data == nil {
+		response.Data = []*barryDTO.UserParentOptionDTO{}
 	}
 	commonRouter.ToJson(c, response.Data, nil)
 }
@@ -335,7 +362,7 @@ func (h *BarryHandler) changeUserDetailPassword(c *gin.Context) {
 	commonRouter.ToJson(c, response.Data, nil)
 }
 
-// 封禁做单用户：秘钥和密码都换成随机值，旧秘钥立即失效；解封走修改密码。
+// 封禁做单用户：置封禁状态，秘钥和密码都换成随机值，旧秘钥立即失效；解封走 unban。
 func (h *BarryHandler) banUserDetail(c *gin.Context) {
 	var req barryDTO.BanUserDetailDTO
 	if c.ShouldBindJSON(&req) != nil || req.UserID <= 0 {
@@ -343,11 +370,54 @@ func (h *BarryHandler) banUserDetail(c *gin.Context) {
 		return
 	}
 	response, err := h.barryService.UserDetail.Ban(c.Request.Context(), &req)
+	respondBarryAction(c, response, err, "封禁用户失败")
+}
+
+// 解封做单用户：封禁状态改回可用，沿用封禁时换的密码和秘钥（管理员在「查看密码」里看到后告诉用户）。
+func (h *BarryHandler) unbanUserDetail(c *gin.Context) {
+	var req barryDTO.UnbanUserDetailDTO
+	if c.ShouldBindJSON(&req) != nil || req.UserID <= 0 {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := h.barryService.UserDetail.Unban(c.Request.Context(), &req)
+	respondBarryAction(c, response, err, "解封用户失败")
+}
+
+// 解除做单用户登录锁定：输错密码太多次被锁时，清掉该账号所有 IP 上的锁。
+func (h *BarryHandler) unlockUserDetail(c *gin.Context) {
+	var req barryDTO.UnlockUserDetailDTO
+	if c.ShouldBindJSON(&req) != nil || req.UserID <= 0 {
+		commonRouter.ToError(c, "参数错误")
+		return
+	}
+	response, err := h.barryService.UserDetail.Unlock(c.Request.Context(), &req)
+	respondBarryAction(c, response, err, "解除登录锁定失败")
+}
+
+// respondBarryAction 把 barry 的业务失败（code 非 0）带着原因返回给前端；
+// 直接回 response.Data 会把失败当成功（data 为空、前端提示操作成功）。
+func respondBarryAction(c *gin.Context, response *barryDTO.ActionResponseDTO, err error, fallbackMessage string) {
 	if err != nil {
 		commonRouter.ToJson(c, nil, err)
 		return
 	}
+	if response == nil || !response.Success {
+		message := fallbackMessage
+		if response != nil {
+			message = firstNonEmpty(response.Message, fallbackMessage)
+		}
+		commonRouter.ToError(c, message)
+		return
+	}
 	commonRouter.ToJson(c, response.Data, nil)
+}
+
+func normalizeParentUserID(parentUserID *int64) *int64 {
+	if parentUserID == nil || *parentUserID <= 0 {
+		return nil
+	}
+	return parentUserID
 }
 
 // 重置做单用户秘钥(pubToken)，旧秘钥立即失效，返回新秘钥。
